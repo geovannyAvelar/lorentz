@@ -122,6 +122,11 @@ bool delete_old_queries_from_db(const bool use_memdb, const double mintime);
 void DB_read_queries(void);
 bool queries_to_database(void);
 bool is_memdb(const db_conn *db) __attribute__((pure));
+// The connection through which the long-term database is read (the in-memory
+// database with the long-term one attached, or a connection to a server) and
+// the prefix of its tables ("disk." or ""). release_longterm_db() hands it back
+db_conn *get_longterm_db(const char **prefix);
+void release_longterm_db(db_conn **db);
 bool get_memdb_size(size_t *memsize, int *queries);
 
 bool attach_database(db_conn *db, const char **message, const char *path, const char *alias);

@@ -680,6 +680,26 @@ static void test_baseline_schema(void)
 
 /* ---- main and stubs ---- */
 
+// Which driver serves a location, and what a log may say about it
+static void test_uri(void)
+{
+	CHECK(db_uri_is_remote("postgresql://u@h/d") && db_uri_is_remote("postgres://u@h/d"));
+	CHECK(!db_uri_is_remote("/etc/lorentz/lorentz.db") && !db_uri_is_remote(":memory:") && !db_uri_is_remote(NULL));
+	CHECK(db_driver_for_uri("/etc/lorentz/lorentz.db") == &db_driver_sqlite);
+	CHECK(db_driver_for_uri(NULL) == &db_driver_sqlite);
+	CHECK(db_driver_for_uri("postgresql://u@h/d") == (db_driver_get("postgres") != NULL ? db_driver_get("postgres") : &db_driver_sqlite));
+
+	CHECK(strcmp(db_uri_display("/etc/lorentz/lorentz.db"), "/etc/lorentz/lorentz.db") == 0);
+	CHECK(strcmp(db_uri_display("postgresql://user:secret@host:5432/db"), "postgresql://user:***@host:5432/db") == 0);
+	CHECK(strstr(db_uri_display("postgresql://user:secret@host/db?sslmode=require"), "secret") == NULL);
+	CHECK(strcmp(db_uri_display("postgresql://user@host/db"), "postgresql://user@host/db") == 0);
+	CHECK(strcmp(db_uri_display("postgresql://host/db?user=u&password=hunter2&sslmode=require"), "postgresql://host/db?user=u&password=***&sslmode=require") == 0);
+	CHECK(strcmp(db_uri_display("postgresql://host/db?password=hunter2"), "postgresql://host/db?password=***") == 0);
+	// A colon after the host is a port, not a password
+	CHECK(strcmp(db_uri_display("postgresql://host:5432/db"), "postgresql://host:5432/db") == 0);
+	CHECK(strcmp(db_uri_display(NULL), "") == 0);
+}
+
 int main(void)
 {
 	snprintf(tmpdir, sizeof(tmpdir), "/tmp/db_driver_regression.XXXXXX");
@@ -703,6 +723,7 @@ int main(void)
 	test_close();
 	test_dialect();
 	test_baseline_schema();
+	test_uri();
 
 	char cmd[300];
 	snprintf(cmd, sizeof(cmd), "rm -rf '%s'", tmpdir);

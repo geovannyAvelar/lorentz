@@ -74,13 +74,68 @@ static void set_hint(char *hint, const char *src)
 	hint[ERRBUF_SIZE - 1] = '\0';
 }
 
+// Copy the tables of a database on a server into the in-memory database. The
+// server cannot be attached, so the rows are read and inserted one by one. The
+// copies have the names of the columns and nothing else
+static bool copy_remote_tables(db_conn *db, const char *uri, const char **tables, const unsigned int num_tables)
+{
+	const char *open_error = NULL;
+	db_conn *remote = db_open_uri_ex(uri, DB_OPEN_READONLY | DB_OPEN_NOMUTEX, NULL, &open_error);
+	if(remote == NULL)
+	{
+		log_warn("Failed to open the long-term database: %s", open_error);
+		return false;
+	}
+
+	bool okay = true;
+	for(unsigned int i = 0; okay && i < num_tables; i++)
+	{
+		char sql[256];
+		snprintf(sql, sizeof(sql), "SELECT * FROM \"%s\"", tables[i]);
+		db_stmt *sel = db_prepare(remote, sql, false);
+		if(sel == NULL)
+		{
+			log_warn("Failed to read %s: %s", tables[i], db_errmsg(remote));
+			okay = false;
+			break;
+		}
+		const int ncols = db_column_count(sel);
+		char create[1024];
+		size_t len = (size_t)snprintf(create, sizeof(create), "CREATE TABLE \"%s\" (", tables[i]);
+		char values[256] = "";
+		for(int c = 0; c < ncols && len < sizeof(create) - 64; c++)
+		{
+			len += (size_t)snprintf(create + len, sizeof(create) - len, "%s\"%s\"", c > 0 ? ", " : "", db_column_name(sel, c));
+			snprintf(values + strlen(values), sizeof(values) - strlen(values), "%s?", c > 0 ? "," : "");
+		}
+		snprintf(create + len, sizeof(create) - len, ")");
+		snprintf(sql, sizeof(sql), "INSERT INTO \"%s\" VALUES (%s)", tables[i], values);
+		db_stmt *ins = NULL;
+		if(db_exec(db, create) != DB_OK || (ins = db_prepare(db, sql, false)) == NULL)
+		{
+			log_warn("Failed to create %s in in-memory database: %s", tables[i], db_errmsg(db));
+			okay = false;
+		}
+		else if(db_copy_rows(sel, ins, db, ncols, -1, tables[i]) < 0)
+		{
+			log_warn("Failed to copy %s to in-memory database", tables[i]);
+			okay = false;
+		}
+		db_finalize(ins);
+		db_finalize(sel);
+	}
+
+	db_close(remote);
+	return okay;
+}
+
 // Create database in memory, copy selected tables to it, serialize and return a memory pointer to it
 static bool create_teleporter_database(const char *filename, const char **tables, const unsigned int num_tables,
                                        void **buffer, size_t *size)
 {
 	// Open in-memory database
 	const char *open_error = NULL;
-	db_conn *db = db_open_ex(":memory:", DB_OPEN_READWRITE | DB_OPEN_NOMUTEX, NULL, &open_error);
+	db_conn *db = db_open_sqlite_ex(":memory:", DB_OPEN_READWRITE | DB_OPEN_NOMUTEX, NULL, &open_error);
 	if(db == NULL)
 	{
 		log_warn("Failed to open in-memory database: %s", open_error);
@@ -92,8 +147,17 @@ static bool create_teleporter_database(const char *filename, const char **tables
 	if(db_set_busy_handler(db, sqliteBusyCallback, NULL) != DB_OK)
 		log_warn("Failed to set busy timeout during creation of in-memory Teleporter database: %s", db_errmsg(db));
 
+	// A database on a server is copied, not attached
+	if(db_uri_is_remote(filename))
+	{
+		if(!copy_remote_tables(db, filename, tables, num_tables))
+		{
+			db_close(db);
+			return false;
+		}
+	}
 	// Attach the Lorentz database to the in-memory database
-	if(db_attach(db, filename, "disk") != DB_OK)
+	else if(db_attach(db, filename, "disk") != DB_OK)
 	{
 		log_warn("Failed to attach database \"%s\" to in-memory database: %s", filename, db_errmsg(db));
 		db_close(db);
@@ -101,7 +165,7 @@ static bool create_teleporter_database(const char *filename, const char **tables
 	}
 
 	// Loop over the tables and copy them to the in-memory database
-	for(unsigned int i = 0; i < num_tables; i++)
+	for(unsigned int i = 0; !db_uri_is_remote(filename) && i < num_tables; i++)
 	{
 		char create_stmt[128] = "";
 
@@ -116,7 +180,7 @@ static bool create_teleporter_database(const char *filename, const char **tables
 	}
 
 	// Detach the Lorentz database from the in-memory database
-	if(db_detach(db, "disk") != DB_OK)
+	if(!db_uri_is_remote(filename) && db_detach(db, "disk") != DB_OK)
 	{
 		log_warn("Failed to detach Lorentz database from in-memory database: %s", db_errmsg(db));
 		db_close(db);
@@ -248,7 +312,8 @@ const char *generate_teleporter_zip(mz_zip_archive *zip, char filename[128], voi
 	{
 		// Add Lorentz database to ZIP archive
 		file_comment = "Lorentz's database";
-		file_path = config.files.database.v.s;
+		// A database on a server has no path to name the entry after
+		file_path = db_uri_is_remote(config.files.database.v.s) ? "etc/lorentz/lorentz.db" : config.files.database.v.s;
 		if(file_path[0] == '/')
 			file_path++;
 		if(!mz_zip_writer_add_mem_ex(zip, file_path, dbbuf, dbsize, file_comment, (uint16_t)strlen(file_comment), MZ_BEST_COMPRESSION, 0, 0))
@@ -491,7 +556,7 @@ static const char *test_and_import_database(void *ptr, size_t size, const char *
 	// this fails, the file is not a valid SQlite3 database. The buffer is read
 	// in place and never modified, it outlives the connection
 	const char *open_error = NULL;
-	db_conn *database = db_open_ex(":memory:", DB_OPEN_READWRITE | DB_OPEN_NOMUTEX, NULL, &open_error);
+	db_conn *database = db_open_sqlite_ex(":memory:", DB_OPEN_READWRITE | DB_OPEN_NOMUTEX, NULL, &open_error);
 	if(database == NULL)
 	{
 		set_hint(hint, open_error);

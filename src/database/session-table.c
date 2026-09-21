@@ -266,17 +266,30 @@ bool restore_db_sessions(struct session *sessions, const uint16_t max_sessions)
 		return true;
 	}
 
-	db_conn *memdb = get_memdb();
+	const char *prefix = "";
+	db_conn *memdb = get_longterm_db(&prefix);
+	if(memdb == NULL)
+		return false;
 
 	// Remove expired sessions from database
-	SQL_bool(memdb, "DELETE FROM disk.session WHERE valid_until < unixepoch();");
+	if(dbquery(memdb, "DELETE FROM %ssession WHERE valid_until < %s", prefix,
+	           memdb->drv->dialect->now_expr()) != DB_OK)
+	{
+		log_err("restore_db_sessions(): Cannot remove expired sessions: %s", DB_LAST_ERR(memdb));
+		release_longterm_db(&memdb);
+		return false;
+	}
 
 	// Get all sessions from database
+	char selectstr[256];
+	snprintf(selectstr, sizeof(selectstr), "SELECT login_at, valid_until, remote_addr, user_agent, sid, csrf, "
+	                                       "tls_login, tls_mixed, app, cli, x_forwarded_for FROM %ssession", prefix);
 	db_stmt *stmt = NULL;
-	if((stmt = db_prepare(memdb, "SELECT login_at, valid_until, remote_addr, user_agent, sid, csrf, tls_login, tls_mixed, app, cli, x_forwarded_for FROM disk.session;", false)) == NULL)
+	if((stmt = db_prepare(memdb, selectstr, false)) == NULL)
 	{
 		log_err("SQL error in restore_db_sessions(): %s (%d)",
 		        db_errmsg(memdb), db_errcode(memdb));
+		release_longterm_db(&memdb);
 		return false;
 	}
 
@@ -362,9 +375,19 @@ bool restore_db_sessions(struct session *sessions, const uint16_t max_sessions)
 	// We use secure_delete to make sure the sessions are really gone
 	// In this mode, SQLite overwrites the deleted content with zeros
 	// (https://www.sqlite.org/pragma.html#pragma_secure_delete)
-	SQL_bool(memdb, "PRAGMA secure_delete = ON;");
-	SQL_bool(memdb, "DELETE FROM disk.session;");
-	SQL_bool(memdb, "PRAGMA secure_delete = OFF;");
+	// PostgreSQL has no such mode, its pages are vacuumed
+	const bool secure = strcmp(memdb->drv->name, "sqlite") == 0;
+	bool okay = true;
+	if(secure && dbquery(memdb, "PRAGMA secure_delete = ON") != DB_OK)
+		okay = false;
+	if(okay && dbquery(memdb, "DELETE FROM %ssession", prefix) != DB_OK)
+	{
+		log_err("restore_db_sessions(): Cannot remove the restored sessions: %s", DB_LAST_ERR(memdb));
+		okay = false;
+	}
+	if(secure && dbquery(memdb, "PRAGMA secure_delete = OFF") != DB_OK)
+		okay = false;
+	release_longterm_db(&memdb);
 
-	return true;
+	return okay;
 }

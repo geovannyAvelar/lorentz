@@ -48,7 +48,7 @@ int api_history_database(struct lorentz_conn *api)
 		                       NULL);
 
 	// Build SQL string
-	const char *querystr = "SELECT (timestamp/:interval)*:interval interval,status,COUNT(*) FROM query_storage "
+	const char *querystr = "SELECT (CAST(timestamp AS BIGINT)/:interval)*:interval interval,status,COUNT(*) FROM query_storage "
 	                       "WHERE (status != 0) AND timestamp >= :from AND timestamp <= :until "
 	                       "GROUP by interval,status ORDER by interval";
 
@@ -234,7 +234,7 @@ int api_stats_database_top_items(struct lorentz_conn *api)
 			           "JOIN domain_by_id d ON d.id = q.domain "
 			           "WHERE timestamp >= :from AND timestamp <= :until "
 			           "AND " FILTER_STATUS_BLOCKED " "
-			           "GROUP BY q.domain ORDER BY cnt DESC LIMIT :count";
+			           "GROUP BY q.domain, d.domain ORDER BY cnt DESC, q.domain DESC LIMIT :count";
 		}
 		else
 		{
@@ -243,7 +243,7 @@ int api_stats_database_top_items(struct lorentz_conn *api)
 			           "JOIN domain_by_id d ON d.id = q.domain "
 			           "WHERE timestamp >= :from AND timestamp <= :until "
 			           "AND " FILTER_STATUS_NOT_BLOCKED " "
-			           "GROUP BY q.domain ORDER BY cnt DESC LIMIT :count";
+			           "GROUP BY q.domain, d.domain ORDER BY cnt DESC, q.domain DESC LIMIT :count";
 		}
 
 		// Count total number of queries for domains
@@ -264,7 +264,7 @@ int api_stats_database_top_items(struct lorentz_conn *api)
 			           "JOIN client_by_id c ON c.id = q.client "
 			           "WHERE timestamp >= :from AND timestamp <= :until "
 			           "AND " FILTER_STATUS_BLOCKED " "
-			           "GROUP BY q.client ORDER BY cnt DESC LIMIT :count";
+			           "GROUP BY q.client, c.ip, c.name ORDER BY cnt DESC, q.client DESC LIMIT :count";
 		}
 		else
 		{
@@ -273,7 +273,7 @@ int api_stats_database_top_items(struct lorentz_conn *api)
 			           "JOIN client_by_id c ON c.id = q.client "
 			           "WHERE timestamp >= :from AND timestamp <= :until "
 			           "AND " FILTER_STATUS_NOT_BLOCKED " "
-			           "GROUP BY q.client ORDER BY cnt DESC LIMIT :count";
+			           "GROUP BY q.client, c.ip, c.name ORDER BY cnt DESC, q.client DESC LIMIT :count";
 		}
 
 		// Count total number of queries for clients
@@ -537,7 +537,7 @@ int api_history_database_clients(struct lorentz_conn *api)
 	db_finalize(stmt);
 
 	// Build SQL string
-	querystr = "SELECT (timestamp/:interval)*:interval interval,client,COUNT(*) FROM query_storage "
+	querystr = "SELECT (CAST(timestamp AS BIGINT)/:interval)*:interval interval,client,COUNT(*) FROM query_storage "
 	           "WHERE timestamp >= :from AND timestamp <= :until "
 	           "GROUP BY interval,client ORDER BY interval DESC, client DESC";
 

@@ -314,6 +314,7 @@ bool create_message_table(db_conn *db)
 // Flush message table
 bool flush_message_table(db_conn *memdb)
 {
+	(void)memdb;
 	// Flush message table, keeping the messages that state a lasting fact
 	// rather than a condition of the run that just ended.
 	//
@@ -321,9 +322,17 @@ bool flush_message_table(db_conn *memdb)
 	// a restart, and it is that very import which triggers the restart - so
 	// flushing it here would delete the message before anyone could see it.
 	// These are dismissed by the user like any other message.
-	SQL_bool(memdb, "DELETE FROM disk.message WHERE type != 'TELEPORTER_SKIPPED';");
+	const char *prefix = "";
+	db_conn *disk = get_longterm_db(&prefix);
+	if(disk == NULL)
+		return false;
 
-	return true;
+	const db_rc rc = dbquery(disk, "DELETE FROM %smessage WHERE type != 'TELEPORTER_SKIPPED'", prefix);
+	if(rc != DB_OK)
+		log_err("flush_message_table(): Failed to flush: %s", DB_LAST_ERR(disk));
+	release_longterm_db(&disk);
+
+	return rc == DB_OK;
 }
 
 static int _add_message(const enum message_type type,
@@ -418,8 +427,10 @@ static int _add_message(const enum message_type type,
 	stmt = NULL;
 
 	// Prepare SQLite statement
-	querystr = "INSERT INTO message (timestamp,type,message,blob1,blob2,blob3,blob4,blob5) "
-	           "VALUES ((cast(strftime('%s', 'now') as int)),?,?,?,?,?,?,?);";
+	char insertstr[192];
+	snprintf(insertstr, sizeof(insertstr), "INSERT INTO message (timestamp,type,message,blob1,blob2,blob3,blob4,blob5) "
+	                                       "VALUES ((%s),?,?,?,?,?,?,?)", DB_NOW(db));
+	querystr = insertstr;
 	rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
 	if( rc != DB_OK )
 	{

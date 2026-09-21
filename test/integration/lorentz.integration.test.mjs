@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   LORENTZ_DB, GRAVITY_DB, api, apiBinary, buildImage, dig, eventually, lorentzLog,
-  restartLorentz, run, settle, sleep, sqlite, startLorentz, waitForApi,
+  restartLorentz, run, settle, sleep, sqlite, startLorentz, startPostgres, waitForApi,
 } from "./lib.mjs";
 
 const BLOCKED = ["0.0.0.0"];
@@ -36,41 +36,86 @@ const LOCAL_DOMAIN = "local.example.com"; // local record set through dns.hosts
 const isWalRecovery = (line) => /recovered \d+ frames from WAL file/.test(line);
 const errorLines = (log) => log.split("\n").filter((line) => /\bERROR\b/.test(line) && !isWalRecovery(line));
 
+// The long-term database Lorentz is run with. SQLite is the default, PostgreSQL
+// needs a Lorentz built with -DUSE_POSTGRESQL=ON. LORENTZ_BACKENDS=sqlite,postgres
+// selects (default: both)
+const wanted = (process.env.LORENTZ_BACKENDS ?? "sqlite,postgres").split(",");
+let postgres;
+
 before(async () => {
   await buildImage();
+  if (wanted.includes("postgres")) postgres = await startPostgres();
+});
+after(async () => {
+  await postgres?.stop();
 });
 
-describe("a fresh lorentz", () => {
+const backends = [];
+if (wanted.includes("sqlite"))
+  backends.push({
+    name: "sqlite",
+    // Start Lorentz. longterm.query() runs SQL on its long-term database
+    async start(environment = {}, options = {}) {
+      const lorentz = await startLorentz(environment, options);
+      lorentz.longterm = { query: (sql) => sqlite(lorentz, LORENTZ_DB, sql) };
+      return lorentz;
+    },
+    // The long-term database is intact
+    healthy: async (lorentz) => assert.equal(await lorentz.longterm.query("PRAGMA integrity_check;"), "ok"),
+  });
+if (wanted.includes("postgres"))
+  backends.push({
+    name: "postgres",
+    async start(environment = {}, options = {}) {
+      const schema = await postgres.schema();
+      const lorentz = await startLorentz(
+        { LORENTZCONF_files_database: schema.uri, ...environment },
+        { ...options, network: postgres.network });
+      lorentz.longterm = { query: schema.sql, schema: schema.name };
+      return lorentz;
+    },
+    healthy: async (lorentz) => assert.equal(await lorentz.longterm.query("SELECT 1"), "1"),
+  });
+
+for (const backend of backends) describe(`a fresh lorentz (${backend.name})`, () => {
   let lorentz;
 
   before(async () => {
-    lorentz = await startLorentz();
+    lorentz = await backend.start();
   });
   after(async () => {
     await lorentz?.stop();
   });
 
   describe("startup", () => {
-    it("migrates the long-term database from scratch and reports no errors", async () => {
+    it("creates the long-term database from scratch and reports no errors", async () => {
       const log = await lorentzLog(lorentz);
-      assert.match(log, /Database version is 1\b/);
-      assert.match(log, /Updating long-term database to version 22/);
+      if (backend.name === "sqlite") {
+        assert.match(log, /Database version is 1\b/);
+        assert.match(log, /Updating long-term database to version 22/);
+      } else {
+        assert.match(log, /Creating the long-term database \(version 22\)/);
+      }
       assert.match(log, /Database successfully initialized/);
-      assert.match(log, /Imported 0 queries from the long-term database/);
+      assert.match(log, /Imported 0 queries from the (on-disk|long-term) database/);
       assert.deepEqual(errorLines(log), [], "lorentz.log contains ERROR lines");
     });
 
     it("leaves a healthy long-term database behind", async () => {
-      assert.equal(await sqlite(lorentz, LORENTZ_DB, "PRAGMA integrity_check;"), "ok");
-      const version = Number(await sqlite(lorentz, LORENTZ_DB, "SELECT value FROM lorentz WHERE id = 0;"));
+      await backend.healthy(lorentz);
+      const db = lorentz.longterm;
+      const version = Number(await db.query("SELECT value FROM lorentz WHERE id = 0;"));
       assert.ok(version >= 22, `database version ${version}`);
-      const tables = (await sqlite(lorentz, LORENTZ_DB,
-        "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;")).split("\n");
+      const tables = (backend.name === "sqlite"
+        ? await db.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;")
+        : await db.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = '${db.schema}' AND table_type = 'BASE TABLE' ORDER BY 1`)
+      ).split("\n");
       for (const table of ["query_storage", "domain_by_id", "client_by_id", "forward_by_id",
         "addinfo_by_id", "message", "session", "network", "network_addresses", "aliasclient", "counters", "lorentz"])
         assert.ok(tables.includes(table), `table ${table} exists`);
-      assert.equal(await sqlite(lorentz, LORENTZ_DB,
-        "SELECT count(*) FROM sqlite_master WHERE type = 'view' AND name = 'queries';"), "1");
+      assert.equal(await db.query(backend.name === "sqlite"
+        ? "SELECT count(*) FROM sqlite_master WHERE type = 'view' AND name = 'queries';"
+        : `SELECT count(*) FROM information_schema.views WHERE table_schema = '${db.schema}' AND table_name = 'queries'`), "1");
     });
 
     it("reads the gravity database", async () => {
@@ -83,7 +128,7 @@ describe("a fresh lorentz", () => {
       assert.equal(body.lorentz.database.domains.denied.total, 2);
     });
 
-    it("reports the SQLite version", async () => {
+    if (backend.name === "sqlite") it("reports the SQLite version", async () => {
       const { status, body } = await api(lorentz, "/api/info/version");
       assert.equal(status, 200);
       assert.match(body.version.lorentz.local.version, /\S/);
@@ -125,6 +170,11 @@ describe("a fresh lorentz", () => {
       const gravity = await api(lorentz, `/api/queries?domain=${GRAVITY_DOMAIN}`);
       assert.equal(gravity.body.queries.length, 1);
       assert.equal(gravity.body.queries[0].client.ip, "127.0.0.1");
+
+      // A wildcard is a LIKE, which ignores the case of letters
+      const wildcard = await api(lorentz, "/api/queries?domain=GRAVITY.lor*");
+      assert.equal(wildcard.body.queries.length, 1);
+      assert.equal(wildcard.body.queries[0].domain, GRAVITY_DOMAIN);
 
       const denied = await api(lorentz, "/api/queries?status=DENYLIST");
       assert.ok(denied.body.queries.every((q) => q.status === "DENYLIST"));
@@ -281,8 +331,8 @@ describe("a fresh lorentz", () => {
 
       // The shutdown exports everything, the start imports it again
       const log = await lorentzLog(lorentz);
-      assert.match(log, /Imported \d+ queries from the on-disk database/);
-      const stored = Number(await sqlite(lorentz, LORENTZ_DB, "SELECT count(*) FROM query_storage;"));
+      assert.match(log, /Imported \d+ queries from the (on-disk|long-term) database/);
+      const stored = Number(await lorentz.longterm.query("SELECT count(*) FROM query_storage;"));
       assert.ok(stored >= before.recordsTotal, `${stored} stored, ${before.recordsTotal} expected`);
 
       const after = await api(lorentz, "/api/queries?length=1");
@@ -293,7 +343,7 @@ describe("a fresh lorentz", () => {
 
       // And Lorentz keeps working
       assert.deepEqual(await dig(lorentz, GRAVITY_DOMAIN), BLOCKED);
-      assert.equal(await sqlite(lorentz, LORENTZ_DB, "PRAGMA integrity_check;"), "ok");
+      await backend.healthy(lorentz);
     });
 
     it("serves statistics from the long-term database", async () => {
@@ -337,12 +387,12 @@ describe("a fresh lorentz", () => {
   });
 });
 
-describe("API sessions", () => {
+for (const backend of backends) describe(`API sessions (${backend.name})`, () => {
   let lorentz;
   const password = "integration-test-password";
 
   before(async () => {
-    lorentz = await startLorentz({ LORENTZCONF_webserver_api_password: password });
+    lorentz = await backend.start({ LORENTZCONF_webserver_api_password: password });
   });
   after(async () => {
     await lorentz?.stop();

@@ -403,7 +403,7 @@ static bool gravityDB_open(void)
 	log_debug(DEBUG_DATABASE, "gravityDB_open(): Trying to open %s in read-write mode", config.files.gravity.v.s);
 	db_rc rc;
 	const char *open_error = NULL;
-	gravity_db = db_open_ex(config.files.gravity.v.s, DB_OPEN_READWRITE, &rc, &open_error);
+	gravity_db = db_open_sqlite_ex(config.files.gravity.v.s, DB_OPEN_READWRITE, &rc, &open_error);
 	if(gravity_db == NULL)
 	{
 		log_err("gravityDB_open() - SQL error: %s", open_error);
@@ -1878,7 +1878,7 @@ bool gravityDB_get_regex_client_groups(clientsData *client, const unsigned int n
 static db_conn *gravity_write_open(const char **message)
 {
 	const char *open_error = NULL;
-	db_conn *db = db_open_ex(config.files.gravity.v.s, DB_OPEN_READWRITE, NULL, &open_error);
+	db_conn *db = db_open_sqlite_ex(config.files.gravity.v.s, DB_OPEN_READWRITE, NULL, &open_error);
 	if(db == NULL)
 	{
 		log_err("gravity_write_open() - SQL error open: %s", open_error);
@@ -2474,7 +2474,7 @@ bool gravityDB_delFromTable(const enum gravity_list_type listtype, const cJSON* 
 db_conn *gravityDB_open_RO(void)
 {
 	const char *open_error = NULL;
-	db_conn *db = db_open_ex(config.files.gravity.v.s, DB_OPEN_READONLY | DB_OPEN_NOMUTEX, NULL, &open_error);
+	db_conn *db = db_open_sqlite_ex(config.files.gravity.v.s, DB_OPEN_READONLY | DB_OPEN_NOMUTEX, NULL, &open_error);
 	if(db == NULL)
 	{
 		log_err("gravityDB_open_RO() - SQL error open: %s", open_error);
@@ -3224,7 +3224,7 @@ bool gravity_updated(void)
 
 	// Open database
 	const char *open_error = NULL;
-	db_conn *db = db_open_ex(config.files.gravity.v.s, DB_OPEN_READONLY | DB_OPEN_NOMUTEX, NULL, &open_error);
+	db_conn *db = db_open_sqlite_ex(config.files.gravity.v.s, DB_OPEN_READONLY | DB_OPEN_NOMUTEX, NULL, &open_error);
 	if(db == NULL)
 	{
 		log_err("gravity_updated(): %s - SQL error open: %s", config.files.gravity.v.s, open_error);

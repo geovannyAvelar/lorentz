@@ -288,7 +288,7 @@ int api_queries(struct lorentz_conn *api)
 
 	// Start building database query string
 	char querystr[QUERYSTRBUFFERLEN] = { 0 };
-	snprintf(querystr, QUERYSTRBUFFERLEN, "%s FROM %s q %s", QUERYSTR, disk ? "disk.query_storage" : "query_storage", JOINSTR);
+	snprintf(querystr, QUERYSTRBUFFERLEN, "%s FROM %s q %s", QUERYSTR, disk && !db_uri_is_remote(config.files.database.v.s) ? "disk.query_storage" : "query_storage", JOINSTR);
 	int draw = 0;
 
 	char domainname[512] = { 0 };
@@ -561,6 +561,8 @@ int api_queries(struct lorentz_conn *api)
 	// releases the statement and the compiled regexes
 	int ret = 200;
 	db_stmt *read_stmt = NULL;
+	// The connection to a long-term database on a server, if that is what is read
+	db_conn *remote_db = NULL;
 	// Both regex arrays are declared before the first goto below: the
 	// epilogue frees them, and jumping past their declarations would leave
 	// it reading indeterminate values
@@ -593,8 +595,13 @@ int api_queries(struct lorentz_conn *api)
 	// Finish preparing query string
 	querystr_finish(querystr, sort_col, sort_dir);
 
-	// Get connection to in-memory database
-	db_conn *memdb = get_memdb();
+	// Get connection to in-memory database or, for a long-term database on a
+	// server, to that server
+	db_conn *memdb = NULL;
+	if(disk && db_uri_is_remote(config.files.database.v.s))
+		memdb = remote_db = get_longterm_db(NULL);
+	else
+		memdb = get_memdb();
 	if(memdb == NULL)
 	{
 		ret = send_json_error(api, 500, // 500 Internal error
@@ -1142,6 +1149,7 @@ int api_queries(struct lorentz_conn *api)
 
 	// Finalize statements
 	db_finalize(read_stmt);
+	release_longterm_db(&remote_db);
 	free_filter_regex(regex_domains, N_regex_domains);
 	free_filter_regex(regex_clients, N_regex_clients);
 
@@ -1149,6 +1157,7 @@ int api_queries(struct lorentz_conn *api)
 
 queries_fail:
 	db_finalize(read_stmt);
+	release_longterm_db(&remote_db);
 	free_filter_regex(regex_domains, N_regex_domains);
 	free_filter_regex(regex_clients, N_regex_clients);
 	return ret;

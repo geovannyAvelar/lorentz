@@ -58,6 +58,11 @@ void SQLite3LogCallback(void *pArg, int iErrCode, const char *zMsg);
 bool db_set_counter(db_conn *db, const enum counters_table_props ID, const int value);
 bool db_update_disk_counter(db_conn *db, const enum counters_table_props ID, const int change);
 const char *get_sqlite3_version(void);
+int64_t get_remote_db_size(void);
+int64_t db_copy_rows(db_stmt *src, db_stmt *dst, db_conn *dstdb, const int ncols, const int int_col, const char *what);
+// SQL expression for the current Unix time in the SQL dialect of a connection
+#define DB_IS_SQLITE(db) (strcmp((db)->drv->name, "sqlite") == 0)
+#define DB_NOW(db) ((db)->drv->dialect->now_expr())
 int64_t get_row_count(const char *table_name, const bool memory);
 
 extern bool DBdeleteoldqueries;

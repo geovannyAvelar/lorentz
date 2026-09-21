@@ -53,13 +53,13 @@ static bool check_db_error(const bool corrupt, const bool readonly)
 	// Check if the database file is malformed
 	if(corrupt)
 	{
-		log_warn("Database %s is damaged and cannot be used.", config.files.database.v.s);
+		log_warn("Database %s is damaged and cannot be used.", db_uri_display(config.files.database.v.s));
 		atomic_store_explicit(&DBerror, true, memory_order_relaxed);
 	}
 	// Check if the database file is read-only
 	if(readonly)
 	{
-		log_warn("Database %s is read-only and cannot be used.", config.files.database.v.s);
+		log_warn("Database %s is read-only and cannot be used.", db_uri_display(config.files.database.v.s));
 		atomic_store_explicit(&DBerror, true, memory_order_relaxed);
 	}
 
@@ -194,7 +194,7 @@ db_conn *_dbopen(const bool readonly, const bool create, const char *func, const
 
 	db_rc rc = DB_OK;
 	const char *msg = NULL;
-	db_conn *db = db_open_ex(config.files.database.v.s, flags, &rc, &msg);
+	db_conn *db = db_open_uri_ex(config.files.database.v.s, flags, &rc, &msg);
 	if(db == NULL)
 	{
 		log_err("Error while trying to open database: %s", msg);
@@ -232,7 +232,7 @@ db_conn *_dbopen(const bool readonly, const bool create, const char *func, const
 // Run a formatted query
 static db_rc vdbquery(db_conn *db, const char *format, va_list args)
 {
-	const db_driver *drv = db != NULL ? db->drv : db_driver_active();
+	const db_driver *drv = db != NULL ? db->drv : db_driver_for_uri(config.files.database.v.s);
 	char *query = drv->vmprintf(format, args);
 
 	if(query == NULL)
@@ -479,8 +479,8 @@ static void db_init_server(void)
 
 void db_init(void)
 {
-	// Only SQLite has a file and a history of migrations to replay
-	if(strcmp(db_driver_active()->name, "sqlite") != 0)
+	// Only a SQLite file has a history of migrations to replay
+	if(db_uri_is_remote(config.files.database.v.s))
 	{
 		db_init_server();
 		return;
@@ -1152,10 +1152,98 @@ int db_query_int_from_until_type(db_conn *db, const char* querystr, const double
 	return result;
 }
 
+// Size in bytes of a database on a server, 0 if it cannot be told
+int64_t get_remote_db_size(void)
+{
+	db_conn *db = dbopen(true, false);
+	if(db == NULL)
+		return 0;
+
+	int64_t size = 0;
+	db_stmt *stmt = db_prepare(db, "SELECT pg_database_size(current_database())", false);
+	if(stmt != NULL && db_step(stmt) == DB_ROW)
+		size = db_column_int64(stmt, 0);
+	db_finalize(stmt);
+	dbclose(&db);
+
+	return size;
+}
+
+// Bind column col of the current row of src to parameter idx of dst
+static db_rc bind_copy(db_stmt *dst, const int idx, db_stmt *src, const int col)
+{
+	switch(db_column_type(src, col))
+	{
+		case DB_TYPE_INT:
+		case DB_TYPE_INT64:
+			return db_bind_int64(dst, idx, db_column_int64(src, col));
+		case DB_TYPE_DOUBLE:
+			return db_bind_double(dst, idx, db_column_double(src, col));
+		case DB_TYPE_TEXT:
+			return db_bind_text(dst, idx, db_column_text(src, col));
+		case DB_TYPE_BLOB:
+			return db_bind_blob(dst, idx, db_column_blob(src, col), (size_t)db_column_bytes(src, col));
+		case DB_TYPE_NULL:
+		default:
+			return db_bind_null(dst, idx);
+	}
+}
+
+// Step through src and run dst (on connection dstdb) with the columns of every row as its
+// parameters. Returns the number of rows for which dst changed a row, -1 on
+// failure. int_col is the 0-based column that holds a number in the in-memory
+// database even where the server stores it as text (or -1)
+int64_t db_copy_rows(db_stmt *src, db_stmt *dst, db_conn *dstdb, const int ncols, const int int_col, const char *what)
+{
+	int64_t changed = 0;
+	db_rc rc;
+	unsigned int n = 0;
+	while((rc = db_step(src)) == DB_ROW)
+	{
+		if((++n % 1024) == 0 && killed)
+			return -1;
+
+		for(int i = 0; i < ncols; i++)
+		{
+			db_rc brc;
+			if(i == int_col && db_column_type(src, i) == DB_TYPE_TEXT)
+			{
+				// A text that is a number stays a number
+				const char *text = db_column_text(src, i);
+				char *end = NULL;
+				const long long v = text != NULL ? strtoll(text, &end, 10) : 0;
+				if(text != NULL && *text != '\0' && *end == '\0')
+					brc = db_bind_int64(dst, i + 1, v);
+				else
+					brc = bind_copy(dst, i + 1, src, i);
+			}
+			else
+				brc = bind_copy(dst, i + 1, src, i);
+
+			if(brc != DB_OK)
+			{
+				log_err("db_copy_rows(%s): Cannot bind column %d", what, i);
+				return -1;
+			}
+		}
+
+		if(db_step(dst) != DB_DONE)
+		{
+			log_err("db_copy_rows(%s): Cannot store row", what);
+			db_reset(dst);
+			return -1;
+		}
+		changed += db_changes(dstdb) > 0 ? 1 : 0;
+		db_reset(dst);
+	}
+
+	return rc == DB_DONE ? changed : -1;
+}
+
 // Return the version string of the database engine in use
 const char *get_sqlite3_version(void)
 {
-	return db_driver_active()->version();
+	return db_driver_sqlite.version();
 }
 
 /**

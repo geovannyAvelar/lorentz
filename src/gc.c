@@ -637,8 +637,10 @@ void *GC_thread(void *val)
 	// Whether an external tracer has been detected
 	bool is_debugged = false;
 
+	// A database on another host shares no device with the log
 	bool db_and_log_on_same_dev = false;
-	db_and_log_on_same_dev = check_files_on_same_device(config.files.database.v.s, config.files.log.lorentz.v.s);
+	if(!db_uri_is_remote(config.files.database.v.s))
+		db_and_log_on_same_dev = check_files_on_same_device(config.files.database.v.s, config.files.log.lorentz.v.s);
 
 	// Create inotify watcher for lorentz.toml config file
 	watch_config(true);
@@ -681,7 +683,8 @@ void *GC_thread(void *val)
 			check_load();
 
 			// Check disk space of database file
-			LastDBStorageUsage = check_space(config.files.database.v.s, LastDBStorageUsage);
+			if(!db_uri_is_remote(config.files.database.v.s))
+				LastDBStorageUsage = check_space(config.files.database.v.s, LastDBStorageUsage);
 
 			// Check disk space of log file only if they are not on
 			// the same file system

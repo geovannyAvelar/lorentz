@@ -38,6 +38,7 @@
 //     - There is no busy handler, waiting for a lock is the job of
 //       lock_timeout, which set_busy_handler() sets.
 //     - glob_op() has no equivalent and returns NULL.
+//     - LIKE is rewritten to ILIKE: SQLite's LIKE ignores the case of ASCII letters.
 //     - The schema version is kept in the table lorentz_schema_version.
 //
 // Errors are reported through SQLSTATE codes, packed into the integer that
@@ -61,10 +62,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 // lorentz.h redirects a number of libc functions to tracking wrappers. This
 // driver only uses plain libc, which is what libpq allocates with as well
 #undef free
+#undef strncasecmp
 #undef strdup
 #undef calloc
 #undef realloc
@@ -684,6 +687,27 @@ static char *translate_sql(const char *sql, int *nparams, char ***names_out)
 				i = j;
 				continue;
 			}
+		}
+
+		// A word. SQLite's LIKE ignores the case of ASCII letters, PostgreSQL's does
+		// not, so LIKE is ILIKE here
+		if(isalpha((unsigned char)c) || c == '_')
+		{
+			size_t j = i;
+			while(j < len && (isalnum((unsigned char)sql[j]) || sql[j] == '_' || sql[j] == '$'))
+				j++;
+			if(j - i == 4 && strncasecmp(sql + i, "LIKE", 4) == 0 && !(i > 0 && sql[i - 1] == '.'))
+			{
+				memcpy(out + o, "ILIKE", 5);
+				o += 5;
+			}
+			else
+			{
+				memcpy(out + o, sql + i, j - i);
+				o += j - i;
+			}
+			i = j;
+			continue;
 		}
 
 		out[o++] = sql[i++];

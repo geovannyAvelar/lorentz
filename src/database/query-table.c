@@ -29,6 +29,9 @@
 // file_exists()
 #include "files.h"
 
+// Is the long-term database on a server rather than a file? See get_longterm_db()
+#define REMOTE_LONGTERM() db_uri_is_remote(config.files.database.v.s)
+
 static db_conn *_memdb = NULL;
 static double new_last_timestamp = 0;
 static uint32_t new_total = 0, new_blocked = 0;
@@ -193,7 +196,7 @@ bool init_memory_database(void)
 	// recreated from scratch on Lorentz start and deleted on Lorentz stop.
 	const char *db_path = config.database.forceDisk.v.b ? config.files.tmp_db.v.s : ":memory:";
 	const char *open_error = NULL;
-	_memdb = db_open_ex(db_path, DB_OPEN_READWRITE | DB_OPEN_CREATE, &rc, &open_error);
+	_memdb = db_open_sqlite_ex(db_path, DB_OPEN_READWRITE | DB_OPEN_CREATE, &rc, &open_error);
 	if(_memdb == NULL)
 	{
 		log_err("init_memory_database(): Error opening database: %s at %s",
@@ -249,14 +252,17 @@ bool init_memory_database(void)
 		}
 	}
 
-	// Attach disk database. This may fail if the database is unavailable
-	const bool attached = attach_database(_memdb, NULL, config.files.database.v.s, "disk");
+	// Attach disk database. This may fail if the database is unavailable. A
+	// database on a server is not attached, it is used through its own
+	// connections
+	const bool remote = REMOTE_LONGTERM();
+	const bool attached = remote ? !LorentzDBerror() : attach_database(_memdb, NULL, config.files.database.v.s, "disk");
 
 	// Enable WAL mode for the on-disk database (lorentz.db) if
 	// configured (default is yes). User may not want to enable WAL
 	// mode if the database is on a network share as all processes
 	// accessing the database must be on the same host in WAL mode.
-	if(config.database.useWAL.v.b && attached)
+	if(config.database.useWAL.v.b && attached && !remote)
 	{
 		// Change journal mode to WAL
 		// - WAL is significantly faster in most scenarios.
@@ -299,7 +305,7 @@ bool init_memory_database(void)
 			return false;
 		}
 	}
-	else if(attached)
+	else if(attached && !remote)
 	{
 		// Unlike the other journaling modes, PRAGMA journal_mode=WAL is
 		// persistent. If a process sets WAL mode, then closes and
@@ -337,7 +343,7 @@ bool init_memory_database(void)
 	// warming the entire file would evict useful cached pages (gravity
 	// B-tree, DNS cache) on memory-constrained systems. The mmap alone
 	// is sufficient: pages fault in on demand during import.
-	if(attached)
+	if(attached && !remote)
 	{
 		rc = db_exec(_memdb, "PRAGMA disk.mmap_size = 268435456");
 		if(rc != DB_OK)
@@ -375,32 +381,36 @@ bool init_memory_database(void)
 	// Clear process-local addinfo ID cache
 	memset(addinfo_id_cache, 0, sizeof(addinfo_id_cache));
 
-	// The IFNULL() is needed to handle the case when there are no queries
-	// in the on-disk database yet. In this case, we want to copy all
-	// queries from the in-memory database (including the query with ID 0)
-	// to the on-disk database.
-	if(!prepare_persistent(&queries_to_disk_stmt, "queries_to_disk", "step",
-	                       "INSERT INTO disk.query_storage SELECT * FROM query_storage "
-	                       "WHERE id > (SELECT IFNULL(MAX(id), -1) FROM disk.query_storage) "
-	                       "AND timestamp < ?"))
-		return false;
-
-	// Export linking tables to disk database
-	// We limit the export to new records to avoid the overhead of many
-	// IGNORE executions for records that are already present on disk. It
-	// follows the same logic as for the main query_storage table above.
-	const char *subtable_sql[SUBTABLE_STMTS] = {
-		"INSERT OR IGNORE INTO disk.domain_by_id SELECT * FROM domain_by_id WHERE id > (SELECT IFNULL(MAX(id), -1) FROM disk.domain_by_id)",
-		"INSERT OR IGNORE INTO disk.client_by_id SELECT * FROM client_by_id WHERE id > (SELECT IFNULL(MAX(id), -1) FROM disk.client_by_id)",
-		"INSERT OR IGNORE INTO disk.forward_by_id SELECT * FROM forward_by_id WHERE id > (SELECT IFNULL(MAX(id), -1) FROM disk.forward_by_id)",
-		"INSERT OR IGNORE INTO disk.addinfo_by_id SELECT * FROM addinfo_by_id WHERE id > (SELECT IFNULL(MAX(id), -1) FROM disk.addinfo_by_id)",
-		"UPDATE disk.sqlite_sequence SET seq = (SELECT seq FROM sqlite_sequence WHERE disk.sqlite_sequence.name = sqlite_sequence.name)"
-	};
-
-	// Export linking tables
-	for(unsigned int i = 0; i < SUBTABLE_STMTS; i++)
-		if(!prepare_persistent(&subtables_to_disk_stmts[i], "queries_to_disk", "prepare", subtable_sql[i]))
+	// Moving data to a server is done by copy_new_rows(), not by statements
+	if(!remote)
+	{
+		// The IFNULL() is needed to handle the case when there are no queries
+		// in the on-disk database yet. In this case, we want to copy all
+		// queries from the in-memory database (including the query with ID 0)
+		// to the on-disk database.
+		if(!prepare_persistent(&queries_to_disk_stmt, "queries_to_disk", "step",
+		                       "INSERT INTO disk.query_storage SELECT * FROM query_storage "
+		                       "WHERE id > (SELECT IFNULL(MAX(id), -1) FROM disk.query_storage) "
+		                       "AND timestamp < ?"))
 			return false;
+
+		// Export linking tables to disk database
+		// We limit the export to new records to avoid the overhead of many
+		// IGNORE executions for records that are already present on disk. It
+		// follows the same logic as for the main query_storage table above.
+		const char *subtable_sql[SUBTABLE_STMTS] = {
+			"INSERT OR IGNORE INTO disk.domain_by_id SELECT * FROM domain_by_id WHERE id > (SELECT IFNULL(MAX(id), -1) FROM disk.domain_by_id)",
+			"INSERT OR IGNORE INTO disk.client_by_id SELECT * FROM client_by_id WHERE id > (SELECT IFNULL(MAX(id), -1) FROM disk.client_by_id)",
+			"INSERT OR IGNORE INTO disk.forward_by_id SELECT * FROM forward_by_id WHERE id > (SELECT IFNULL(MAX(id), -1) FROM disk.forward_by_id)",
+			"INSERT OR IGNORE INTO disk.addinfo_by_id SELECT * FROM addinfo_by_id WHERE id > (SELECT IFNULL(MAX(id), -1) FROM disk.addinfo_by_id)",
+			"UPDATE disk.sqlite_sequence SET seq = (SELECT seq FROM sqlite_sequence WHERE disk.sqlite_sequence.name = sqlite_sequence.name)"
+		};
+
+		// Export linking tables
+		for(unsigned int i = 0; i < SUBTABLE_STMTS; i++)
+			if(!prepare_persistent(&subtables_to_disk_stmts[i], "queries_to_disk", "prepare", subtable_sql[i]))
+				return false;
+	}
 
 	// Initialize in-memory database starting index
 	init_disk_db_idx(_memdb);
@@ -444,7 +454,7 @@ void close_memory_database(void)
 	}
 
 	// Detach disk database
-	if(!detach_database(_memdb, NULL, "disk"))
+	if(!REMOTE_LONGTERM() && !detach_database(_memdb, NULL, "disk"))
 		log_err("close_memory_database(): Failed to detach disk database");
 
 	// Close the in-memory database connection
@@ -618,6 +628,270 @@ static uint64_t get_number_of_queries_in_DB(db_conn *db, const char *tablename, 
 static double import_from = 0.0;
 static double import_until = 0.0;
 static int counted_queries = 0;
+
+// ---- Long-term database on a server ----
+// A SQLite long-term database is attached to the in-memory database and moved
+// data with INSERT ... SELECT. A database on a server cannot be attached, so
+// there the two databases are separate connections and the rows are copied by
+// Lorentz itself.
+
+// The connection through which the long-term database is read and the prefix
+// of its tables. Release the connection with release_longterm_db()
+db_conn *get_longterm_db(const char **prefix)
+{
+	if(REMOTE_LONGTERM())
+	{
+		if(prefix != NULL)
+			*prefix = "";
+		return dbopen(false, false);
+	}
+
+	if(prefix != NULL)
+		*prefix = "disk.";
+	return get_memdb();
+}
+
+void release_longterm_db(db_conn **db)
+{
+	if(db == NULL || *db == NULL)
+		return;
+
+	// The in-memory connection outlives the caller
+	if(is_memdb(*db))
+		*db = NULL;
+	else
+		dbclose(db);
+}
+
+// Columns of query_storage in the order of the table
+#define QUERY_STORAGE_COLUMNS "id,timestamp,type,status,domain,client,forward,additional_info,reply_type,reply_time,dnssec,list_id,ede"
+#define QUERY_STORAGE_NCOLS 13
+
+// The linking tables and the columns they are copied with
+static const struct {
+	const char *name;
+	const char *columns;
+	const char *values;
+	const char *conflict;
+	int ncols;
+	int int_col;
+} subtables[] = {
+	{ "domain_by_id",  "id,domain",         "?,?",   "id", 2, -1 },
+	{ "client_by_id",  "id,ip,name",        "?,?,?", "id", 3, -1 },
+	{ "forward_by_id", "id,forward",        "?,?",   "id", 2, -1 },
+	// content is a number in the in-memory database, the server has text
+	{ "addinfo_by_id", "id,type,content",   "?,?,?", "id", 3,  2 }
+};
+
+// Copy rows of table from one database to the other, only those that the
+// destination does not have yet (id above its highest). Returns rows copied,
+// -1 on failure
+static int64_t copy_new_rows(db_conn *src, db_conn *dst, const char *table, const char *columns,
+                             const char *values, const int ncols, const int int_col,
+                             const char *extra_where, const double bind_time)
+{
+	char sql[512];
+	db_stmt *max = NULL;
+	snprintf(sql, sizeof(sql), "SELECT COALESCE(MAX(id), -1) FROM %s", table);
+	int64_t maxid = -1;
+	if((max = db_prepare(dst, sql, false)) == NULL || db_step(max) != DB_ROW)
+	{
+		log_err("copy_new_rows(%s): Cannot get the highest id: %s", table, DB_LAST_ERR(dst));
+		db_finalize(max);
+		return -1;
+	}
+	maxid = db_column_int64(max, 0);
+	db_finalize(max);
+
+	snprintf(sql, sizeof(sql), "SELECT %s FROM %s WHERE id > ?%s ORDER BY id", columns, table, extra_where);
+	db_stmt *sel = db_prepare(src, sql, false);
+	snprintf(sql, sizeof(sql), "INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (id) DO NOTHING", table, columns, values);
+	db_stmt *ins = db_prepare(dst, sql, false);
+	int64_t copied = -1;
+	if(sel != NULL && ins != NULL && db_bind_int64(sel, 1, maxid) == DB_OK &&
+	   (extra_where[0] == '\0' || db_bind_double(sel, 2, bind_time) == DB_OK))
+		copied = db_copy_rows(sel, ins, dst, ncols, int_col, table);
+	else
+		log_err("copy_new_rows(%s): Cannot prepare: %s / %s", table,
+		        sel == NULL ? DB_LAST_ERR(src) : "", ins == NULL ? DB_LAST_ERR(dst) : "");
+	db_finalize(sel);
+	db_finalize(ins);
+	return copied;
+}
+
+// Export to a long-term database on a server. Same contract as
+// export_queries_to_disk()
+static bool export_queries_to_remote(const bool final)
+{
+	const double time = double_time() - (final ? 0.0 : REPLY_TIMEOUT);
+
+	if(LorentzDBerror())
+		return false;
+
+	timer_start(DATABASE_WRITE_TIMER);
+
+	db_conn *memdb = get_memdb();
+	db_conn *disk = dbopen(false, false);
+	if(disk == NULL)
+		return false;
+
+	bool okay = true;
+	int64_t insertions = 0;
+
+	// One read view of the in-memory database and one transaction on the server
+	if(dbquery(memdb, "BEGIN") != DB_OK || dbquery(disk, "BEGIN") != DB_OK)
+	{
+		log_err("export_queries_to_disk(): Cannot begin transaction: %s", DB_LAST_ERR(disk));
+		dbquery(memdb, "ROLLBACK");
+		dbclose(&disk);
+		return false;
+	}
+
+	// Only store queries if database.maxDBdays > 0
+	if(config.database.maxDBdays.v.ui > 0)
+	{
+		log_debug(DEBUG_DATABASE, "Storing queries on the server WHERE timestamp < %f (memdb_queries_maxid = %"PRId64")",
+		          time, memdb_queries_maxid);
+
+		insertions = copy_new_rows(memdb, disk, "query_storage", QUERY_STORAGE_COLUMNS,
+		                           "?,?,?,?,?,?,?,?,?,?,?,?,?", QUERY_STORAGE_NCOLS, -1,
+		                           " AND timestamp < ?", time);
+		if(insertions < 0)
+		{
+			log_err("export_queries_to_disk(): Failed to export queries");
+			okay = false;
+		}
+		else if(insertions > 0)
+		{
+			diskdb_queries_count += insertions;
+
+			if(dbquery(disk, "INSERT INTO lorentz (id, value) VALUES ( %i, %f ) "
+			                 "ON CONFLICT (id) DO UPDATE SET value = excluded.value",
+			           DB_LASTTIMESTAMP, new_last_timestamp) != DB_OK)
+				log_err("export_queries_to_disk(): Cannot update timestamp: %s", DB_LAST_ERR(disk));
+
+			if(!db_update_disk_counter(disk, DB_TOTALQUERIES, new_total))
+				log_err("export_queries_to_disk(): Cannot update total queries counter: %s", DB_LAST_ERR(disk));
+			else
+				new_total = 0;
+
+			if(!db_update_disk_counter(disk, DB_BLOCKEDQUERIES, new_blocked))
+				log_err("export_queries_to_disk(): Cannot update blocked queries counter: %s", DB_LAST_ERR(disk));
+			else
+				new_blocked = 0;
+		}
+	}
+
+	// Linking tables
+	for(unsigned int i = 0; okay && i < ArraySize(subtables); i++)
+	{
+		const int64_t rows = copy_new_rows(memdb, disk, subtables[i].name, subtables[i].columns,
+		                                   subtables[i].values, subtables[i].ncols,
+		                                   -1, "", 0.0);
+		if(rows < 0)
+		{
+			log_err("export_queries_to_disk(%s): Cannot export subtable", subtables[i].name);
+			okay = false;
+		}
+		log_debug(DEBUG_DATABASE, "Exported %"PRId64" rows to %s", rows, subtables[i].name);
+	}
+
+	// A failed export must not leave half of it on the server. The in-memory
+	// side is a read only view
+	if(okay && dbquery(disk, "COMMIT") != DB_OK)
+	{
+		log_err("export_queries_to_disk(): Cannot commit: %s", DB_LAST_ERR(disk));
+		okay = false;
+	}
+	if(!okay)
+	{
+		dbquery(disk, "ROLLBACK");
+		// The counters above were not stored
+		if(insertions > 0)
+			diskdb_queries_count -= insertions;
+	}
+	if(dbquery(memdb, "END") != DB_OK)
+	{
+		log_err("export_queries_to_disk(): Cannot end transaction: %s", DB_LAST_ERR(memdb));
+		dbquery(memdb, "ROLLBACK");
+	}
+	dbclose(&disk);
+
+	log_debug(DEBUG_DATABASE, "Exported %"PRId64" rows for query_storage (took %.1f ms)",
+	          insertions, timer_elapsed_msec(DATABASE_WRITE_TIMER));
+
+	return okay;
+}
+
+// Import from a long-term database on a server. Same contract as
+// import_queries_from_disk()
+static bool import_queries_from_remote(void)
+{
+	db_conn *memdb = get_memdb();
+	db_conn *disk = dbopen(true, false);
+	if(disk == NULL)
+		return false;
+
+	bool okay = false;
+	int64_t imported = -1;
+	if(dbquery(memdb, "BEGIN") != DB_OK)
+	{
+		log_err("import_queries_from_disk(): Cannot begin transaction: %s", DB_LAST_ERR(memdb));
+		dbclose(&disk);
+		return false;
+	}
+
+	db_stmt *sel = db_prepare(disk, "SELECT " QUERY_STORAGE_COLUMNS " FROM query_storage "
+	                                "WHERE timestamp BETWEEN ? AND ? ORDER BY id", false);
+	db_stmt *ins = db_prepare(memdb, "INSERT INTO query_storage (" QUERY_STORAGE_COLUMNS ") "
+	                                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", false);
+	if(sel != NULL && ins != NULL &&
+	   db_bind_double(sel, 1, import_from) == DB_OK && db_bind_double(sel, 2, import_until) == DB_OK)
+		imported = db_copy_rows(sel, ins, memdb, QUERY_STORAGE_NCOLS, -1, "query_storage");
+	else
+		log_err("import_queries_from_disk(): SQL error prepare: %s", sel == NULL ? DB_LAST_ERR(disk) : DB_LAST_ERR(memdb));
+	db_finalize(sel);
+	db_finalize(ins);
+
+	// Linking tables, in full
+	for(unsigned int i = 0; imported >= 0 && !killed && i < ArraySize(subtables); i++)
+	{
+		char sql[256];
+		snprintf(sql, sizeof(sql), "SELECT %s FROM %s ORDER BY id", subtables[i].columns, subtables[i].name);
+		sel = db_prepare(disk, sql, false);
+		snprintf(sql, sizeof(sql), "INSERT INTO %s (%s) VALUES (%s)", subtables[i].name,
+		         subtables[i].columns, subtables[i].values);
+		ins = db_prepare(memdb, sql, false);
+		if(sel == NULL || ins == NULL ||
+		   db_copy_rows(sel, ins, memdb, subtables[i].ncols, subtables[i].int_col, subtables[i].name) < 0)
+		{
+			log_err("import_queries_from_disk(%s): Cannot import linking table", subtables[i].name);
+			imported = -1;
+		}
+		db_finalize(sel);
+		db_finalize(ins);
+	}
+
+	if(imported >= 0 && !killed && dbquery(memdb, "END") == DB_OK)
+		okay = true;
+	else
+		dbquery(memdb, "ROLLBACK");
+
+	if(okay)
+	{
+		if(imported != counted_queries)
+			log_warn("Database %s has changed during import: Expected to import %i queries, but only imported %"PRId64". You may observe memory error warnings.",
+			         db_uri_display(config.files.database.v.s), counted_queries, imported);
+
+		memdb_queries_count = imported;
+		memdb_earliest_timestamp = import_from;
+		diskdb_queries_count = get_number_of_queries_in_DB(disk, "query_storage", &diskdb_earliest_timestamp);
+		log_info("Imported %"PRIu64" queries from the long-term database (it has %"PRIu64" rows)", memdb_queries_count, diskdb_queries_count);
+	}
+	dbclose(&disk);
+
+	return okay;
+}
 // Start transaction and count number of queries to be imported from disk.
 // We keep the transaction open so that no new queries are written to the disk
 // database until we have copied the data into the in-memory database in
@@ -629,9 +903,13 @@ static bool count_queries_on_disk(db_conn *memdb)
 	import_until = double_time();
 	import_from = import_until - config.webserver.api.maxHistory.v.ui;
 
-	counted_queries = db_query_int_from_until(memdb, "SELECT COUNT(*) FROM disk.query_storage "
-	                                                 "WHERE timestamp BETWEEN ? AND ?",
-	                                                 import_from, import_until);
+	const char *prefix = "";
+	db_conn *disk = get_longterm_db(&prefix);
+	char countstr[128];
+	snprintf(countstr, sizeof(countstr), "SELECT COUNT(*) FROM %squery_storage "
+	                                     "WHERE timestamp BETWEEN ? AND ?", prefix);
+	counted_queries = disk != NULL ? db_query_int_from_until(disk, countstr, import_from, import_until) : DB_FAILED;
+	release_longterm_db(&disk);
 	log_debug(DEBUG_DATABASE, "count_queries_on_disk(): Going to import %i queries from disk database",
 	          counted_queries);
 
@@ -692,6 +970,9 @@ void get_db_info(const bool disk, uint64_t *count, double *earliest_timestamp)
 // restart, etc.). A transaction is already running when this function is called.
 bool import_queries_from_disk(void)
 {
+	if(REMOTE_LONGTERM())
+		return import_queries_from_remote();
+
 	// Get time stamp 24 hours (or what was configured) in the past
 	bool okay = false;
 	const char *querystr = "INSERT INTO query_storage SELECT * FROM disk.query_storage WHERE timestamp BETWEEN ? AND ?";
@@ -759,7 +1040,7 @@ bool import_queries_from_disk(void)
 
 	if(!killed && imported_queries != counted_queries)
 		log_warn("Database %s has changed during import: Expected to import %i queries, but only imported %i. You may observe memory error warnings.",
-		         config.files.database.v.s, counted_queries, imported_queries);
+		         db_uri_display(config.files.database.v.s), counted_queries, imported_queries);
 
 	// Finalize statement
 	db_finalize(stmt);
@@ -828,6 +1109,9 @@ bool import_queries_from_disk(void)
 // to be added to the in-memory database anymore).
 bool export_queries_to_disk(const bool final)
 {
+	if(REMOTE_LONGTERM())
+		return export_queries_to_remote(final);
+
 	db_rc rc = DB_OK;
 	bool okay = false;
 	unsigned int insertions = 0;
@@ -1032,7 +1316,7 @@ bool delete_old_queries_from_db(const bool use_memdb, const double mintime)
 
 		// Log size of database and number of deleted rows
 		log_info("Size of %s is %.2f MB, deleted %"PRId64" of %"PRIu64" rows",
-			config.files.database.v.s, 9.5367431640625e-07*st.st_size,
+			db_uri_display(config.files.database.v.s), 9.5367431640625e-07*st.st_size,
 			deleted, diskdb_queries_count);
 
 		// Close on-disk database
@@ -1501,7 +1785,7 @@ void DB_read_queries(void)
 		if(queryIndex >= counted_queries)
 		{
 			log_warn("Database %s has changed during import: Expected to import %i queries. Parts of the history may be missing.",
-			         config.files.database.v.s, counted_queries);
+			         db_uri_display(config.files.database.v.s), counted_queries);
 			unlock_shm();
 			break;
 		}
@@ -1694,7 +1978,7 @@ void DB_read_queries(void)
 	if(!killed && (int)imported_queries < counted_queries)
 	{
 		log_warn("Database %s has changed during import: Expected to import %i queries, but found only %zu. You may see harmless memory errors in the log.",
-		         config.files.database.v.s, counted_queries, imported_queries);
+		         db_uri_display(config.files.database.v.s), counted_queries, imported_queries);
 	}
 
 	// Finalize SQLite3 statement
@@ -1703,7 +1987,11 @@ void DB_read_queries(void)
 
 static void init_disk_db_idx(db_conn *memdb)
 {
-	const char *querystr = "SELECT MAX(id) FROM disk.query_storage";
+	(void)memdb;
+	const char *prefix = "";
+	db_conn *disk = get_longterm_db(&prefix);
+	char querystr[64];
+	snprintf(querystr, sizeof(querystr), "SELECT MAX(id) FROM %squery_storage", prefix);
 
 	// If the disk database is broken, we cannot import queries from it,
 	// however, as we will also never export any queries, we can safely
@@ -1714,8 +2002,15 @@ static void init_disk_db_idx(db_conn *memdb)
 		return;
 	}
 
+	if(disk == NULL)
+	{
+		log_err("init_disk_db_idx(): Cannot open the long-term database");
+		memdb_queries_maxid = -1;
+		return;
+	}
+
 	// Prepare statement on first call
-	db_stmt *stmt = db_prepare(memdb, querystr, false);
+	db_stmt *stmt = db_prepare(disk, querystr, false);
 
 	// Perform step
 	if(stmt != NULL && db_step(stmt) == DB_ROW)
@@ -1731,11 +2026,12 @@ static void init_disk_db_idx(db_conn *memdb)
 			memdb_queries_maxid = -1;
 	}
 	else
-		log_err("init_disk_db_idx(): Failed to get MAX(id) from disk.query_storage: %s",
-		        DB_LAST_ERR(memdb));
+		log_err("init_disk_db_idx(): Failed to get MAX(id) from %squery_storage: %s",
+		        prefix, DB_LAST_ERR(disk));
 
 	// Finalize statement
 	db_finalize(stmt);
+	release_longterm_db(&disk);
 
 	log_debug(DEBUG_DATABASE, "Last long-term idx is %"PRId64, memdb_queries_maxid);
 }

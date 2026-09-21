@@ -204,10 +204,21 @@ const db_driver *db_driver_get(const char *name);
 // Select the driver used by db_open(). Defaults to "sqlite"
 bool db_driver_select(const char *name);
 const db_driver *db_driver_active(void);
+// Is the database location a connection URI (postgresql://...) rather than the path of a file?
+bool db_uri_is_remote(const char *uri);
+// The driver that serves a location: PostgreSQL for a connection URI, SQLite otherwise
+const db_driver *db_driver_for_uri(const char *uri);
+// A location that can be written to a log: the password of a connection URI is masked
+const char *db_uri_display(const char *uri);
 
 // Dispatch helpers: the API the rest of Lorentz uses. Callers never touch a driver
 // directly. A NULL slot means the driver does not support the feature; helpers
 // for optional features return DB_ERROR (or a neutral value) in that case
+// SQLite is what the in-memory database, gravity.db and the temporary databases use, whatever the
+// long-term database is
+static inline db_conn *db_open_sqlite_ex(const char *uri, unsigned int flags, db_rc *rc, const char **msg) { return db_driver_sqlite.open(uri, flags, rc, msg); }
+// The driver of the long-term database (files.database)
+static inline db_conn *db_open_uri_ex(const char *uri, unsigned int flags, db_rc *rc, const char **msg) { return db_driver_for_uri(uri)->open(uri, flags, rc, msg); }
 static inline db_conn *db_open(const char *uri, unsigned int flags) { return db_driver_active()->open(uri, flags, NULL, NULL); }
 static inline db_conn *db_open_ex(const char *uri, unsigned int flags, db_rc *rc, const char **msg) { return db_driver_active()->open(uri, flags, rc, msg); }
 static inline void db_close(db_conn *c) { if(c) c->drv->close(c); }

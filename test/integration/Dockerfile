@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libhogweed6t64 libgmp10 libnettle8t64 libidn2-0 libunistring5 \
         libdbus-1-3 libreadline8t64 libcap2 libtinfo6 \
-        dnsutils curl ca-certificates \
+        dnsutils curl ca-certificates libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /etc/lorentz /var/log/lorentz /run/lorentz /etc/dnsmasq.d /var/www/html /home/lorentz

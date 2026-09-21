@@ -731,6 +731,52 @@ void test_postgres_database(void)
 		dbclose(&db);
 	}
 
+	// The in-memory database (always SQLite) exports to the server ...
+	config.database.maxDBdays.v.ui = 365;
+	CHECK(init_memory_database());
+	db_conn *m = get_memdb();
+	CHECK(m != NULL && is_memdb(m));
+	CHECK(dbquery(m, "INSERT INTO domain_by_id(id,domain) VALUES(5,'mem.example')") == DB_OK);
+	CHECK(dbquery(m, "INSERT INTO addinfo_by_id(id,type,content) VALUES(3,1,77)") == DB_OK);
+	CHECK(dbquery(m, "INSERT INTO query_storage(id,timestamp,type,status,domain,client) VALUES(5,1700000010.5,1,2,5,1)") == DB_OK);
+	CHECK(dbquery(m, "INSERT INTO query_storage(id,timestamp,type,status,domain,client) VALUES(6,1700000011.5,1,2,5,1)") == DB_OK);
+	CHECK(export_queries_to_disk(true));
+	// (a second export finds nothing new and changes nothing)
+	CHECK(export_queries_to_disk(true));
+
+	const char *prefix = NULL;
+	db_conn *disk = get_longterm_db(&prefix);
+	CHECK(disk != NULL && !is_memdb(disk) && prefix != NULL && prefix[0] == '\0');
+	if(disk != NULL)
+	{
+		CHECK(db_query_int(disk, "SELECT count(*) FROM query_storage") == 3);
+		CHECK(db_query_int(disk, "SELECT count(*) FROM query_storage WHERE id IN (5,6) AND timestamp > 1700000010") == 2);
+		CHECK(db_query_int(disk, "SELECT count(*) FROM domain_by_id WHERE domain = 'mem.example'") == 1);
+		// The number in the in-memory database is text on the server
+		CHECK(db_query_int(disk, "SELECT count(*) FROM addinfo_by_id WHERE content = '77'") == 1);
+		CHECK(db_query_int(disk, "SELECT count(*) FROM lorentz WHERE id = 2") == 1);
+	}
+	release_longterm_db(&disk);
+	CHECK(disk == NULL);
+
+	// ... and imports from it: everything in the linking tables, the queries
+	// of the time range (none here, it is empty)
+	close_memory_database();
+	CHECK(init_memory_database());
+	m = get_memdb();
+	CHECK(import_queries_from_disk());
+	CHECK(db_query_int(m, "SELECT count(*) FROM domain_by_id") == 2);
+	CHECK(db_query_int(m, "SELECT count(*) FROM domain_by_id WHERE domain = 'mem.example' AND id = 5") == 1);
+	// The text of the server is a number again, or the lookups of Lorentz would not find it
+	CHECK(db_query_int(m, "SELECT count(*) FROM addinfo_by_id WHERE typeof(content) = 'integer' AND content = 77") == 1);
+
+	// Deleting old queries works on the server
+	CHECK(delete_old_queries_from_db(false, 1700000005.0));
+	db_conn *chk = dbopen(false, false);
+	CHECK(chk != NULL && db_query_int(chk, "SELECT count(*) FROM query_storage") == 2);
+	dbclose(&chk);
+	close_memory_database();
+
 	setup = db_open(url, DB_OPEN_READWRITE);
 	if(setup != NULL)
 	{

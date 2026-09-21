@@ -1327,12 +1327,12 @@ void initConfig(struct config *conf)
 	// struct files
 	// Note: files.pid is hardcoded as LORENTZ_PID_FILE — see GHSA-6w8x-p785-6pm4
 	conf->files.database.k = "files.database";
-	conf->files.database.h = "The location of Lorentz's long-term database";
-	conf->files.database.a = cJSON_CreateStringReference("Any Lorentz database");
+	conf->files.database.h = "The location of Lorentz's long-term database. This is the path of a SQLite3 file or, when Lorentz is built with PostgreSQL support, a connection URI such as postgresql://user:password@host/database";
+	conf->files.database.a = cJSON_CreateStringReference("Any Lorentz database, or a PostgreSQL connection URI (postgresql://user:password@host/database)");
 	conf->files.database.t = CONF_STRING;
 	conf->files.database.f = FLAG_RESTART_LORENTZ;
 	conf->files.database.d.s = (char*)"/etc/lorentz/lorentz.db";
-	conf->files.database.c = validate_filepath;
+	conf->files.database.c = validate_database_location;
 
 	conf->files.tmp_db.k = "files.tmp_db";
 	conf->files.tmp_db.h = "The location of Lorentz's short-term temporary database (only used when database.forceDisk is true)";

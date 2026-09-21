@@ -74,6 +74,20 @@ Set `LORENTZ_PG_HARNESS` if the binary is elsewhere and `PG_IMAGES` (comma
 separated) to pick other server versions. The harness alone can be pointed at
 any throw-away database with `POSTGRES_URL=postgresql://... ./db_postgres_regression`.
 
+### Lorentz on PostgreSQL
+
+`lorentz.integration.test.mjs` runs its scenarios twice, once with the long-term database in a SQLite file
+and once on PostgreSQL (`LORENTZ_BACKENDS=sqlite,postgres`, the default; `postgres` or `sqlite` alone
+selects one; `PG_IMAGE` picks the server, `postgres:16-alpine` by default). The PostgreSQL run needs a Lorentz
+built with `-DUSE_POSTGRESQL=ON`. It starts a server and the Lorentz containers on one Docker network, gives
+each Lorentz a schema of its own, and covers startup, DNS, the query log, the statistics of the long-term
+database, the network table, messages, Teleporter, sessions and a restart that has to keep the history. The
+scenario that upgrades an old SQLite database only exists for SQLite.
+
+```bash
+LORENTZ_BACKENDS=postgres npm --prefix test/integration test
+```
+
 ### Schema on PostgreSQL
 
 A new PostgreSQL database is created by `db_schema_baseline()`
@@ -86,6 +100,7 @@ PostgreSQL columns and indexes with the SQLite baseline, and
 `db_layer_regression` compares a real migrated SQLite file with the baseline
 (the known differences of types are listed in `known_type_difference()`).
 
-`db_init()` on PostgreSQL is tested by `db_layer_regression` when it is built
-with `-DUSE_POSTGRESQL=ON` and given `POSTGRES_URL`; the Testcontainers test
-runs it on each server version.
+`db_layer_regression` also runs `db_init()`, the export and import of the
+in-memory database and `get_longterm_db()` on PostgreSQL when it is built with
+`-DUSE_POSTGRESQL=ON` and given `POSTGRES_URL`; the Testcontainers test
+`postgres.driver.test.mjs` runs it on each server version.

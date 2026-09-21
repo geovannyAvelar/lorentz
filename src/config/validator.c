@@ -12,6 +12,7 @@
 #include "log.h"
 // valid_domain()
 #include "tools/gravity-parseList.h"
+#include "database/db-driver.h"
 // regex
 #include "regex_r.h"
 
@@ -322,6 +323,26 @@ bool validate_filepath(union conf_value *val, const char *key, char err[VALIDATO
 		if(!isalnum(val->s[i]) && val->s[i] != '/' && val->s[i] != '.' && val->s[i] != '-' && val->s[i] != '_' && val->s[i] != ' ')
 		{
 			snprintf(err, VALIDATOR_ERRBUF_LEN, "%s: not a valid file path (\"%s\")", key, val->s);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+// Validate the location of the long-term database: the path of a SQLite file or
+// the connection URI of a PostgreSQL database
+bool validate_database_location(union conf_value *val, const char *key, char err[VALIDATOR_ERRBUF_LEN])
+{
+	if(!db_uri_is_remote(val->s))
+		return validate_filepath(val, key, err);
+
+	// libpq parses the URI, here we only refuse what cannot be part of one
+	for(const char *c = val->s; *c != '\0'; c++)
+	{
+		if(!isgraph((unsigned char)*c))
+		{
+			snprintf(err, VALIDATOR_ERRBUF_LEN, "%s: not a valid connection URI", key);
 			return false;
 		}
 	}

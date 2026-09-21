@@ -17,6 +17,7 @@
 #include "config/password.h"
 // log_verify_message()
 #include "database/message-table.h"
+#include "database/common.h"
 
 // opendir(), readdir()
 #include <dirent.h>
@@ -143,6 +144,14 @@ bool directory_exists(const char *path)
 
 off_t get_Lorentz_db_stats(struct stat *st)
 {
+	// A remote database is not a file we can stat: report its size
+	if(db_uri_is_remote(config.files.database.v.s))
+	{
+		memset(st, 0, sizeof(*st));
+		st->st_size = (off_t)get_remote_db_size();
+		return st->st_size;
+	}
+
 	if(stat(config.files.database.v.s, st) == 0)
 		return st->st_size;
 	log_err("Cannot stat %s: %s", config.files.database.v.s, strerror(errno));

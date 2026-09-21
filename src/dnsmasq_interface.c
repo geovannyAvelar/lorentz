@@ -3694,31 +3694,34 @@ void Lorentz_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start)
 			// Configured Lorentz log file
 			chown_lorentz(config.files.log.lorentz.v.s, ent_pw);
 
-			// Configured Lorentz database file
-			chown_lorentz(config.files.database.v.s, ent_pw);
-
-			// Check if auxiliary files exist and change ownership
-			char *extrafile = calloc(strlen(config.files.database.v.s) + 5, sizeof(char));
-			if(extrafile == NULL)
+			// Configured Lorentz database file. A database on a server has no file
+			if(!db_uri_is_remote(config.files.database.v.s))
 			{
-				log_err("Memory allocation failed. Skipping some file ownership checks.");
-				return;
+				chown_lorentz(config.files.database.v.s, ent_pw);
+
+				// Check if auxiliary files exist and change ownership
+				char *extrafile = calloc(strlen(config.files.database.v.s) + 5, sizeof(char));
+				if(extrafile == NULL)
+				{
+					log_err("Memory allocation failed. Skipping some file ownership checks.");
+					return;
+				}
+
+				// Check <database>-wal file (write-ahead log)
+				strcpy(extrafile, config.files.database.v.s);
+				strcat(extrafile, "-wal");
+				if(file_exists(extrafile))
+					chown_lorentz(extrafile, ent_pw);
+
+				// Check <database>-shm file (mmapped shared memory)
+				strcpy(extrafile, config.files.database.v.s);
+				strcat(extrafile, "-shm");
+				if(file_exists(extrafile))
+					chown_lorentz(extrafile, ent_pw);
+
+				// Free allocated memory
+				free(extrafile);
 			}
-
-			// Check <database>-wal file (write-ahead log)
-			strcpy(extrafile, config.files.database.v.s);
-			strcat(extrafile, "-wal");
-			if(file_exists(extrafile))
-				chown_lorentz(extrafile, ent_pw);
-
-			// Check <database>-shm file (mmapped shared memory)
-			strcpy(extrafile, config.files.database.v.s);
-			strcat(extrafile, "-shm");
-			if(file_exists(extrafile))
-				chown_lorentz(extrafile, ent_pw);
-
-			// Free allocated memory
-			free(extrafile);
 		}
 		else
 		{

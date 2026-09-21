@@ -244,6 +244,13 @@ static void test_placeholder_translation(void)
 		db_finalize(s);
 	}
 
+	// LIKE ignores case like it does in SQLite, and only as a word outside of literals
+	CHECK(scalar(db, "SELECT CASE WHEN 'ABC.example' LIKE 'abc%' THEN 1 ELSE 0 END") == 1);
+	CHECK(scalar(db, "SELECT CASE WHEN 'ABC' NOT LIKE 'a%' THEN 1 ELSE 0 END") == 0);
+	CHECK(scalar(db, "SELECT CASE WHEN 'a_b' LIKE 'a\\_b' ESCAPE '\\' THEN 1 ELSE 0 END") == 1);
+	CHECK(scalar(db, "SELECT CASE WHEN 'LIKE' = 'LIKE' AND length('x LIKE y') = 8 THEN 1 ELSE 0 END") == 1);
+	CHECK(scalar(db, "SELECT count(*) FROM (SELECT 1 AS likes) q WHERE likes = 1") == 1);
+
 	// Dollar quoting, casts, block comments and array slices
 	s = db_prepare(db, "SELECT $tag$?:x$tag$, 5::int + ?, /* ? */ (ARRAY[1,2,3])[1:2]::text", false);
 	CHECK(s != NULL);

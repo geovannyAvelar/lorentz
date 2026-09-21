@@ -233,12 +233,10 @@ static int find_device_by_recent_ip(db_conn *db, const char *ipaddr)
 	if(LorentzDBerror())
 		return -1;
 
-	const char *querystr = "SELECT network_id FROM network_addresses "
-	                       "WHERE ip = ?1 AND "
-	                       // Single %, this string goes to SQLite as it is
-	                       // and is never run through a formatter
-	                       "lastSeen > (cast(strftime('%s', 'now') as int)-86400) "
-	                       "ORDER BY lastSeen DESC LIMIT 1;";
+	char querystr[256];
+	snprintf(querystr, sizeof(querystr), "SELECT network_id FROM network_addresses "
+	                                     "WHERE ip = ?1 AND lastSeen > (%s-86400) "
+	                                     "ORDER BY lastSeen DESC LIMIT 1", DB_NOW(db));
 
 	// Perform SQL query
 	int network_id = db_query_int_str(db, querystr, ipaddr);
@@ -267,7 +265,7 @@ static int find_device_by_mock_hwaddr(db_conn *db, const char *ipaddr)
 	if(LorentzDBerror())
 		return DB_FAILED;
 
-	const char *querystr = "SELECT id FROM network WHERE hwaddr = concat('ip-',?1)";
+	const char *querystr = "SELECT id FROM network WHERE hwaddr = 'ip-' || ?1";
 
 	// Perform SQL query
 	return db_query_int_str(db, querystr, ipaddr);
@@ -282,7 +280,11 @@ static int find_device_by_hwaddr(db_conn *db, const char hwaddr[])
 
 	log_debug(DEBUG_ARP, "find_device_by_hwaddr(%s)", hwaddr);
 
-	const char *querystr = "SELECT id FROM network WHERE hwaddr = ?1 COLLATE NOCASE;";
+	// The comparison ignores the case of the address. SQLite has a collation
+	// for that, PostgreSQL compares lower case
+	const char *querystr = DB_IS_SQLITE(db) ?
+	                       "SELECT id FROM network WHERE hwaddr = ?1 COLLATE NOCASE" :
+	                       "SELECT id FROM network WHERE lower(hwaddr) = lower(?1)";
 
 	// Perform SQL query
 	return db_query_int_str(db, querystr, hwaddr);
@@ -297,11 +299,10 @@ static int find_recent_device_by_mock_hwaddr(db_conn *db, const char *ipaddr)
 
 	log_debug(DEBUG_ARP, "find_recent_device_by_mock_hwaddr(%s)", ipaddr);
 
-	const char *querystr = "SELECT id FROM network WHERE "
-	                       "hwaddr = concat('ip-',?1) AND "
-	                       // Single %, this string goes to SQLite as it is
-	                       // and is never run through a formatter
-	                       "firstSeen > (cast(strftime('%s', 'now') as int)-3600)";
+	char querystr[256];
+	snprintf(querystr, sizeof(querystr), "SELECT id FROM network WHERE "
+	                                     "hwaddr = 'ip-' || ?1 AND "
+	                                     "firstSeen > (%s-3600)", DB_NOW(db));
 
 	// Perform SQL query
 	return db_query_int_str(db, querystr, ipaddr);
@@ -329,9 +330,9 @@ static bool update_netDB_name(db_conn *db, const char *ip, const char *name)
 
 	bool success = false;
 	db_stmt *query_stmt = NULL;
-	const char querystr[] = "UPDATE network_addresses SET name = ?1, "
-	                               "nameUpdated = (cast(strftime('%s', 'now') as int)) "
-	                               "WHERE ip = ?2";
+	char querystr[256];
+	snprintf(querystr, sizeof(querystr), "UPDATE network_addresses SET name = ?1, "
+	                                     "nameUpdated = (%s) WHERE ip = ?2", DB_NOW(db));
 
 	db_rc rc = (query_stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
 	if(rc != DB_OK)
@@ -412,9 +413,9 @@ static bool update_netDB_lastQuery(db_conn *db, const int network_id, const time
 	log_debug(DEBUG_ARP, "update_netDB_lastQuery(%i, %lu)", network_id, (unsigned long)lastQuery);
 
 	const int ret = dbquery(db, "UPDATE network "\
-	                            "SET lastQuery = MAX(lastQuery, %lu) "\
+	                            "SET lastQuery = CASE WHEN lastQuery > %lu THEN lastQuery ELSE %lu END "\
 	                            "WHERE id = %i;",
-	                            (unsigned long)lastQuery, network_id);
+	                            (unsigned long)lastQuery, (unsigned long)lastQuery, network_id);
 
 	return ret == DB_OK;
 }
@@ -473,13 +474,12 @@ static bool add_netDB_network_address(db_conn *db, const int network_id, const c
 
 	bool success = false;
 	db_stmt *query_stmt = NULL;
-	const char querystr[] = "INSERT OR REPLACE INTO network_addresses "
-	                        "(network_id,ip,lastSeen,name,nameUpdated) VALUES "
-	                        "(?1,?2,(cast(strftime('%s', 'now') as int)),"
-	                        "(SELECT name FROM network_addresses "
-	                                "WHERE ip = ?2),"
-	                        "(SELECT nameUpdated FROM network_addresses "
-	                                "WHERE ip = ?2));";
+	// A known address keeps its name, only the device and the time change
+	char querystr[256];
+	snprintf(querystr, sizeof(querystr), "INSERT INTO network_addresses (network_id,ip,lastSeen) "
+	                                     "VALUES (?1,?2,(%s)) "
+	                                     "ON CONFLICT (ip) DO UPDATE SET "
+	                                     "network_id = excluded.network_id, lastSeen = excluded.lastSeen", DB_NOW(db));
 
 	db_rc rc = (query_stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
 	if(rc != DB_OK)
@@ -1829,7 +1829,7 @@ static bool getMACVendor(const char *hwaddr, char vendor[MAXVENDORLEN])
 	bool success = false;
 	db_rc rc = DB_OK;
 	const char *open_error = NULL;
-	db_conn *macvendor_db = db_open_ex(config.files.macvendor.v.s, DB_OPEN_READONLY | DB_OPEN_NOMUTEX, &rc, &open_error);
+	db_conn *macvendor_db = db_open_sqlite_ex(config.files.macvendor.v.s, DB_OPEN_READONLY | DB_OPEN_NOMUTEX, &rc, &open_error);
 	if(macvendor_db == NULL)
 	{
 		log_err("getMACVendor(\"%s\") - SQL error: %s", hwaddr, open_error);
@@ -2020,7 +2020,7 @@ bool getMACfromIP(db_conn *db, char hwaddr[MAXMACLEN], const char *ipaddr)
 	db_stmt *stmt = NULL;
 	const char *querystr = "SELECT hwaddr FROM network WHERE id = "
 	                       "(SELECT network_id FROM network_addresses "
-	                       "WHERE ip = ? GROUP BY ip HAVING max(lastSeen));";
+	                       "WHERE ip = ? ORDER BY lastSeen DESC LIMIT 1)";
 	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
 	if(rc != DB_OK)
 	{
@@ -2098,11 +2098,9 @@ int getAliasclientIDfromIP(db_conn *db, const char *ipaddr)
 	bool success = false;
 	db_stmt *stmt = NULL;
 	int aliasclient_id = DB_FAILED;
-	const char *querystr = "SELECT aliasclient_id FROM network WHERE id = "
+	const char *querystr = "SELECT aliasclient_id FROM network WHERE aliasclient_id IS NOT NULL AND id = "
 	                       "(SELECT network_id FROM network_addresses "
-	                       "WHERE ip = ? "
-	                             "AND aliasclient_id IS NOT NULL "
-	                       "GROUP BY ip HAVING max(lastSeen));";
+	                       "WHERE ip = ? ORDER BY lastSeen DESC LIMIT 1)";
 	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
 	if(rc != DB_OK)
 	{

@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, copyFileSync, rmSync, statSync } from "node:fs
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { GenericContainer, Wait } from "testcontainers";
+import { GenericContainer, Network, Wait } from "testcontainers";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "..", "..");
@@ -47,10 +47,12 @@ export async function buildImage() {
 // Start Lorentz in a fresh container. The API is open (empty password) unless
 // the environment says otherwise. The default upstream list is empty, so
 // every answer in these tests comes from Lorentz itself
-export async function startLorentz(environment = {}, { command, files = [] } = {}) {
+export async function startLorentz(environment = {}, { command, files = [], network, extraHosts = [] } = {}) {
   let container = new GenericContainer(IMAGE_TAG);
   if (command) container = container.withCommand(command);
   if (files.length) container = container.withCopyFilesToContainer(files);
+  if (network) container = container.withNetwork(network);
+  if (extraHosts.length) container = container.withExtraHosts(extraHosts);
   return container
     .withEnvironment({
       LORENTZCONF_webserver_api_password: "",
@@ -186,4 +188,44 @@ export async function settle(container, quietMs = 2500, timeoutMs = 30_000) {
       return;
     }
   }
+}
+
+// A PostgreSQL server for the long-term database of one or more Lorentz containers,
+// on a network that Lorentz can reach it on. Every call of schema() gives a fresh
+// schema, so tests do not see each other's data.
+export async function startPostgres(image = process.env.PG_IMAGE ?? "postgres:16-alpine") {
+  const network = await new Network().start();
+  const container = await new GenericContainer(image)
+    .withNetwork(network)
+    .withNetworkAliases("pg")
+    .withEnvironment({ POSTGRES_PASSWORD: "lorentz", POSTGRES_DB: "lorentz_test" })
+    .withExposedPorts(5432)
+    // The image starts a temporary server for initialization first
+    .withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
+    .withStartupTimeout(120_000)
+    .start();
+
+  let counter = 0;
+  const uri = (schema, host = "pg") =>
+    `postgresql://postgres:lorentz@${host}/lorentz_test?options=-c%20search_path%3D${schema}`;
+  const psql = async (schema, sql) => {
+    const result = await container.exec(["psql", "-At", "-v", "ON_ERROR_STOP=1", uri(schema, "localhost"), "-c", sql]);
+    if (result.exitCode !== 0) throw new Error(`psql failed (${result.exitCode}): ${result.output}`);
+    return result.output.trim();
+  };
+
+  return {
+    network,
+    container,
+    // Create a schema and return what a Lorentz container needs to use it
+    async schema() {
+      const name = `lz_${Date.now().toString(36)}_${counter++}`;
+      await psql("public", `CREATE SCHEMA ${name}`);
+      return { name, uri: uri(name), sql: (sql) => psql(name, sql) };
+    },
+    async stop() {
+      await container.stop();
+      await network.stop();
+    },
+  };
 }

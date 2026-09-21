@@ -13,6 +13,15 @@
 #include "db-driver.h"
 
 #include <string.h>
+#include <stdio.h>
+
+// The driver harnesses link this file without the tracking wrappers of lorentz.h
+#undef strstr
+#undef strlen
+#undef memmove
+#undef strchr
+#undef strncmp
+#undef memcpy
 
 static const db_driver *const drivers[] = {
 	&db_driver_sqlite,
@@ -50,4 +59,56 @@ bool db_driver_select(const char *name)
 const db_driver *db_driver_active(void)
 {
 	return active_driver;
+}
+
+bool db_uri_is_remote(const char *uri)
+{
+	return uri != NULL && (strncmp(uri, "postgresql://", 13) == 0 ||
+	                       strncmp(uri, "postgres://", 11) == 0);
+}
+
+const db_driver *db_driver_for_uri(const char *uri)
+{
+	if(db_uri_is_remote(uri))
+	{
+		const db_driver *drv = db_driver_get("postgres");
+		// Not built in: fall back to SQLite, which fails to open the URI
+		// and reports it like any other unusable database
+		if(drv != NULL)
+			return drv;
+	}
+
+	return &db_driver_sqlite;
+}
+
+// Mask the password of postgresql://user:password@host/db. Everything else is
+// returned as it is. The result is valid until the next call of the thread
+const char *db_uri_display(const char *uri)
+{
+	static __thread char buf[512];
+	if(uri == NULL)
+		return "";
+	if(!db_uri_is_remote(uri))
+		return uri;
+
+	const char *scheme_end = strstr(uri, "://") + 3;
+	const char *at = strchr(scheme_end, '@');
+	const char *slash = strchr(scheme_end, '/');
+	const char *colon = strchr(scheme_end, ':');
+	// A password exists only if a colon comes before the "@" of the userinfo
+	if(at != NULL && colon != NULL && colon < at && (slash == NULL || at < slash))
+		snprintf(buf, sizeof(buf), "%.*s:***%s", (int)(colon - uri), uri, at);
+	else
+		snprintf(buf, sizeof(buf), "%s", uri);
+
+	// A password can also be given as a parameter
+	char *pw = strstr(buf, "password=");
+	if(pw != NULL)
+	{
+		pw += 9;
+		char *end = strchr(pw, '&');
+		memmove(pw + 3, end != NULL ? end : pw + strlen(pw), end != NULL ? strlen(end) + 1 : 1);
+		memcpy(pw, "***", 3);
+	}
+	return buf;
 }

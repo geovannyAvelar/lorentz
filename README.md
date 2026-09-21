@@ -32,15 +32,38 @@ Lorentz (`lorentz`) provides an interactive API and also generates statistics fo
 ## Database drivers
 
 All database access goes through a driver interface (`src/database/db-driver.h`). The default driver
-is SQLite. An experimental PostgreSQL driver (`src/database/db-postgres.c`, on libpq) is built with
+is SQLite. A PostgreSQL driver (`src/database/db-postgres.c`, on libpq) is built with
 `-DUSE_POSTGRESQL=ON` and needs `libpq-dev`.
 
-The PostgreSQL driver implements the whole interface (see the comment at the top of the file for the
-differences, for example that there is no `ATTACH` and no in-memory database), and is tested against
-real servers. **Lorentz itself cannot run on PostgreSQL yet**: the queries, migrations and schema of the
-in-memory and gravity databases and most of the queries are written in SQLite's dialect, and they still
-have to be moved behind the dialect hooks of the driver. The schema of the long-term database is ready:
-on PostgreSQL, `db_init()` creates it with `db_schema_baseline()` (`src/database/db-schema.c`).
+### Running Lorentz on PostgreSQL
+
+Point `files.database` (`LORENTZCONF_files_database`) at a connection URI instead of a file:
+
+```toml
+[files]
+  database = "postgresql://lorentz:password@db.example/lorentz"
+```
+
+Lorentz creates its tables on the first start (`db_schema_baseline()` in `src/database/db-schema.c`). Use a
+database or a schema of its own: `?options=-c%20search_path%3Dlorentz` in the URI selects a schema. The
+URI is stored in `lorentz.toml`, where the password is readable to whoever can read that file, and the
+logs mask it.
+
+What is on PostgreSQL is the **long-term database**: the query history, the counters, the network table,
+the messages, the sessions and the alias-clients. Three things stay in SQLite files whatever `files.database`
+is, because they are private to one host or are produced by tools that write SQLite:
+
+- the in-memory query database (a cache of the last `webserver.api.maxHistory` seconds, filled from the
+  server on start and written back every `database.DBinterval` seconds and on shutdown),
+- `gravity.db` (written by `pihole -g` and the gravity tools),
+- the MAC vendor database.
+
+Differences to be aware of: SQLite migrations are not replayed (the schema of the current version is created
+in one step, and a database of an older version is refused), `LIKE` ignores the case of letters as it does in
+SQLite, and a change of the schema after version 22 has to be written for both databases. Lorentz opens a
+connection for each request, so use a pooler such as PgBouncer when many API clients are expected.
+
+The driver is described at the top of `src/database/db-postgres.c`, the tests in `test/integration/README.md`.
 
 ## Documentation
 
