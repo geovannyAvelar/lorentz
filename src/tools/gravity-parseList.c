@@ -1,0 +1,780 @@
+/* Pi-hole: A black hole for Internet advertisements
+*  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
+*  Network-wide ad blocking via your own hardware.
+*
+*  FTL Engine
+*  Gravity parseList routines
+*
+*  This file is copyright under the latest version of the EUPL.
+*  Please see LICENSE file for your rights under this license. */
+
+#include "tools/gravity-parseList.h"
+#include "args.h"
+// Database driver layer
+#include "database/db-driver.h"
+
+// A list of items of common local hostnames not to report as unusable
+// Some lists (i.e StevenBlack's) contain these as they are supposed to be used as HOST files
+// but flagging them as unusable causes more confusion than it's worth - so we suppress them from the output
+static const char *false_positives[] = {
+	"localhost",
+	"localhost.localdomain",
+	"local",
+	"broadcasthost",
+	"localhost",
+	"ip6-localhost",
+	"ip6-loopback",
+	"lo0 localhost",
+	"ip6-localnet",
+	"ip6-mcastprefix",
+	"ip6-allnodes",
+	"ip6-allrouters",
+	"ip6-allhosts"
+};
+
+// Lookup table containing characters that are valid in domain names
+// Domain must not contain any ASCII character other than [a-zA-Z0-9.-_].
+// Non-ASCII bytes are not covered here, they are checked as UTF-8 sequences,
+// see utf8_sequence_len()
+static const unsigned char valid_domain_char[256] = {
+	['a' ... 'z'] = 1, ['A' ... 'Z'] = 1, ['0' ... '9'] = 1,
+	['-'] = 1, ['.'] = 1, ['_'] = 1,
+};
+
+// Fast test for string containing specified character in 
+// selected range from start of string
+static inline bool string_has_within(const char *s, const char character, const int maxlen)
+{
+    for (int i = 0; i < maxlen && s[i] != '\0'; ++i)
+        if (s[i] == character)
+            return true;
+    return false;
+}
+
+// Print progress for files larger than 10 MB
+// This is to avoid printing progress for small files
+// which would be printed too often as affect performance
+#define PRINT_PROGRESS_THRESHOLD 10*1000*1000
+
+// Number of invalid domains to print before skipping the rest
+#define MAX_INVALID_DOMAINS 5
+
+// Length of the UTF-8 sequence starting at *p, or 0 if it is not one
+//
+// An internationalized name reaches us as UTF-8 and dnsmasq, built with
+// libidn2, converts it to punycode itself. We accept such a name only where
+// its bytes form a well-formed UTF-8 sequence: the ranges below are those of
+// RFC 3629, which excludes overlong encodings, UTF-16 surrogates and
+// everything above U+10FFFF.
+static inline unsigned int __attribute__((pure)) utf8_sequence_len(const unsigned char *p, const size_t avail)
+{
+	unsigned char lo = 0x80, hi = 0xbf;
+	unsigned int len;
+
+	if(p[0] >= 0xc2 && p[0] <= 0xdf)
+		len = 2;
+	else if(p[0] >= 0xe0 && p[0] <= 0xef)
+	{
+		len = 3;
+		if(p[0] == 0xe0)
+			lo = 0xa0;
+		else if(p[0] == 0xed)
+			hi = 0x9f;
+	}
+	else if(p[0] >= 0xf0 && p[0] <= 0xf4)
+	{
+		len = 4;
+		if(p[0] == 0xf0)
+			lo = 0x90;
+		else if(p[0] == 0xf4)
+			hi = 0x8f;
+	}
+	else
+		return 0;
+
+	if(avail < len)
+		return 0;
+
+	// The first continuation byte carries the range restriction of its lead
+	if(p[1] < lo || p[1] > hi)
+		return 0;
+	for(unsigned int i = 2; i < len; i++)
+		if(p[i] < 0x80 || p[i] > 0xbf)
+			return 0;
+
+	return len;
+}
+
+// Validate domain name
+//
+// allow_utf8 accepts an internationalized name in its UTF-8 form. Only pass it
+// where the value is handed to dnsmasq, which is built with libidn2 and converts
+// such a name itself. Pi-hole's own lists are matched byte-wise against the
+// query name, which always arrives as an A-label, so a UTF-8 entry there would
+// be stored and never match anything.
+inline bool __attribute__((pure)) valid_domain(const char *domain, const size_t len,
+                                               const bool fqdn_only, const bool allow_utf8)
+{
+	// Domain must not be NULL or empty, and they should not be longer than
+	// 255 characters
+	if(domain == NULL || len == 0 || len > 255)
+		return false;
+
+	// Loop over line
+	int last_dot = -1;
+	unsigned int i = 0;
+	while(i < len)
+	{
+		// Check for invalid characters
+		unsigned char c = (unsigned char)domain[i];
+		if(c > 0x7f)
+		{
+			if(!allow_utf8)
+				return false;
+
+			// Skip over the sequence at once, none of its bytes is a dot
+			const unsigned int seq = utf8_sequence_len((const unsigned char *)domain + i, len - i);
+			if(seq == 0)
+				return false;
+			i += seq;
+			continue;
+		}
+		if(!valid_domain_char[c])
+			return false;
+
+		// Individual label length check
+		if(c == '.')
+		{
+			// Label must be longer than 0 characters, i.e., two consecutive
+			// dots are not allowed
+			if(i - last_dot == 1)
+				return false;
+
+			// Label must not be longer than 63 characters
+			// (actually 64 because the dot at the end of the label
+			// is included here)
+			if(i - last_dot > 64)
+				return false;
+
+			// Label must be at least 1 character long
+			// We did already check above to not have two
+			// consecutive dots
+
+			// Update last_dot to this dot
+			last_dot = i;
+		}
+
+		i++;
+	}
+
+	// TLD checks
+
+	// The loop only measured a label once it reached the dot ending it,
+	// so the last label has not been looked at yet. It runs from
+	// last_dot + 1 to the end of the string, which is the entire string
+	// for a name without any dot (last_dot == -1)
+	if(len - (size_t)(last_dot + 1) > 63)
+		return false;
+
+	// There must be at least two labels (i.e. one dot)
+	// e.g., "example.com" but not "localhost" for exact domain
+	// We do not enforce this for ABP domains and domainlist input
+	// (see https://github.com/pi-hole/pi-hole/pull/5240)
+	if(last_dot == -1 && fqdn_only)
+		return false;
+
+	// TLD must not start or end with a hyphen
+	if(domain[last_dot + 1] == '-' || domain[len - 1] == '-')
+		return false;
+
+	return true;
+}
+
+// Validate ABP domain name
+static inline bool __attribute__((pure)) valid_abp_domain(const char *line, const size_t len, const bool antigravity)
+{
+	if(antigravity)
+	{
+
+		// The line must be at least 5 characters long
+		if(len < 5)
+			return false;
+
+		// First four characters must be "@@||"
+		if(line[0] != '@' || line[1] != '@' || line[2] != '|' || line[3] != '|')
+			return false;
+
+		// Last character must be "^"
+		if(line[len-1] != '^')
+			return false;
+
+		// Domain must be valid
+		return valid_domain(line+4, len-5, false, false);
+	}
+	else
+	{
+		// The line must be at least 3 characters long
+		if(len < 3)
+			return false;
+
+		// First two characters must be "||"
+		if(line[0] != '|' || line[1] != '|')
+			return false;
+
+		// Last character must be "^"
+		if(line[len-1] != '^')
+			return false;
+
+		// Domain must be valid
+		return valid_domain(line+2, len-3, false, false);
+	}
+}
+
+// Check if a line is a false positive
+static inline bool is_false_positive(const char *line)
+{
+	for(unsigned int i = 0; i < sizeof(false_positives)/sizeof(false_positives[0]); i++)
+		if(strcmp(line, false_positives[i]) == 0)
+			return true;
+	return false;
+}
+
+// Print domain (escape non-printable characters)
+static void print_escaped(const char *str, const ssize_t len)
+{
+	for(ssize_t j = 0; j < len; j++)
+		if(isgraph(str[j]))
+			putchar(str[j]);
+		else
+			// Escape non-printable characters
+			printf("\\x%02x", (unsigned char)str[j]);
+}
+
+int gravity_parseList(const char *infile, const char *outfile, const char *adlistIDstr,
+                      const bool checkOnly, const bool antigravity)
+{
+	const char *info = cli_info();
+	const char *tick = cli_tick();
+	const char *cross = cli_cross();
+	const char *over = cli_over();
+
+	// Open input file
+	FILE *fpin = fopen(infile, "r");
+	if(fpin == NULL)
+	{
+		printf("%s  %s Unable to open %s for reading\n", over, cross, infile);
+		return EXIT_FAILURE;
+	}
+
+	// Open output file (database)
+	db_conn *db = NULL;
+	db_stmt *stmt = NULL;
+	if(!checkOnly && (db = db_open(outfile, DB_OPEN_READWRITE | DB_OPEN_NOMUTEX)) == NULL)
+	{
+		printf("%s  %s Unable to open database file %s for writing\n", over, cross, outfile);
+		fclose(fpin);
+		return EXIT_FAILURE;
+	}
+
+	// Disable journaling
+	// Journaling is used to prevent database corruption in case of a power
+	// loss or operating system crash. However, this is not needed for the
+	// gravity database the database is created from scratch at every run
+	// of pihole -g.
+	// The OFF journaling mode disables the rollback journal completely. No
+	// rollback journal is ever created and hence there is never a rollback
+	// journal to delete.
+	if(!checkOnly && db_exec(db, "PRAGMA journal_mode = OFF;") != DB_OK)
+	{
+		printf("%s  %s Unable to disable journaling in database file %s\n", over, cross, outfile);
+		fclose(fpin);
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+	// Disable synchronous mode
+	// With synchronous OFF (0), SQLite continues without syncing as soon as
+	// it has handed data off to the operating system. If the application
+	// running SQLite crashes, the data will be safe, but the database might
+	// become corrupted if the operating system crashes or the computer
+	// loses power before that data has been written to the disk surface. On
+	// the other hand, commits can be orders of magnitude faster with
+	// synchronous OFF.
+	// See https://www.sqlite.org/pragma.html#pragma_synchronous
+	// If a power loss (or operating system crash) happens, the database
+	// created here will never be swapped into action and is discarded at
+	// the next run of pihole -g.
+	if(!checkOnly && db_exec(db, "PRAGMA synchronous = OFF;") != DB_OK)
+	{
+		printf("%s  %s Unable to disable synchronous mode in database file %s\n", over, cross, outfile);
+		fclose(fpin);
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+	// Get size of input file
+	fseek(fpin, 0L, SEEK_END);
+	const size_t fsize = ftell(fpin);
+	rewind(fpin);
+
+	// Begin transaction
+	if(!checkOnly && db_exec(db, "BEGIN TRANSACTION;") != DB_OK)
+	{
+		printf("%s  %s Unable to begin transaction to insert domains into database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+	// Prepare SQL statement
+	const char *sql = antigravity ?
+		"INSERT INTO antigravity (domain, adlist_id) VALUES (?, ?);" :
+		"INSERT INTO gravity (domain, adlist_id) VALUES (?, ?);";
+	if(!checkOnly && (stmt = db_prepare(db, sql, false)) == NULL)
+	{
+		printf("%s  %s Unable to prepare SQL statement to insert domains into database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+	// Bind adlistID
+	const int adlistID = atoi(adlistIDstr);
+	if(!checkOnly && db_bind_int(stmt, 2, adlistID) != DB_OK)
+	{
+		printf("%s  %s Unable to bind adlistID to SQL statement to insert domains into database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+	// Parse list file line by line
+	char *line = NULL;
+	size_t lineno = 0;
+	size_t len = 0;
+	ssize_t read = 0;
+	size_t total_read = 0, last_print = 0;
+	const size_t print_step = fsize / 20; // Print progress every 100/20 = 5%
+	int last_progress = 0;
+	char *invalid_domains_list[MAX_INVALID_DOMAINS] = { NULL };
+	ssize_t invalid_domains_list_lengths[MAX_INVALID_DOMAINS] = { -1 };
+	unsigned int invalid_domains_list_len = 0;
+	unsigned int exact_domains = 0, abp_domains = 0, invalid_domains = 0;
+	bool first_line = true; // Flag to test UTF-8 Bom only on first line
+	while((read = getline(&line, &len, fpin)) != -1)
+	{
+		// Handle UTF-8 BOM (Byte Order Mark) if present at start of file
+		if (first_line)
+		{
+			// Clear first_line flag immediately after check
+			first_line = false;
+			if (read >= 3 &&
+				(unsigned char)line[0] == 0xEF &&
+				(unsigned char)line[1] == 0xBB &&
+				(unsigned char)line[2] == 0xBF)
+			{
+				// Shift line contents left by 3 bytes to remove BOM
+				memmove(line, line + 3, read - 3);
+				read -= 3;
+				// Re-terminate at the new end, otherwise the old
+				// 3 trailing bytes remain readable to strlen/strtok
+				line[read] = '\0';
+			}
+		}
+
+		// Update total read bytes
+		total_read += read;
+		lineno++;
+
+		// Skip empty lines
+		if(read < 1)
+			continue;
+
+		// Remove trailing newline
+		if(line[read-1] == '\n')
+			line[--read] = '\0';
+
+		// Skip empty lines
+		if(read < 1)
+			continue;
+
+		// Remove trailing carriage return
+		if(line[read-1] == '\r')
+			line[--read] = '\0';
+
+		// Skip empty lines
+		if(read < 1)
+			continue;
+
+		// Remove trailing whitespace
+		while(read > 0 && isspace(line[read-1]))
+			line[--read] = '\0';
+
+		// Skip empty lines
+		if(read < 1)
+			continue;
+
+		// Skip lines having any of the following characters:
+		// ! = ABP-style comment
+		// # = bach-style comment
+		// ; = PHP-style comment
+		// [ = ABP header lines
+		if(line[0] == '!' || line[0] == '#' || line[0] == ';' || line[0] == '[')
+			continue;
+
+		// Remove lines containing ABP extended CSS selectors ("##",
+		// "#$#", "#@#", "#?#") and Adguard JavaScript (#%#)
+		char *hash = strchr(line, '#');
+		if(hash != NULL && line < hash && (hash[1] == '#' || hash[1] == '$' || hash[1] == '@' || hash[1] == '?' || hash[1] == '%'))
+			continue;
+
+		// Remove comments (text starting with "#", include possible spaces before the hash sign)
+		const size_t comment_start = strcspn(line, "#");
+		if (comment_start < (size_t)read)
+		{
+			line[comment_start] = '\0';
+			read = comment_start;
+		}
+
+		// Skip empty lines
+		if(read < 1)
+			continue;
+
+		// Split by whitespace and tabs and look over the tokens
+		char *saveptr = NULL;
+		char *token = strtok_r(line, " \t", &saveptr);
+		while(token != NULL)
+		{
+			// Skip empty tokens
+			if(token[0] == '\0')
+				goto next_domain;
+
+			// Skip IP addresses
+			// IPv4 addresses
+			// Don't test any token not starting with a digit
+			if (token[0] <= '9' && token[0] >= '0')
+			{
+				// Potential IPv4 address
+				struct in_addr buffer = { 0 };
+				if (inet_pton(AF_INET, token, &buffer) == 1)
+					goto next_domain;
+			}
+
+			// Ipv6 address
+			// Only test for IPv6 address if line contains a colon
+			// within this token's first 5 characters
+			if (string_has_within(token, ':', 5))
+			{
+				struct in6_addr buffer6 = { 0 };
+				if (inet_pton(AF_INET6, token, &buffer6) == 1)
+					goto next_domain;
+			}
+
+			// Remove trailing dot (convert FQDN to domain)
+			size_t token_len = strlen(token);
+			if(token[token_len - 1] == '.')
+				token[--token_len] = '\0';
+
+			// Skip empty tokens
+			if(token[0] == '\0')
+				goto next_domain;
+
+			// Convert all characters to lowercase
+			for(size_t i = 0; i < token_len; i++)
+				token[i] = tolower(token[i]);
+
+			// Validate line
+			if(line[0] != (antigravity ? '@' : '|') &&  // <- Not an ABP-style match
+			   valid_domain(token, token_len, true, false))
+			{
+				// Exact match found
+				if(checkOnly)
+				{
+					// Increment counter
+					exact_domains++;
+					goto next_domain;
+				}
+
+				// else: Append domain to database using prepared statement
+				// Append domain to database using prepared statement
+				if(db_bind_text_ref(stmt, 1, token) != DB_OK)
+				{
+					printf("%s  %s Unable to bind domain to SQL statement to insert domains into database file %s\n",
+					over, cross, outfile);
+					fclose(fpin);
+					db_finalize(stmt);
+					db_exec(db, "ROLLBACK");
+					db_close(db);
+					return EXIT_FAILURE;
+				}
+				if(db_step(stmt) != DB_DONE)
+				{
+					printf("%s  %s Unable to insert domain into database file %s\n", over, cross, outfile);
+					fclose(fpin);
+					db_finalize(stmt);
+					db_exec(db, "ROLLBACK");
+					db_close(db);
+					return EXIT_FAILURE;
+				}
+				db_reset(stmt);
+				// Increment counter
+				exact_domains++;
+			}
+			else if(token[0] == (antigravity ? '@' : '|') &&         // <- ABP-style match
+			        valid_abp_domain(token, token_len, antigravity)) // <- Valid ABP domain
+			{
+				// ABP-style match (see comments above)
+				if(checkOnly)
+				{
+					// Increment counter
+					abp_domains++;
+					goto next_domain;
+				}
+
+				// else: Append pattern to database using prepared statement
+				if(db_bind_text_ref(stmt, 1, token) != DB_OK)
+				{
+					printf("%s  %s Unable to bind domain to SQL statement to insert domains into database file %s\n",
+					over, cross, outfile);
+					fclose(fpin);
+					db_finalize(stmt);
+					db_exec(db, "ROLLBACK");
+					db_close(db);
+					return EXIT_FAILURE;
+				}
+				if(db_step(stmt) != DB_DONE)
+				{
+					printf("%s  %s Unable to insert domain into database file %s\n", over, cross, outfile);
+					fclose(fpin);
+					db_finalize(stmt);
+					db_exec(db, "ROLLBACK");
+					db_close(db);
+					return EXIT_FAILURE;
+				}
+				db_reset(stmt);
+				abp_domains++;
+			}
+			else
+			{
+				// No match - This is an invalid domain or a false positive
+
+				// Ignore false positives - they don't count as invalid domains
+				if(!is_false_positive(token))
+				{
+					if(checkOnly)
+					{
+						// Increment counter
+						invalid_domains++;
+						printf("%s  %s Invalid domain on line %zu: ", over, cross, lineno);
+						print_escaped(token, token_len);
+						puts("");
+						goto next_domain;
+					}
+					// Add the domain to invalid_domains_list only
+					// if the list contains < MAX_INVALID_DOMAINS
+					if(invalid_domains_list_len < MAX_INVALID_DOMAINS)
+					{
+						// Check if we have this domain already
+						bool found = false;
+						for(unsigned int i = 0; i < invalid_domains_list_len; i++)
+						{
+							// Do not compare against unset entries
+							if(invalid_domains_list[i] == NULL || invalid_domains_list_lengths[i] == -1)
+								break;
+
+							// Compare against the current domain
+							if(memcmp(invalid_domains_list[i], token, min((ssize_t)token_len, invalid_domains_list_lengths[i])) == 0)
+							{
+								found = true;
+								break;
+							}
+						}
+
+						// If not found, add it to the list
+						if(!found)
+						{
+							invalid_domains_list[invalid_domains_list_len] = calloc(token_len + 1, sizeof(char));
+							if(invalid_domains_list[invalid_domains_list_len] == NULL)
+							{
+								printf("%s  %s Unable to allocate memory for invalid domains list\n", over, cross);
+								fclose(fpin);
+								db_finalize(stmt);
+								db_exec(db, "ROLLBACK");
+								db_close(db);
+								return EXIT_FAILURE;
+							}
+							memcpy(invalid_domains_list[invalid_domains_list_len], token, token_len);
+							invalid_domains_list[invalid_domains_list_len][token_len] = '\0';
+							invalid_domains_list_lengths[invalid_domains_list_len] = token_len;
+							invalid_domains_list_len++;
+						}
+
+					}
+					invalid_domains++;
+				}
+			}
+next_domain:
+			token = strtok_r(NULL, " \t", &saveptr);
+		}
+
+		// Print progress if the file is large enough every 100 lines
+		// This code cannot be reached if checkOnly is true
+		if(fsize > PRINT_PROGRESS_THRESHOLD && total_read - last_print > print_step)
+		{
+			last_print = total_read;
+			// Calculate progress
+			const int progress = (int)(100.0*total_read/fsize);
+			// Print progress if it has changed
+			if(progress > last_progress)
+			{
+				printf("%s  %s Processed %i%% of downloaded list", over, info, progress);
+				fflush(stdout);
+				last_progress = progress;
+			}
+		}
+	}
+
+	// Finalize SQL statement
+	db_finalize(stmt);
+	stmt = NULL;
+
+	// Skip to end of parseList if we are only checking the list
+	if(checkOnly)
+		goto end_of_parseList;
+
+	// Update database properties
+	// Are ABP patterns used?
+	if(abp_domains > 0)
+	{
+		sql = "INSERT OR REPLACE INTO info (property,value) VALUES ('abp_domains',1);";
+		if(db_exec(db, sql) != DB_OK)
+		{
+			printf("%s  %s Unable to update database properties in database file %s\n",
+			       over, cross, outfile);
+			fclose(fpin);
+			db_exec(db, "ROLLBACK");
+			db_close(db);
+			return EXIT_FAILURE;
+		}
+	}
+
+	// Update number of domains and update timestamp on this list
+	// The `date_updated` column is updated conditionally using a `CASE`
+	// expression. If the `status` column of the row is `1` (= list has been
+	// updated), the `date_updated` column is set to the current timestamp.
+	// This is achieved by using the `strftime` function to get the current
+	// time in seconds since the Unix epoch and casting it to an integer. If
+	// the `status` is not `1` (we used a cached list either because there
+	// are no changes or the download failed), the `date_updated` column
+	// retains its existing value.
+	sql = "UPDATE adlist SET number = ?, invalid_domains = ?, abp_entries = ?, date_updated = CASE WHEN status = 1 THEN cast(strftime('%s', 'now') as int) ELSE date_updated END WHERE id = ?;";
+	if((stmt = db_prepare(db, sql, false)) == NULL)
+	{
+		printf("%s  %s Unable to prepare SQL statement to update adlist properties in database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+	if(db_bind_int(stmt, 1, exact_domains + abp_domains) != DB_OK)
+	{
+		printf("%s  %s Unable to bind number of entries to SQL statement to update adlist properties in database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+	if(db_bind_int(stmt, 2, invalid_domains) != DB_OK)
+	{
+		printf("%s  %s Unable to bind number of invalid domains to SQL statement to update adlist properties in database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+	if(db_bind_int(stmt, 3, abp_domains) != DB_OK)
+	{
+		printf("%s  %s Unable to bind number of ABP entries to SQL statement to update adlist properties in database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+	if(db_bind_int(stmt, 4, adlistID) != DB_OK)
+	{
+		printf("%s  %s Unable to bind adlist ID to SQL statement to update adlist properties in database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+	if(db_step(stmt) != DB_DONE)
+	{
+		printf("%s  %s Unable to update adlist properties in database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+	db_finalize(stmt);
+
+	// End transaction
+	if(db_exec(db, "END") != DB_OK)
+	{
+		printf("%s  %s Unable to end transaction to insert domains into database file %s (database file may be corrupted)\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+end_of_parseList:
+	// Print summary
+	printf("%s  %s Parsed %u exact domains and %u ABP-style domains (%sing, ignored %u non-domain entries)\n",
+	       over, tick, exact_domains, abp_domains, antigravity ? "allow" : "block", invalid_domains);
+	if(invalid_domains_list_len > 0)
+	{
+		puts("      Sample of non-domain entries:");
+		for(unsigned int i = 0; i < invalid_domains_list_len; i++)
+		{
+			// Print indentation
+			printf("        - ");
+			print_escaped(invalid_domains_list[i], invalid_domains_list_lengths[i]);
+			// Print newline
+			puts("");
+		}
+	}
+
+	// Free memory
+	free(line);
+	for(unsigned int i = 0; i < invalid_domains_list_len; i++)
+		if(invalid_domains_list[i] != NULL)
+			free(invalid_domains_list[i]);
+
+	// Close files
+	fclose(fpin);
+	if(db != NULL)
+		db_close(db);
+
+	// Return success
+	return EXIT_SUCCESS;
+}

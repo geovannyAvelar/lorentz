@@ -1,0 +1,42 @@
+/* Pi-hole: A black hole for Internet advertisements
+*  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
+*  Network-wide ad blocking via your own hardware.
+*
+*  FTL Engine
+*  dnsmasq config writer prototypes
+*
+*  This file is copyright under the latest version of the EUPL.
+*  Please see LICENSE file for your rights under this license. */
+#ifndef DNSMASQ_CONFIG_H
+#define DNSMASQ_CONFIG_H
+
+#include "config/config.h"
+
+#define ERRBUF_SIZE 1024
+
+// What write_dnsmasq_config() should do with the file it builds
+enum dnsmasq_write_mode {
+	DNSMASQ_INSTALL,      // install it, no syntax test
+	DNSMASQ_TEST_INSTALL, // test it, install it if the test passes
+	DNSMASQ_TEST_ONLY,    // test it and remove it again
+};
+
+bool write_dnsmasq_config(struct config *conf, enum dnsmasq_write_mode mode, char errbuf[ERRBUF_SIZE]) __attribute__((nonnull(1,3)));
+int get_lineno_from_string(const char *string);
+char *get_dnsmasq_line(const unsigned int lineno);
+bool read_legacy_dhcp_static_config(void);
+bool read_legacy_cnames_config(void);
+bool read_legacy_custom_hosts_config(void);
+bool write_custom_list(void);
+
+#define DNSMASQ_PH_CONFIG "/etc/pihole/dnsmasq.conf"
+#define DNSMASQ_TEMP_CONF "/etc/pihole/dnsmasq.conf.temp"
+#define DNSMASQ_STATIC_LEASES MIGRATION_TARGET_V6"/04-pihole-static-dhcp.conf"
+#define DNSMASQ_CNAMES MIGRATION_TARGET_V6"/05-pihole-custom-cname.conf"
+#define DNSMASQ_HOSTSDIR "/etc/pihole/hosts"
+#define DNSMASQ_CUSTOM_LIST DNSMASQ_HOSTSDIR"/custom.list"
+#define DNSMASQ_CUSTOM_LIST_LEGACY "/etc/pihole/custom.list"
+#define DNSMASQ_CUSTOM_LIST_LEGACY_TARGET MIGRATION_TARGET_V6"/custom.list"
+#define DHCPLEASESFILE "/etc/pihole/dhcp.leases"
+
+#endif //DNSMASQ_CONFIG_H

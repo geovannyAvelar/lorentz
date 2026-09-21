@@ -1,0 +1,28 @@
+--- a/src/database/shell.c
++++ b/src/database/shell.c
+@@ -4474,6 +4474,8 @@
+ #include <assert.h>
+ #include <string.h>
+ #include <stdarg.h>
++// print_FTL_version()
++#include "../log.h"
+ 
+ #ifndef SQLITE_AMALGAMATION
+ /* typedef sqlite3_uint64 u64; */
+@@ -36426,7 +36428,7 @@
+ **     fiddle_main          In Fiddle
+ **     sqlite3_shell        Other projects that use shell.c as a subroutine
+ */
+-int SQLITE_CDECL main(int argc, char **argv){
++int SQLITE_CDECL sqlite3_shell_main(int argc, char **argv){
+ #ifdef SQLITE_DEBUG
+   sqlite3_int64 mem_main_enter = 0;
+ #endif
+@@ -37060,6 +37062,7 @@
+     if( stdin_is_interactive ){
+       char *zHome;
+       char *zHistory;
++      print_FTL_version();
+       cli_printf(stdout,
+             "SQLite version %s %.19s\n" /*extra-version-info*/
+             "Enter \".help\" for usage hints.\n",

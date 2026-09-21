@@ -1,0 +1,39 @@
+From 0ff00e1c838ec91a31970c2b51a7651954cba3d6 Mon Sep 17 00:00:00 2001
+From: DL6ER <dl6er@dl6er.de>
+Date: Mon, 23 Sep 2024 21:42:21 +0200
+Subject: [PATCH] Add bundled script loading into luaL_openlibs to make them
+ available globally (also in the webserver)
+
+Signed-off-by: DL6ER <dl6er@dl6er.de>
+---
+ src/lua/linit.c                    |  6 ++++++
+ src/lua/lua.c                      | 13 +------------
+ 2 files changed, 7 insertions(+), 13 deletions(-)
+
+diff --git a/src/lua/linit.c b/src/lua/linit.c
+index 9a5bcfdc..787865c0 100644
+--- a/src/lua/linit.c
++++ b/src/lua/linit.c
+@@ -8,6 +8,10 @@
+ #define linit_c
+ #define LUA_LIB
+ 
++/** Pi-hole modification **/
++#include "ftl_lua.h"
++/**************************/
++
+ /*
+ ** If you embed Lua in your program and need to open the standard
+ ** libraries, call luaL_openlibs in your program. If you need a
+@@ -64,5 +68,7 @@ LUALIB_API void luaL_openselectedlibs (lua_State *L, int load, int preload) {
+   }
+   lua_assert((mask >> 1) == LUA_UTF8LIBK);
+   lua_pop(L, 1);  /* remove PRELOAD table */
++  // Load and enable libraries bundled with Pi-hole
++  ftl_lua_init(L);
+ }
+ 
+
+-- 
+2.34.1
+
