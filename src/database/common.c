@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
-*  Common database routines for pihole-FTL.db
+*  Lorentz Engine
+*  Common database routines for lorentz.db
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "database/common.h"
 // SQLITE_WARNING, SQLITE_NOTICE, SQLITE_SCHEMA for SQLite3LogCallback()
 #include "database/sqlite3.h"
@@ -40,7 +40,7 @@ bool DBdeleteoldqueries = false;
 static _Atomic bool DBerror = false;
 static _Atomic int dbopen_cnt = 0; // Number of times the database has been opened
 
-bool __attribute__ ((pure)) FTLDBerror(void)
+bool __attribute__ ((pure)) LorentzDBerror(void)
 {
 	return atomic_load_explicit(&DBerror, memory_order_relaxed);
 }
@@ -79,7 +79,7 @@ static void check_conn_error(db_conn *db)
 void _dbclose(db_conn **db, const char *func, const int line, const char *file)
 {
 	// The shared in-memory connection is owned by close_memory_database() and
-	// its prepared statements live as long as FTL does. Closing it here would
+	// its prepared statements live as long as Lorentz does. Closing it here would
 	// finalize them behind the back of whoever cached them, so return before
 	// both the NULL assignment and the counter below: the connection stays
 	// valid for its owner, and it never went through dbopen() to be counted
@@ -91,7 +91,7 @@ void _dbclose(db_conn **db, const char *func, const int line, const char *file)
 	}
 
 	if(config.debug.database.v.b)
-		log_debug(DEBUG_DATABASE, "Closing FTL database in %s() (%s:%i)", func, short_path(file), line);
+		log_debug(DEBUG_DATABASE, "Closing Lorentz database in %s() (%s:%i)", func, short_path(file), line);
 
 	// Only try to close an existing database connection. Statements that
 	// were not finalized are finalized (and logged) by the driver. Inside the
@@ -171,11 +171,11 @@ int sqliteBusyCallback(void *ptr, int count)
 db_conn *_dbopen(const bool readonly, const bool create, const char *func, const int line, const char *file)
 {
 	// Silently return NULL if the database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return NULL;
 
 	// Try to open database
-	log_debug(DEBUG_DATABASE, "Opening FTL database in %s() (node %s%s) (%s:%i)",
+	log_debug(DEBUG_DATABASE, "Opening Lorentz database in %s() (node %s%s) (%s:%i)",
 	          func, readonly ? "RO" : "RW", create ? ",C" : "", short_path(file), line);
 
 	// DB_OPEN_NOMUTEX: dbopen() connections are strictly single-
@@ -213,7 +213,7 @@ db_conn *_dbopen(const bool readonly, const bool create, const char *func, const
 		return NULL;
 	}
 
-	// Explicitly set busy handler to value defined in FTL.h
+	// Explicitly set busy handler to value defined in lorentz.h
 	rc = db_set_busy_handler(db, sqliteBusyCallback, NULL);
 	if(rc != DB_OK)
 	{
@@ -284,7 +284,7 @@ static bool create_counter_table(db_conn *db)
 	// Start transaction
 	SQL_bool(db, "BEGIN");
 
-	// Create FTL table in the database (holds properties like database version, etc.)
+	// Create Lorentz table in the database (holds properties like database version, etc.)
 	SQL_bool(db, "CREATE TABLE counters ( id INTEGER PRIMARY KEY NOT NULL, value INTEGER NOT NULL );");
 
 	// ID 0 = total queries
@@ -304,7 +304,7 @@ static bool create_counter_table(db_conn *db)
 	}
 
 	// Time stamp of creation of the counters database
-	if(!db_set_FTL_property(db, DB_FIRSTCOUNTERTIMESTAMP, (unsigned long)time(0)))
+	if(!db_set_Lorentz_property(db, DB_FIRSTCOUNTERTIMESTAMP, (unsigned long)time(0)))
 	{
 		log_err("create_counter_table(): Failed to update first counter timestamp!");
 		dbquery(db, "ROLLBACK");
@@ -312,7 +312,7 @@ static bool create_counter_table(db_conn *db)
 	}
 
 	// Update database version to 2
-	if(!db_set_FTL_property(db, DB_VERSION, 2))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 2))
 	{
 		log_err("create_counter_table(): Failed to update database version!");
 		dbquery(db, "ROLLBACK");
@@ -335,15 +335,15 @@ static bool db_create_tables(db_conn *db)
 	// Add an index on the timestamps (not a unique index!)
 	SQL_bool(db, CREATE_QUERIES_TIMESTAMP_INDEX);
 
-	// Create FTL table in the database (holds properties like database version, etc.)
-	SQL_bool(db, CREATE_FTL_TABLE);
+	// Create Lorentz table in the database (holds properties like database version, etc.)
+	SQL_bool(db, CREATE_LORENTZ_TABLE);
 
-	// Set FTL_db version 1
-	if(!db_set_FTL_property(db, DB_VERSION, 1))
+	// Set Lorentz_db version 1
+	if(!db_set_Lorentz_property(db, DB_VERSION, 1))
 		return false;
 
 	// Most recent timestamp initialized to 00:00 1 Jan 1970
-	if(!db_set_FTL_property(db, DB_LASTTIMESTAMP, 0))
+	if(!db_set_Lorentz_property(db, DB_LASTTIMESTAMP, 0))
 		return false;
 
 	return true;
@@ -372,7 +372,7 @@ void SQLite3LogCallback(void *pArg, int iErrCode, const char *zMsg)
 	// concerning the return codes returned here
 	if(zMsg != NULL && strncmp(zMsg, "file renamed while open: ", sizeof("file renamed while open: ")-1) == 0)
 	{
-		// This happens when gravity.db is replaced while FTL is running
+		// This happens when gravity.db is replaced while Lorentz is running
 		// We can safely ignore this warning
 		return;
 	}
@@ -426,13 +426,13 @@ void db_init(void)
 		return;
 	}
 
-	// Test FTL_db version and see if we need to upgrade the database file
+	// Test Lorentz_db version and see if we need to upgrade the database file
 	int dbversion = db_get_int(db, DB_VERSION);
 	// Warn if there is an error, however, do not warn on database file
 	// corruption. This has already been logged before
-	if(dbversion < 1 && !FTLDBerror())
+	if(dbversion < 1 && !LorentzDBerror())
 	{
-		log_warn("Database not available, please ensure the database is unlocked when starting pihole-FTL !");
+		log_warn("Database not available, please ensure the database is unlocked when starting lorentz !");
 		dbclose(&db);
 		DBerror = true;
 		return;
@@ -650,11 +650,11 @@ void db_init(void)
 	// Update to version 14 if lower
 	if(dbversion < 14)
 	{
-		// Update to version 14: Add additional column for the ftl table
+		// Update to version 14: Add additional column for the lorentz table
 		log_info("Updating long-term database to version 14");
-		if(!add_ftl_table_description(db))
+		if(!add_lorentz_table_description(db))
 		{
-			log_info("FTL table description cannot be added, database not available");
+			log_info("Lorentz table description cannot be added, database not available");
 			dbclose(&db);
 			DBerror = true;
 			return;
@@ -794,7 +794,7 @@ void db_init(void)
 	/* * * * * * * * * * * * * IMPORTANT * * * * * * * * * * * * *
 	 * If you add a new database version, check if the in-memory
 	 * schema needs to be update as well (always recreated from
-	 * scratch on every FTL (re)start). Also, ensure to update the
+	 * scratch on every Lorentz (re)start). Also, ensure to update the
 	 * MEMDB_VERSION in src/database/query-table.h as well as the
 	 * expected database schema in the CI tests.
 	 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -818,18 +818,18 @@ void db_init(void)
 	dbclose(&db);
 
 	// Log if users asked us to not use the long-term database for queries
-	// We will still use it to store warnings (Pi-hole diagnosis system)
+	// We will still use it to store warnings (Lorentz diagnosis system)
 	if(config.database.maxDBdays.v.ui == 0)
 		log_info("Not using the database for storing queries");
 
 	log_info("Database successfully initialized");
 }
 
-int db_get_int(db_conn *db, const enum ftl_table_props ID)
+int db_get_int(db_conn *db, const enum lorentz_table_props ID)
 {
 	// Prepare SQL statement
 	char* querystr = NULL;
-	int ret = asprintf(&querystr, "SELECT VALUE FROM ftl WHERE id = %u;", ID);
+	int ret = asprintf(&querystr, "SELECT VALUE FROM lorentz WHERE id = %u;", ID);
 
 	if(querystr == NULL || ret < 0)
 	{
@@ -843,14 +843,14 @@ int db_get_int(db_conn *db, const enum ftl_table_props ID)
 	return value;
 }
 
-bool db_set_FTL_property(db_conn *db, const enum ftl_table_props ID, const int value)
+bool db_set_Lorentz_property(db_conn *db, const enum lorentz_table_props ID, const int value)
 {
 	// Use UPSERT (https://sqlite.org/lang_upsert.html)
 	// UPSERT is a clause added to INSERT that causes the INSERT to behave
 	// as an UPDATE or a no-op if the INSERT would violate a uniqueness
 	// constraint. UPSERT is not standard SQL. UPSERT in SQLite follows the
 	// syntax established by PostgreSQL, with generalizations. 
-	SQL_bool(db, "INSERT INTO ftl (id, value) VALUES ( %u, %d ) ON CONFLICT (id) DO UPDATE SET value=%d;", ID, value, value);
+	SQL_bool(db, "INSERT INTO lorentz (id, value) VALUES ( %u, %d ) ON CONFLICT (id) DO UPDATE SET value=%d;", ID, value, value);
 	return true;
 }
 

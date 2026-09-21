@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Common HTTP server routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "config/config.h"
 #include "log.h"
@@ -22,7 +22,7 @@
 // Each request is handled entirely within a single thread, so the buffer is
 // written by the API handler and then read by send_additional_header() in
 // the same thread.
-_Thread_local char pi_hole_extra_headers[PIHOLE_HEADERS_MAXLEN] = { 0 };
+_Thread_local char lorentz_extra_headers[LORENTZ_HEADERS_MAXLEN] = { 0 };
 
 // Provides a compile-time flag for JSON formatting
 // This should never be needed as all modern browsers
@@ -50,14 +50,14 @@ char *json_formatter(const cJSON *object)
 	}
 }
 
-int send_http(struct ftl_conn *api, const char *mime_type,
+int send_http(struct lorentz_conn *api, const char *mime_type,
               const char *msg)
 {
 	mg_send_http_ok(api->conn, mime_type, strlen(msg));
 	return mg_write(api->conn, msg, strlen(msg));
 }
 
-int send_http_code(struct ftl_conn *api, const char *mime_type,
+int send_http_code(struct lorentz_conn *api, const char *mime_type,
                    int code, const char *msg)
 {
 	// Payload will be sent with text/plain encoding due to
@@ -74,7 +74,7 @@ int send_http_code(struct ftl_conn *api, const char *mime_type,
 	return mg_write(api->conn, msg, strlen(msg));
 }
 
-int send_json_unauthorized(struct ftl_conn *api)
+int send_json_unauthorized(struct lorentz_conn *api)
 {
 	// Log API warnings only if debug.api is true
 	return send_json_error_free(api, 401,
@@ -84,7 +84,7 @@ int send_json_unauthorized(struct ftl_conn *api)
 	                            config.debug.api.v.b);
 }
 
-int send_json_error(struct ftl_conn *api, const int code,
+int send_json_error(struct lorentz_conn *api, const int code,
                     const char *key, const char* message,
                     const char *hint)
 {
@@ -92,7 +92,7 @@ int send_json_error(struct ftl_conn *api, const int code,
 	                            (char*)hint, false, true);
 }
 
-int send_json_error_free(struct ftl_conn *api, const int code,
+int send_json_error_free(struct lorentz_conn *api, const int code,
                          const char *key, const char* message,
                          char *hint, const bool free_hint, const bool log)
 {
@@ -149,14 +149,14 @@ int send_json_error_free(struct ftl_conn *api, const int code,
 	JSON_SEND_OBJECT_CODE(json, code);
 }
 
-int send_json_success(struct ftl_conn *api)
+int send_json_success(struct lorentz_conn *api)
 {
 	cJSON *json = JSON_NEW_OBJECT();
 	JSON_REF_STR_IN_OBJECT(json, "status", "success");
 	JSON_SEND_OBJECT(json);
 }
 
-int send_http_internal_error(struct ftl_conn *api)
+int send_http_internal_error(struct lorentz_conn *api)
 {
 	return mg_send_http_error(api->conn, 500, "Internal server error");
 }
@@ -448,7 +448,7 @@ int get_string_var(const char *source, const char *var, char *dest, size_t dest_
 	return len;
 }
 
-const char* startsWith(const char *path, struct ftl_conn *api)
+const char* startsWith(const char *path, struct lorentz_conn *api)
 {
 	// We use local_uri_raw here to get the unescaped URI, see
 	// https://github.com/civetweb/civetweb/pull/975
@@ -487,7 +487,7 @@ const char* startsWith(const char *path, struct ftl_conn *api)
 		return NULL;
 }
 
-bool http_get_cookie_int(struct ftl_conn *api, const char *cookieName, int *i)
+bool http_get_cookie_int(struct lorentz_conn *api, const char *cookieName, int *i)
 {
 	// Maximum cookie length is 4KB
 	char cookieValue[4096];
@@ -500,7 +500,7 @@ bool http_get_cookie_int(struct ftl_conn *api, const char *cookieName, int *i)
 	return false;
 }
 
-bool http_get_cookie_str(struct ftl_conn *api, const char *cookieName, char *str, size_t str_size)
+bool http_get_cookie_str(struct lorentz_conn *api, const char *cookieName, char *str, size_t str_size)
 {
 	const char *cookie = mg_get_header(api->conn, "Cookie");
 	if(mg_get_cookie(cookie, cookieName, str, str_size) > 0)
@@ -551,7 +551,7 @@ const char * __attribute__((const)) get_http_method_str(const enum http_method m
 	}
 }
 
-void read_and_parse_payload(struct ftl_conn *api)
+void read_and_parse_payload(struct lorentz_conn *api)
 {
 	// Defense in depth: never operate on an unallocated payload buffer
 	if(api->payload.raw == NULL)
@@ -642,7 +642,7 @@ char *__attribute__((malloc)) escape_html(const char *string)
 // response with a hint that no payload was received. If the payload is not
 // valid JSON, send a 400 Bad Request response with a hint that the payload is
 // invalid JSON.
-int check_json_payload(struct ftl_conn *api)
+int check_json_payload(struct lorentz_conn *api)
 {
 	if (api->payload.json == NULL)
 	{
@@ -665,7 +665,7 @@ int check_json_payload(struct ftl_conn *api)
 // Black magic at work here: We build a JSON array from the group_concat result
 // delivered from the database, parse it as valid array and append it as row to
 // the data
-int parse_groupIDs(struct ftl_conn *api, tablerow *table, cJSON *row)
+int parse_groupIDs(struct lorentz_conn *api, tablerow *table, cJSON *row)
 {
 	const size_t buflen = strlen(table->group_ids) + 3u;
 	char *group_ids_str = calloc(buflen, sizeof(char));

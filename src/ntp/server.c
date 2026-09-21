@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2024 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  NTP server routines
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -315,7 +315,7 @@ static void *ntp_bind_and_listen(void *param)
 
 #ifdef SO_REUSEPORT
 	// Set socket option to allow multiple sockets to bind to the same port
-	// (SO_REUSEPORT). This is necessary to ensure pihole-FTL can rebind to
+	// (SO_REUSEPORT). This is necessary to ensure lorentz can rebind to
 	// the NTP port after a restart without waiting for the kernel to release
 	// the port. This feature is available since Linux 3.9.
 	int optval = 1;

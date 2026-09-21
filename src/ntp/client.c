@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2024 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  NTP client routines
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -710,7 +710,7 @@ bool ntp_client(const char *server, const bool settime, const bool print)
 			{
 				char errbuf[256];
 				snprintf(errbuf, sizeof(errbuf),
-				         "Refusing to step system clock by %.0f s (exceeds %d s panic threshold) - possible malicious NTP server. If this device has no RTC, restart FTL to permit the initial large step.",
+				         "Refusing to step system clock by %.0f s (exceeds %d s panic threshold) - possible malicious NTP server. If this device has no RTC, restart Lorentz to permit the initial large step.",
 				         theta_trim, NTP_MAX_STEP_SECS);
 				errbuf[sizeof(errbuf) - 1] = '\0';
 				log_ntp_message(true, false, errbuf);
@@ -786,7 +786,7 @@ static void *ntp_client_thread(void *arg)
 		// Get time after NTP sync
 		const double after = double_time();
 
-		// If the time was updated by more than ten minutes, restart FTL
+		// If the time was updated by more than ten minutes, restart Lorentz
 		// to import recent data. This is relevant when the system time
 		// was set to an incorrect value (e.g., due to a dead CMOS
 		// battery or overall missing RTC) and the time was off.
@@ -794,7 +794,7 @@ static void *ntp_client_thread(void *arg)
 		if(first_run && time_delta > 600)
 		{
 			log_info("System time was updated by %.1f seconds", time_delta);
-			restart_ftl("System time updated");
+			restart_lorentz("System time updated");
 		}
 
 		// Calculate time to sleep. Clamp to zero when the sync itself took

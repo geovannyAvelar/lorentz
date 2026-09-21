@@ -1,8 +1,8 @@
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine
+# Lorentz Engine
 # /src/dnsmasq/CMakeList.txt
 #
 # This file is copyright under the latest version of the EUPL.
@@ -63,7 +63,7 @@ set(sources
 
 add_library(dnsmasq OBJECT ${sources})
 target_compile_definitions(dnsmasq PRIVATE VERSION=\"${DNSMASQ_VERSION}\")
-target_compile_definitions(dnsmasq PRIVATE CONFFILE=\"/etc/pihole/dnsmasq.conf\")
+target_compile_definitions(dnsmasq PRIVATE CONFFILE=\"/etc/lorentz/dnsmasq.conf\")
 if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_compile_options(dnsmasq PRIVATE -Wno-maybe-uninitialized -Wno-sign-compare)
 elseif (CMAKE_C_COMPILER_ID STREQUAL "Clang")

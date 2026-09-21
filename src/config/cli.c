@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  CLI config routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "config/cli.h"
 #include "config/config.h"
 #include "config/toml_helper.h"
@@ -384,18 +384,18 @@ int set_config_from_CLI(const char *key, const char *value, const bool test_only
 {
 	// Check if we are either
 	// - root, or
-	// - pihole with CAP_CHOWN capability on the pihole-FTL binary
+	// - lorentz with CAP_CHOWN capability on the lorentz binary
 	const uid_t euid = geteuid();
 	const struct passwd *current_user = getpwuid(euid);
 	const bool is_root = euid == 0;
-	const bool is_pihole = current_user != NULL && strcmp(current_user->pw_name, "pihole") == 0;
+	const bool is_lorentz = current_user != NULL && strcmp(current_user->pw_name, "lorentz") == 0;
 	const bool have_chown_cap = check_capability(CAP_CHOWN);
-	if(!is_root && !(is_pihole && have_chown_cap))
+	if(!is_root && !(is_lorentz && have_chown_cap))
 	{
-		if(is_pihole)
+		if(is_lorentz)
 			printf("Permission error: CAP_CHOWN is missing on the binary\n");
 		else
-			printf("Permission error: User %s is not allowed to edit Pi-hole's config\n",
+			printf("Permission error: User %s is not allowed to edit Lorentz's config\n",
 			       current_user != NULL ? current_user->pw_name : "(unknown)");
 
 		printf("Please run this command using sudo\n\n");
@@ -434,7 +434,7 @@ int set_config_from_CLI(const char *key, const char *value, const bool test_only
 		// Check if this the special read-only config option
 		if(item->f & FLAG_API_CLI_READ_ONLY)
 		{
-			log_err("Config option %s can only be set in pihole.toml, not via the CLI", key);
+			log_err("Config option %s can only be set in lorentz.toml, not via the CLI", key);
 			free_config(&newconf, false);
 			return EXIT_FAILURE;
 		}
@@ -491,7 +491,7 @@ int set_config_from_CLI(const char *key, const char *value, const bool test_only
 		}
 
 		// Is this a dnsmasq option we need to check?
-		if(conf_item->f & FLAG_RESTART_FTL)
+		if(conf_item->f & FLAG_RESTART_LORENTZ)
 		{
 			char errbuf[ERRBUF_SIZE] = { 0 };
 			if(!write_dnsmasq_config(&newconf, test_only ? DNSMASQ_TEST_ONLY : DNSMASQ_TEST_INSTALL, errbuf))
@@ -541,7 +541,7 @@ int set_config_from_CLI(const char *key, const char *value, const bool test_only
 	}
 
 	putchar('\n');
-	writeFTLtoml(false, NULL);
+	writeLorentztoml(false, NULL);
 	return OKAY;
 }
 

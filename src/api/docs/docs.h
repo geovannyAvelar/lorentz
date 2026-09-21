@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/docs (helper)
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -10,7 +10,7 @@
 #ifndef API_DOCS_H
 #define API_DOCS_H
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/civetweb/civetweb.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
@@ -18,7 +18,7 @@
 
 #include "hex/index_html.h"
 #include "hex/index_css.h"
-#include "hex/pi-hole_js.h"
+#include "hex/lorentz_js.h"
 #include "hex/external/rapidoc-min_js.h"
 #include "hex/external/rapidoc-min_js_map.h"
 #include "hex/images/logo_svg.h"
@@ -54,7 +54,7 @@ struct {
 {
     {"index.html", "text/html", (const char*)index_html, index_html_len},
     {"index.css", "text/css", (const char*)index_css, index_css_len},
-    {"pi-hole.js", "application/javascript", (const char*)pi_hole_js, pi_hole_js_len},
+    {"lorentz.js", "application/javascript", (const char*)lorentz_js, lorentz_js_len},
     {"external/rapidoc-min.js", "application/javascript", (const char*)external_rapidoc_min_js, external_rapidoc_min_js_len},
     {"external/rapidoc-min.js.map", "text/plain", (const char*)external_rapidoc_min_js_map, external_rapidoc_min_js_map_len},
     {"images/logo.svg", "image/svg+xml", (const char*)images_logo_svg, images_logo_svg_len},

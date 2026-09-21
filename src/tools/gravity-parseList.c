@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Gravity parseList routines
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -109,7 +109,7 @@ static inline unsigned int __attribute__((pure)) utf8_sequence_len(const unsigne
 //
 // allow_utf8 accepts an internationalized name in its UTF-8 form. Only pass it
 // where the value is handed to dnsmasq, which is built with libidn2 and converts
-// such a name itself. Pi-hole's own lists are matched byte-wise against the
+// such a name itself. Lorentz's own lists are matched byte-wise against the
 // query name, which always arrives as an A-label, so a UTF-8 entry there would
 // be stored and never match anything.
 inline bool __attribute__((pure)) valid_domain(const char *domain, const size_t len,
@@ -280,7 +280,7 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 	// Journaling is used to prevent database corruption in case of a power
 	// loss or operating system crash. However, this is not needed for the
 	// gravity database the database is created from scratch at every run
-	// of pihole -g.
+	// of lorentz -g.
 	// The OFF journaling mode disables the rollback journal completely. No
 	// rollback journal is ever created and hence there is never a rollback
 	// journal to delete.
@@ -303,7 +303,7 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 	// See https://www.sqlite.org/pragma.html#pragma_synchronous
 	// If a power loss (or operating system crash) happens, the database
 	// created here will never be swapped into action and is discarded at
-	// the next run of pihole -g.
+	// the next run of lorentz -g.
 	if(!checkOnly && db_exec(db, "PRAGMA synchronous = OFF;") != DB_OK)
 	{
 		printf("%s  %s Unable to disable synchronous mode in database file %s\n", over, cross, outfile);

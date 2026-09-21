@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  File operation routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "files.h"
 #include "config/config.h"
 #include "config/setupVars.h"
@@ -141,7 +141,7 @@ bool directory_exists(const char *path)
 	return S_ISDIR(stats.st_mode);
 }
 
-off_t get_FTL_db_stats(struct stat *st)
+off_t get_Lorentz_db_stats(struct stat *st)
 {
 	if(stat(config.files.database.v.s, st) == 0)
 		return st->st_size;
@@ -430,16 +430,16 @@ static int copy_file(const char *source, const char *destination)
 #endif
 }
 
-// Change ownership of file to pihole user
-bool chown_pihole(const char *path, struct passwd *pwd)
+// Change ownership of file to lorentz user
+bool chown_lorentz(const char *path, struct passwd *pwd)
 {
-	// Get pihole user's UID and GID if not provided
+	// Get lorentz user's UID and GID if not provided
 	if(pwd == NULL)
 	{
-		pwd = getpwnam("pihole");
+		pwd = getpwnam("lorentz");
 		if(pwd == NULL)
 		{
-			log_warn("chown_pihole(): Failed to get pihole user's UID/GID: %s", strerror(errno));
+			log_warn("chown_lorentz(): Failed to get lorentz user's UID/GID: %s", strerror(errno));
 			return false;
 		}
 	}
@@ -448,7 +448,7 @@ bool chown_pihole(const char *path, struct passwd *pwd)
 	struct group *grp = getgrgid(pwd->pw_gid);
 	const char *grp_name = grp != NULL ? grp->gr_name : "<unknown>";
 
-	// Change ownership of file to pihole user
+	// Change ownership of file to lorentz user
 	if(chown(path, pwd->pw_uid, pwd->pw_gid) < 0)
 	{
 		if(errno == ENOENT) // ENOENT = No such file or directory
@@ -562,8 +562,8 @@ void rotate_files(const char *path, char **first_file)
 				          old_path, new_path);
 			}
 
-			// Change ownership of file to pihole user
-			chown_pihole(new_path, NULL);
+			// Change ownership of file to lorentz user
+			chown_lorentz(new_path, NULL);
 		}
 
 		// Free memory
@@ -805,7 +805,7 @@ bool sha256sum(const char *path, uint8_t checksum[SHA256_DIGEST_SIZE], const boo
  * @return Returns true if the checksum matches the expected value, false
  * otherwise.
  */
-enum verify_result verify_FTL(bool verbose)
+enum verify_result verify_Lorentz(bool verbose)
 {
 	// Get the filename of the current executable
 	char filename[PATH_MAX] = { 0 };

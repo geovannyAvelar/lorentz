@@ -1,5 +1,5 @@
 """
-Shared pytest fixtures for FTL API integration tests.
+Shared pytest fixtures for Lorentz API integration tests.
 """
 
 import sys
@@ -11,13 +11,13 @@ import requests
 # Add test/api to the path so libs/ can be imported
 sys.path.insert(0, os.path.dirname(__file__))
 
-FTL_URL = "http://127.0.0.1"
+LORENTZ_URL = "http://127.0.0.1"
 
 
 @pytest.fixture(scope="session")
-def ftl_url():
-    """Base URL for the FTL API."""
-    return FTL_URL
+def lorentz_url():
+    """Base URL for the Lorentz API."""
+    return LORENTZ_URL
 
 
 @pytest.fixture(scope="session")
@@ -31,20 +31,20 @@ def api_session():
     session = requests.Session()
     session.headers["Accept"] = "application/json"
     try:
-        r = session.get(f"{FTL_URL}/api/auth", timeout=5)
+        r = session.get(f"{LORENTZ_URL}/api/auth", timeout=5)
         if r.status_code not in (200, 401):
             r.raise_for_status()
     except requests.ConnectionError:
-        pytest.skip("FTL is not running at " + FTL_URL)
+        pytest.skip("Lorentz is not running at " + LORENTZ_URL)
 
     data = r.json()
     if not data.get("session", {}).get("valid"):
         # Password is set — login with "ABC"
-        r = session.post(f"{FTL_URL}/api/auth",
+        r = session.post(f"{LORENTZ_URL}/api/auth",
                          json={"password": "ABC"}, timeout=10)
         sid = r.json().get("session", {}).get("sid")
         if sid:
-            session.headers["X-FTL-SID"] = sid
+            session.headers["X-Lorentz-SID"] = sid
     return session
 
 
@@ -58,19 +58,19 @@ def openapi():
 
 
 @pytest.fixture(scope="session")
-def ftl():
-    """FTLAPI client with endpoints loaded (session-scoped).
+def lorentz():
+    """LORENTZAPI client with endpoints loaded (session-scoped).
 
     Authenticates with password "ABC" if a password is set, otherwise
     connects without authentication.
     """
-    from libs.FTLAPI import FTLAPI
+    from libs.LORENTZAPI import LORENTZAPI
     # Check if authentication is required
-    r = requests.get(f"{FTL_URL}/api/auth", timeout=5)
+    r = requests.get(f"{LORENTZ_URL}/api/auth", timeout=5)
     data = r.json()
     if data.get("session", {}).get("valid"):
-        client = FTLAPI(FTL_URL)
+        client = LORENTZAPI(LORENTZ_URL)
     else:
-        client = FTLAPI(FTL_URL, "ABC")
+        client = LORENTZAPI(LORENTZ_URL, "ABC")
     client.get_endpoints()
     return client

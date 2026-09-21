@@ -4474,7 +4474,7 @@ SQLITE_EXTENSION_INIT1
 #include <assert.h>
 #include <string.h>
 #include <stdarg.h>
-// print_FTL_version()
+// print_Lorentz_version()
 #include "../log.h"
 
 #ifndef SQLITE_AMALGAMATION
@@ -37062,7 +37062,7 @@ int SQLITE_CDECL sqlite3_shell_main(int argc, char **argv){
     if( stdin_is_interactive ){
       char *zHome;
       char *zHistory;
-      print_FTL_version();
+      print_Lorentz_version();
       cli_printf(stdout,
             "SQLite version %s %.19s\n" /*extra-version-info*/
             "Enter \".help\" for usage hints.\n",

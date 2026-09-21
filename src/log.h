@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Logging prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -43,36 +43,36 @@ extern bool debug_flags[DEBUG_MAX];
 extern bool only_testing;
 
 void clear_debug_flags(void);
-void init_FTL_log(const char *name);
+void init_Lorentz_log(const char *name);
 void log_counter_info(void);
 void format_memory_size(char prefix[2], const off_t bytes, double * const formatted);
 void format_time(char buffer[42], unsigned long seconds, double milliseconds);
 unsigned int get_year(const time_t timein);
-const char *get_FTL_version(void);
-void log_FTL_version(bool crashreport);
+const char *get_Lorentz_version(void);
+void log_Lorentz_version(bool crashreport);
 double double_time(void);
 void get_timestr(char timestring[TIMESTR_SIZE], const time_t timein, const bool millis, const bool uri_compatible);
 const char *debugstr(const enum debug_flag flag) __attribute__((const));
 void log_web(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
 const char *get_ordinal_suffix(unsigned int number) __attribute__ ((const));
-void print_FTL_version(void);
+void print_Lorentz_version(void);
 void dnsmasq_diagnosis_warning(char *message);
 
 // The actual logging routine can take extra options for specialized logging
 // The more general interfaces can be defined here as appropriate shortcuts
-#define log_crit(format, ...) _FTL_log(LOG_CRIT, 0, format, ## __VA_ARGS__)
-#define log_err(format, ...) _FTL_log(LOG_ERR, 0, format, ## __VA_ARGS__)
-#define log_warn(format, ...) _FTL_log(LOG_WARNING, 0, format, ## __VA_ARGS__)
-#define log_notice(format, ...) _FTL_log(LOG_NOTICE, 0, format, ## __VA_ARGS__)
-#define log_info(format, ...) _FTL_log(LOG_INFO, 0, format, ## __VA_ARGS__)
-#define log_lvl(priority, format, ...) _FTL_log(priority, 0, format, ## __VA_ARGS__)
+#define log_crit(format, ...) _Lorentz_log(LOG_CRIT, 0, format, ## __VA_ARGS__)
+#define log_err(format, ...) _Lorentz_log(LOG_ERR, 0, format, ## __VA_ARGS__)
+#define log_warn(format, ...) _Lorentz_log(LOG_WARNING, 0, format, ## __VA_ARGS__)
+#define log_notice(format, ...) _Lorentz_log(LOG_NOTICE, 0, format, ## __VA_ARGS__)
+#define log_info(format, ...) _Lorentz_log(LOG_INFO, 0, format, ## __VA_ARGS__)
+#define log_lvl(priority, format, ...) _Lorentz_log(priority, 0, format, ## __VA_ARGS__)
 #define log_debug(flag, format, ...) \
 	if(flag > -1 && flag < DEBUG_MAX && debug_flags[flag]) \
-		_FTL_log(LOG_DEBUG, flag, format, ## __VA_ARGS__)
-void _FTL_log(const int priority, const enum debug_flag flag, const char *format, ...) __attribute__ ((format (printf, 3, 4)));
-void FTL_log_dnsmasq_fatal(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
+		_Lorentz_log(LOG_DEBUG, flag, format, ## __VA_ARGS__)
+void _Lorentz_log(const int priority, const enum debug_flag flag, const char *format, ...) __attribute__ ((format (printf, 3, 4)));
+void Lorentz_log_dnsmasq_fatal(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
 void log_ctrl(bool vlog, bool vstdout);
-void FTL_log_helper(const unsigned int n, ...);
+void Lorentz_log_helper(const unsigned int n, ...);
 
 char *escape_string(const char *input) __attribute__ ((malloc));
 char *escape_data(const char *src_buf, size_t src_sz) __attribute__((malloc));

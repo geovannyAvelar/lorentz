@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation 2FA methods
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "api/api.h"
 #include "webserver/json_macros.h"
 #include "log.h"
@@ -356,7 +356,7 @@ int printTOTP(void)
 
 // A QR code may be generated from the data using
 // otpauth://totp/<label>?secret=<secret>&issuer=<issuer>&algorithm=<algorithm>&digits=<digits>&period=<period>
-int generateTOTP(struct ftl_conn *api)
+int generateTOTP(struct lorentz_conn *api)
 {
 	// Generate random secret using the system's random number generator
 	uint8_t random_secret[RFC6238_SECRET_LEN];
@@ -372,14 +372,14 @@ int generateTOTP(struct ftl_conn *api)
 	if(!encode_uint8_t_array_to_base32(random_secret, sizeof(random_secret), base32, base32_len))
 	{
 		free(base32);
-		return send_json_error(api, 500, "internal_error", "Failed to encode secret", "Check FTL.log for details");
+		return send_json_error(api, 500, "internal_error", "Failed to encode secret", "Check lorentz.log for details");
 	}
 
 	// Create JSON object
 	cJSON *tjson = cJSON_CreateObject();
 	JSON_REF_STR_IN_OBJECT(tjson, "type", "totp");
 	JSON_COPY_STR_TO_OBJECT(tjson, "account", config.webserver.domain.v.s);
-	JSON_REF_STR_IN_OBJECT(tjson, "issuer", "Pi-hole%20API");
+	JSON_REF_STR_IN_OBJECT(tjson, "issuer", "Lorentz%20API");
 	JSON_REF_STR_IN_OBJECT(tjson, "algorithm", "SHA1");
 	JSON_ADD_NUMBER_TO_OBJECT(tjson, "digits", RFC6238_DIGITS);
 	JSON_ADD_NUMBER_TO_OBJECT(tjson, "period", RFC6238_X);
@@ -404,7 +404,7 @@ int generateTOTP(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int generateAppPw(struct ftl_conn *api)
+int generateAppPw(struct lorentz_conn *api)
 {
 	// Generate and set app password
 	char *password = NULL, *pwhash = NULL;
@@ -414,7 +414,7 @@ int generateAppPw(struct ftl_conn *api)
 		                       500,
 		                       "internal_error",
 		                       "Failed to generate app password",
-		                       "Check FTL.log for details");
+		                       "Check lorentz.log for details");
 	}
 
 	// Create JSON object
@@ -437,7 +437,7 @@ int generateAppPw(struct ftl_conn *api)
 #define RFC6238_TESTTIME 59
 #define RFC6238_TESTTOTP 94287082
 
-int test_totp(struct ftl_conn *api)
+int test_totp(struct lorentz_conn *api)
 {
 	// Generate base32 secret
 	uint8_t secret[sizeof(RFC6238_TESTKEY)-1];

@@ -3,12 +3,12 @@ components:
   paths:
     summary:
       get:
-        summary: Get overview of Pi-hole activity
+        summary: Get overview of Lorentz activity
         tags:
           - Metrics
         operationId: "get_metrics_summary"
         description: |
-          Request various query, system, and FTL properties
+          Request various query, system, and Lorentz properties
         responses:
           '200':
             description: OK
@@ -58,7 +58,7 @@ components:
 
     upstreams:
       get:
-        summary: Get metrics about Pi-hole's upstream destinations
+        summary: Get metrics about Lorentz's upstream destinations
         tags:
           - Metrics
         operationId: "get_metrics_upstreams"
@@ -84,7 +84,7 @@ components:
 
     database_upstreams:
       get:
-        summary: Get metrics about Pi-hole's upstream destinations (long-term database)
+        summary: Get metrics about Lorentz's upstream destinations (long-term database)
         tags:
           - Metrics
         operationId: "get_metrics_upstreams_database"
@@ -328,7 +328,7 @@ components:
               example: 34.5
             unique_domains:
               type: integer
-              description: Number of unique domains FTL knows
+              description: Number of unique domains Lorentz knows
               example: 445
             forwarded:
               type: integer
@@ -559,14 +559,14 @@ components:
               example: 10
             total:
               type: integer
-              description: Total number of clients seen by FTL
+              description: Total number of clients seen by Lorentz
               example: 22
         gravity:
           type: object
           properties:
             domains_being_blocked:
               type: integer
-              description: Number of domain on your Pi-hole's gravity list
+              description: Number of domain on your Lorentz's gravity list
               example: 104756
             last_update:
               type: integer

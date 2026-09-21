@@ -1,5 +1,5 @@
 """
-Pi-hole FTL API mutation tests -- PUT (create) and DELETE operations.
+Lorentz API mutation tests -- PUT (create) and DELETE operations.
 
 These tests verify that creating and deleting items via the API works
 correctly.  Every test is self-contained: it creates a temporary item,
@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 import pytest
 
-FTL_URL = "http://127.0.0.1"
+LORENTZ_URL = "http://127.0.0.1"
 
 
 # ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ class TestDeleteGroups:
 
     def test_delete_group_returns_204(self, api_session):
         name = "_pytest_del_group"
-        url = f"{FTL_URL}/api/groups/{name}"
+        url = f"{LORENTZ_URL}/api/groups/{name}"
 
         # Create
         r = api_session.put(url, json={"comment": "pytest temp"}, timeout=10)
@@ -65,7 +65,7 @@ class TestDeleteGroups:
 
     def test_delete_nonexistent_group_returns_404(self, api_session):
         r = api_session.delete(
-            f"{FTL_URL}/api/groups/_pytest_no_such_group", timeout=5)
+            f"{LORENTZ_URL}/api/groups/_pytest_no_such_group", timeout=5)
         assert r.status_code == 404, \
             f"Expected 404, got {r.status_code} {r.text}"
 
@@ -78,7 +78,7 @@ class TestDeleteDomains:
 
     def test_delete_domain_returns_204(self, api_session):
         domain = "_pytest-del.example.com"
-        url = f"{FTL_URL}/api/domains/allow/exact/{domain}"
+        url = f"{LORENTZ_URL}/api/domains/allow/exact/{domain}"
 
         # Create
         r = api_session.put(url,
@@ -106,7 +106,7 @@ class TestDeleteDomains:
 
     def test_delete_nonexistent_domain_returns_404(self, api_session):
         r = api_session.delete(
-            f"{FTL_URL}/api/domains/allow/exact/_pytest-nosuch.invalid",
+            f"{LORENTZ_URL}/api/domains/allow/exact/_pytest-nosuch.invalid",
             timeout=5)
         assert r.status_code == 404, \
             f"Expected 404, got {r.status_code} {r.text}"
@@ -120,7 +120,7 @@ class TestDeleteClients:
 
     def test_delete_client_returns_204(self, api_session):
         client = "192.168.255.250"
-        url = f"{FTL_URL}/api/clients/{client}"
+        url = f"{LORENTZ_URL}/api/clients/{client}"
 
         # Create
         r = api_session.put(url,
@@ -147,7 +147,7 @@ class TestDeleteClients:
 
     def test_delete_nonexistent_client_returns_404(self, api_session):
         r = api_session.delete(
-            f"{FTL_URL}/api/clients/192.168.255.251", timeout=5)
+            f"{LORENTZ_URL}/api/clients/192.168.255.251", timeout=5)
         assert r.status_code == 404, \
             f"Expected 404, got {r.status_code} {r.text}"
 
@@ -161,7 +161,7 @@ class TestDeleteLists:
     def test_delete_list_returns_204(self, api_session):
         address = "https://pytest-temp.example.com/block.txt"
         encoded = quote(address, safe="")
-        url = f"{FTL_URL}/api/lists/{encoded}"
+        url = f"{LORENTZ_URL}/api/lists/{encoded}"
 
         # Create
         r = api_session.put(f"{url}?type=block",
@@ -190,7 +190,7 @@ class TestDeleteLists:
     def test_delete_nonexistent_list_returns_404(self, api_session):
         encoded = quote("https://no-such.invalid/block.txt", safe="")
         r = api_session.delete(
-            f"{FTL_URL}/api/lists/{encoded}?type=block", timeout=5)
+            f"{LORENTZ_URL}/api/lists/{encoded}?type=block", timeout=5)
         assert r.status_code == 404, \
             f"Expected 404, got {r.status_code} {r.text}"
 
@@ -203,7 +203,7 @@ class TestDeleteConfigArrayItem:
 
     def test_delete_config_item_returns_204(self, api_session):
         value = quote("192.168.255.99 pytest-temp-host", safe="")
-        base = f"{FTL_URL}/api/config/dns/hosts"
+        base = f"{LORENTZ_URL}/api/config/dns/hosts"
         url = f"{base}/{value}"
 
         # Add item to array
@@ -220,7 +220,7 @@ class TestDeleteConfigArrayItem:
     def test_value_with_many_slashes_is_kept_whole(self, api_session):
         """The value is everything after the item, however many slashes it has."""
         value = "pytest/a/b/c/d/e/f"
-        base = f"{FTL_URL}/api/config/webserver/api/excludeDomains"
+        base = f"{LORENTZ_URL}/api/config/webserver/api/excludeDomains"
         url = f"{base}/{value}"
 
         r = api_session.put(f"{url}?restart=false", timeout=10)
@@ -241,7 +241,7 @@ class TestDeleteConfigArrayItem:
     def test_delete_nonexistent_config_item_returns_404(self, api_session):
         value = quote("192.168.255.99 no_such_host", safe="")
         r = api_session.delete(
-            f"{FTL_URL}/api/config/dns/hosts/{value}?restart=false",
+            f"{LORENTZ_URL}/api/config/dns/hosts/{value}?restart=false",
             timeout=5)
         assert r.status_code == 404, \
             f"Expected 404, got {r.status_code} {r.text}"
@@ -256,7 +256,7 @@ class TestDeleteNetworkDevice:
 
     def test_delete_nonexistent_device_returns_404(self, api_session):
         r = api_session.delete(
-            f"{FTL_URL}/api/network/devices/99999", timeout=5)
+            f"{LORENTZ_URL}/api/network/devices/99999", timeout=5)
         assert r.status_code == 404, \
             f"Expected 404, got {r.status_code} {r.text}"
 
@@ -269,7 +269,7 @@ class TestDeleteInfoMessage:
 
     def test_delete_nonexistent_message_returns_404(self, api_session):
         r = api_session.delete(
-            f"{FTL_URL}/api/info/messages/99999", timeout=5)
+            f"{LORENTZ_URL}/api/info/messages/99999", timeout=5)
         assert r.status_code == 404, \
             f"Expected 404, got {r.status_code} {r.text}"
 
@@ -288,7 +288,7 @@ class TestPutGroups:
     def test_put_creates_group(self, api_session):
         """PUT /api/groups/{name} creates a new group and returns it."""
         name = "_pytest_put_group"
-        url = f"{FTL_URL}/api/groups/{name}"
+        url = f"{LORENTZ_URL}/api/groups/{name}"
 
         r = api_session.put(url,
                             json={"comment": "pytest created", "enabled": True},
@@ -308,7 +308,7 @@ class TestPutGroups:
     def test_put_replaces_group(self, api_session):
         """PUT to an existing group replaces its attributes."""
         name = "_pytest_replace_group"
-        url = f"{FTL_URL}/api/groups/{name}"
+        url = f"{LORENTZ_URL}/api/groups/{name}"
 
         # Create
         r = api_session.put(url,
@@ -337,7 +337,7 @@ class TestPutDomains:
 
     def test_put_creates_domain(self, api_session):
         domain = "_pytest-put.example.com"
-        url = f"{FTL_URL}/api/domains/deny/exact/{domain}"
+        url = f"{LORENTZ_URL}/api/domains/deny/exact/{domain}"
 
         r = api_session.put(url,
                             json={"comment": "pytest created", "groups": [0],
@@ -358,7 +358,7 @@ class TestPutDomains:
 
     def test_put_replaces_domain(self, api_session):
         domain = "_pytest-replace.example.com"
-        url = f"{FTL_URL}/api/domains/allow/exact/{domain}"
+        url = f"{LORENTZ_URL}/api/domains/allow/exact/{domain}"
 
         r = api_session.put(url,
                             json={"comment": "original", "groups": [0],
@@ -387,7 +387,7 @@ class TestPutDomains:
         valid DNS name.
         """
         domain = "xn--4ca0bs45142c.com"
-        url = f"{FTL_URL}/api/domains/deny/exact/{domain}"
+        url = f"{LORENTZ_URL}/api/domains/deny/exact/{domain}"
 
         r = api_session.put(url,
                             json={"comment": "pytest punycode", "groups": [0],
@@ -415,7 +415,7 @@ class TestPutClients:
 
     def test_put_creates_client(self, api_session):
         client = "192.168.255.240"
-        url = f"{FTL_URL}/api/clients/{client}"
+        url = f"{LORENTZ_URL}/api/clients/{client}"
 
         r = api_session.put(url,
                             json={"comment": "pytest created", "groups": [0]},
@@ -433,7 +433,7 @@ class TestPutClients:
 
     def test_put_replaces_client(self, api_session):
         client = "192.168.255.241"
-        url = f"{FTL_URL}/api/clients/{client}"
+        url = f"{LORENTZ_URL}/api/clients/{client}"
 
         r = api_session.put(url,
                             json={"comment": "original", "groups": [0]},
@@ -460,7 +460,7 @@ class TestPutLists:
     def test_put_creates_list(self, api_session):
         address = "https://pytest-put.example.com/block.txt"
         encoded = quote(address, safe="")
-        url = f"{FTL_URL}/api/lists/{encoded}"
+        url = f"{LORENTZ_URL}/api/lists/{encoded}"
 
         r = api_session.put(f"{url}?type=block",
                             json={"comment": "pytest created", "groups": [0],
@@ -481,7 +481,7 @@ class TestPutLists:
     def test_put_replaces_list(self, api_session):
         address = "https://pytest-replace.example.com/allow.txt"
         encoded = quote(address, safe="")
-        url = f"{FTL_URL}/api/lists/{encoded}"
+        url = f"{LORENTZ_URL}/api/lists/{encoded}"
 
         r = api_session.put(f"{url}?type=allow",
                             json={"comment": "original", "groups": [0],
@@ -512,7 +512,7 @@ class TestPutErrors:
     def test_put_group_without_body_returns_400(self, api_session):
         """PUT with no JSON body should return 400."""
         r = api_session.put(
-            f"{FTL_URL}/api/groups/_pytest_err_nobody",
+            f"{LORENTZ_URL}/api/groups/_pytest_err_nobody",
             data=b"", timeout=5)
         assert r.status_code == 400, \
             f"Expected 400, got {r.status_code} {r.text}"
@@ -520,7 +520,7 @@ class TestPutErrors:
     def test_put_domain_invalid_type_returns_400(self, api_session):
         """PUT domain with invalid type/kind in path should return 400."""
         r = api_session.put(
-            f"{FTL_URL}/api/domains/invalid/invalid/_pytest-err.example.com",
+            f"{LORENTZ_URL}/api/domains/invalid/invalid/_pytest-err.example.com",
             json={"comment": "err"},
             timeout=5)
         assert r.status_code == 400, \
@@ -537,19 +537,19 @@ class TestBatchDeleteGroups:
     def test_batch_delete_groups(self, api_session):
         names = ["_pytest_batch_g1", "_pytest_batch_g2"]
         for name in names:
-            r = api_session.put(f"{FTL_URL}/api/groups/{name}",
+            r = api_session.put(f"{LORENTZ_URL}/api/groups/{name}",
                                 json={"comment": "batch test"}, timeout=10)
             assert r.status_code in (200, 201), f"PUT {name} failed: {r.status_code}"
 
         r = api_session.post(
-            f"{FTL_URL}/api/groups:batchDelete",
+            f"{LORENTZ_URL}/api/groups:batchDelete",
             json=[{"item": n} for n in names],
             timeout=10)
         assert r.status_code == 204, \
             f"Expected 204, got {r.status_code} {r.text}"
 
         for name in names:
-            r = api_session.get(f"{FTL_URL}/api/groups/{name}", timeout=5)
+            r = api_session.get(f"{LORENTZ_URL}/api/groups/{name}", timeout=5)
             assert r.status_code == 404 or _j(r).get("groups", []) == [], \
                 f"Group {name} still exists after batch delete"
 
@@ -563,14 +563,14 @@ class TestBatchDeleteDomains:
         ]
         for it in items:
             r = api_session.put(
-                f"{FTL_URL}/api/domains/{it['type']}/{it['kind']}/{it['domain']}",
+                f"{LORENTZ_URL}/api/domains/{it['type']}/{it['kind']}/{it['domain']}",
                 json={"comment": "batch test", "groups": [0], "enabled": True},
                 timeout=10)
             assert r.status_code in (200, 201), \
                 f"PUT {it['domain']} failed: {r.status_code}"
 
         r = api_session.post(
-            f"{FTL_URL}/api/domains:batchDelete",
+            f"{LORENTZ_URL}/api/domains:batchDelete",
             json=[{"item": it["domain"], "type": it["type"], "kind": it["kind"]}
                   for it in items],
             timeout=10)
@@ -579,7 +579,7 @@ class TestBatchDeleteDomains:
 
         for it in items:
             r = api_session.get(
-                f"{FTL_URL}/api/domains/{it['type']}/{it['kind']}/{it['domain']}",
+                f"{LORENTZ_URL}/api/domains/{it['type']}/{it['kind']}/{it['domain']}",
                 timeout=5)
             assert r.status_code == 404 or _j(r).get("domains", []) == [], \
                 f"Domain {it['domain']} still exists after batch delete"
@@ -590,20 +590,20 @@ class TestBatchDeleteClients:
     def test_batch_delete_clients(self, api_session):
         clients = ["192.168.255.230", "192.168.255.231"]
         for c in clients:
-            r = api_session.put(f"{FTL_URL}/api/clients/{c}",
+            r = api_session.put(f"{LORENTZ_URL}/api/clients/{c}",
                                 json={"comment": "batch test", "groups": [0]},
                                 timeout=10)
             assert r.status_code in (200, 201), f"PUT {c} failed: {r.status_code}"
 
         r = api_session.post(
-            f"{FTL_URL}/api/clients:batchDelete",
+            f"{LORENTZ_URL}/api/clients:batchDelete",
             json=[{"item": c} for c in clients],
             timeout=10)
         assert r.status_code == 204, \
             f"Expected 204, got {r.status_code} {r.text}"
 
         for c in clients:
-            r = api_session.get(f"{FTL_URL}/api/clients/{c}", timeout=5)
+            r = api_session.get(f"{LORENTZ_URL}/api/clients/{c}", timeout=5)
             assert r.status_code == 404 or _j(r).get("clients", []) == [], \
                 f"Client {c} still exists after batch delete"
 
@@ -618,14 +618,14 @@ class TestBatchDeleteLists:
         for it in items:
             encoded = quote(it["address"], safe="")
             r = api_session.put(
-                f"{FTL_URL}/api/lists/{encoded}?type={it['type']}",
+                f"{LORENTZ_URL}/api/lists/{encoded}?type={it['type']}",
                 json={"comment": "batch test", "groups": [0], "enabled": True},
                 timeout=10)
             assert r.status_code in (200, 201), \
                 f"PUT {it['address']} failed: {r.status_code}"
 
         r = api_session.post(
-            f"{FTL_URL}/api/lists:batchDelete",
+            f"{LORENTZ_URL}/api/lists:batchDelete",
             json=[{"item": it["address"], "type": it["type"]} for it in items],
             timeout=10)
         assert r.status_code == 204, \
@@ -634,7 +634,7 @@ class TestBatchDeleteLists:
         for it in items:
             encoded = quote(it["address"], safe="")
             r = api_session.get(
-                f"{FTL_URL}/api/lists/{encoded}?type={it['type']}", timeout=5)
+                f"{LORENTZ_URL}/api/lists/{encoded}?type={it['type']}", timeout=5)
             assert r.status_code == 404 or _j(r).get("lists", []) == [], \
                 f"List {it['address']} still exists after batch delete"
 
@@ -649,25 +649,25 @@ class TestDNSBlockingToggle:
     def test_disable_and_reenable_blocking(self, api_session):
         """POST /api/dns/blocking toggles blocking on and off."""
         # Disable
-        r = api_session.post(f"{FTL_URL}/api/dns/blocking",
+        r = api_session.post(f"{LORENTZ_URL}/api/dns/blocking",
                              json={"blocking": False}, timeout=10)
         assert r.status_code == 200, f"Disable failed: {r.status_code} {r.text}"
         data = _j(r)
         assert data["blocking"] == "disabled"
 
         # Verify via GET
-        data = _j(api_session.get(f"{FTL_URL}/api/dns/blocking", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/dns/blocking", timeout=5))
         assert data["blocking"] == "disabled"
 
         # Re-enable
-        r = api_session.post(f"{FTL_URL}/api/dns/blocking",
+        r = api_session.post(f"{LORENTZ_URL}/api/dns/blocking",
                              json={"blocking": True}, timeout=10)
         assert r.status_code == 200, f"Enable failed: {r.status_code} {r.text}"
         data = _j(r)
         assert data["blocking"] == "enabled"
 
         # Verify via GET
-        data = _j(api_session.get(f"{FTL_URL}/api/dns/blocking", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/dns/blocking", timeout=5))
         assert data["blocking"] == "enabled"
 
 
@@ -680,7 +680,7 @@ class TestConfigPatchRoundTrip:
 
     def test_patch_bool_config_round_trip(self, api_session):
         """PATCH a boolean config value, verify, then restore."""
-        url = f"{FTL_URL}/api/config/dns/blockESNI"
+        url = f"{LORENTZ_URL}/api/config/dns/blockESNI"
 
         # Read original
         original = _j(api_session.get(url, timeout=5))
@@ -707,7 +707,7 @@ class TestConfigPatchRoundTrip:
 
     def test_patch_integer_config_round_trip(self, api_session):
         """PATCH an integer config value, verify, then restore."""
-        url = f"{FTL_URL}/api/config/dns/blockTTL"
+        url = f"{LORENTZ_URL}/api/config/dns/blockTTL"
 
         # Read original
         original = _j(api_session.get(url, timeout=5))

@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  X.509 certificate and randomness generator routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "log.h"
 #include "x509.h"
 
@@ -27,7 +27,7 @@
 #define RSA_KEY_SIZE 4096
 #define EC_KEY_SIZE 384
 #define BUFFER_SIZE 16000
-#define PIHOLE_ISSUER "CN=pi.hole,O=Pi-hole,C=DE"
+#define LORENTZ_ISSUER "CN=lorentz.lan,O=Lorentz,C=DE"
 
 // Generate private RSA or EC key
 static int generate_private_key(mbedtls_pk_context *pk_key, const bool rsa,
@@ -219,8 +219,8 @@ bool generate_certificate(const char* certfile, bool rsa, const char *domain, co
 	mbedtls_x509write_crt_set_subject_key_identifier(&ca_cert);
 	mbedtls_x509write_crt_set_issuer_key(&ca_cert, &ca_key);
 	mbedtls_x509write_crt_set_authority_key_identifier(&ca_cert);
-	mbedtls_x509write_crt_set_issuer_name(&ca_cert, PIHOLE_ISSUER);
-	mbedtls_x509write_crt_set_subject_name(&ca_cert, PIHOLE_ISSUER);
+	mbedtls_x509write_crt_set_issuer_name(&ca_cert, LORENTZ_ISSUER);
+	mbedtls_x509write_crt_set_subject_name(&ca_cert, LORENTZ_ISSUER);
 	mbedtls_x509write_crt_set_validity(&ca_cert, not_before, not_after);
 	mbedtls_x509write_crt_set_basic_constraints(&ca_cert, 1, -1);
 
@@ -241,7 +241,7 @@ bool generate_certificate(const char* certfile, bool rsa, const char *domain, co
 	mbedtls_x509write_crt_set_issuer_key(&server_cert, &ca_key);
 	mbedtls_x509write_crt_set_authority_key_identifier(&server_cert);
 	// subject name set below
-	mbedtls_x509write_crt_set_issuer_name(&server_cert, PIHOLE_ISSUER);
+	mbedtls_x509write_crt_set_issuer_name(&server_cert, LORENTZ_ISSUER);
 	mbedtls_x509write_crt_set_validity(&server_cert, not_before, not_after);
 	mbedtls_x509write_crt_set_basic_constraints(&server_cert, 0, -1);
 
@@ -254,7 +254,7 @@ bool generate_certificate(const char* certfile, bool rsa, const char *domain, co
 		free(subject_name);
 	}
 
-	// Add "DNS:pi.hole" as subject alternative name (SAN)
+	// Add "DNS:lorentz.lan" as subject alternative name (SAN)
 	//
 	// Since RFC 2818 (May 2000), the Common Name (CN) field is ignored
 	// in certificates if the subject alternative name extension is present.
@@ -263,26 +263,26 @@ bool generate_certificate(const char* certfile, bool rsa, const char *domain, co
 	// subjectAltName must always be used and that the use of the CN field
 	// should be limited to support legacy implementations.
 	//
-	mbedtls_x509_san_list san_dns_pihole = { 0 };
-	san_dns_pihole.node.type = MBEDTLS_X509_SAN_DNS_NAME;
-	san_dns_pihole.node.san.unstructured_name.p = (unsigned char *) "pi.hole";
-	san_dns_pihole.node.san.unstructured_name.len = 7; // strlen("pi.hole")
-	san_dns_pihole.next = NULL; // No further element
+	mbedtls_x509_san_list san_dns_lorentz = { 0 };
+	san_dns_lorentz.node.type = MBEDTLS_X509_SAN_DNS_NAME;
+	san_dns_lorentz.node.san.unstructured_name.p = (unsigned char *) "lorentz.lan";
+	san_dns_lorentz.node.san.unstructured_name.len = 7; // strlen("lorentz.lan")
+	san_dns_lorentz.next = NULL; // No further element
 
 	// Furthermore, add the domain when a custom domain is used to make the
 	// certificate more universal
 	mbedtls_x509_san_list san_dns_domain = { 0 };
-	if(strcasecmp(domain, "pi.hole") != 0)
+	if(strcasecmp(domain, "lorentz.lan") != 0)
 	{
 		san_dns_domain.node.type = MBEDTLS_X509_SAN_DNS_NAME;
 		san_dns_domain.node.san.unstructured_name.p = (unsigned char *) domain;
 		san_dns_domain.node.san.unstructured_name.len = strlen(domain);
 		san_dns_domain.next = NULL; // No more SANs (linked list)
 
-		san_dns_pihole.next = &san_dns_domain; // Link this domain
+		san_dns_lorentz.next = &san_dns_domain; // Link this domain
 	}
 
-	ret = mbedtls_x509write_crt_set_subject_alternative_name(&server_cert, &san_dns_pihole);
+	ret = mbedtls_x509write_crt_set_subject_alternative_name(&server_cert, &san_dns_lorentz);
 	if (ret != 0)
 		printf("mbedtls_x509write_crt_set_subject_alternative_name returned %d\n", ret);
 
@@ -529,7 +529,7 @@ enum cert_check read_certificate(const char *certfile, const char *domain, const
 	}
 	else
 	{
-		puts("Sorry, but FTL does not know how to print key information for this type\n");
+		puts("Sorry, but Lorentz does not know how to print key information for this type\n");
 		goto end;
 	}
 
@@ -610,7 +610,7 @@ enum cert_check cert_currently_valid(const char *certfile, const time_t valid_fo
 	return CERT_OKAY;
 }
 
-bool is_pihole_certificate(const char *certfile)
+bool is_lorentz_certificate(const char *certfile)
 {
 	// Check if the file exists and is readable
 	if(access(certfile, R_OK) != 0)
@@ -628,23 +628,23 @@ bool is_pihole_certificate(const char *certfile)
 		log_err("Cannot parse certificate: Error code %d", rc);
 		return false;
 	}
-	// Check if the issuer is "pi.hole"
-	const bool is_pihole_issuer = strncasecmp((char*)crt.issuer.val.p, "pi.hole", crt.issuer.val.len) == 0;
-	// Check if the subject is "pi.hole"
-	const bool is_pihole_subject = strncasecmp((char*)crt.subject.val.p, "pi.hole", crt.subject.val.len) == 0;
+	// Check if the issuer is "lorentz.lan"
+	const bool is_lorentz_issuer = strncasecmp((char*)crt.issuer.val.p, "lorentz.lan", crt.issuer.val.len) == 0;
+	// Check if the subject is "lorentz.lan"
+	const bool is_lorentz_subject = strncasecmp((char*)crt.subject.val.p, "lorentz.lan", crt.subject.val.len) == 0;
 
 
 	// Free resources
 	mbedtls_x509_crt_free(&crt);
 
-	return is_pihole_issuer && is_pihole_subject;
+	return is_lorentz_issuer && is_lorentz_subject;
 }
 
 #else
 
 enum cert_check read_certificate(const char* certfile, const char *domain, const bool private_key)
 {
-	log_err("FTL was not compiled with mbedtls support");
+	log_err("Lorentz was not compiled with mbedtls support");
 	return CERT_FILE_NOT_FOUND;
 }
 

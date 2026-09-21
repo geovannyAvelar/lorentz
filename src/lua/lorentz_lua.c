@@ -1,19 +1,19 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  LUA routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "ftl_lua.h"
+#include "lorentz_lua.h"
 
-#include "FTL.h"
+#include "lorentz.h"
 // struct luaL_Reg
 #include "lauxlib.h"
-// get_FTL_version()
+// get_Lorentz_version()
 #include "log.h"
 // config struct
 #include "config/config.h"
@@ -26,7 +26,7 @@
 // get_prefix_webhome(), get_api_uri()
 #include "webserver/webserver.h"
 
-// prototype for luaopen_pihole()
+// prototype for luaopen_lorentz()
 #include "lualib.h"
 
 #if defined(LUA_USE_READLINE)
@@ -41,7 +41,7 @@
 int run_lua_interpreter(const int argc, char **argv, bool debug)
 {
 	if(argc == 1) // No arguments after this one
-		printf("Pi-hole FTL %s\n", get_FTL_version());
+		printf("Lorentz %s\n", get_Lorentz_version());
 #if defined(LUA_USE_READLINE)
 	wordexp_t word;
 	wordexp(LUA_HISTORY_FILE, &word, WRDE_NOCMD);
@@ -98,19 +98,19 @@ int run_lua_interpreter(const int argc, char **argv, bool debug)
 int run_luac(const int argc, char **argv)
 {
 	if(argc == 1) // No arguments after this one
-		printf("Pi-hole FTL %s\n", get_FTL_version());
+		printf("Lorentz %s\n", get_Lorentz_version());
 	return luac_main(argc, argv);
 }
 
-// pihole.ftl_version()
-static int pihole_ftl_version(lua_State *L) {
-	const char *version = get_FTL_version();
+// lorentz.lorentz_version()
+static int lorentz_lorentz_version(lua_State *L) {
+	const char *version = get_Lorentz_version();
 	lua_pushexternalstring(L, version, strlen(version), NULL, NULL);
 	return 1; // number of results
 }
 
-// pihole.hostname()
-static int pihole_hostname(lua_State *L) {
+// lorentz.hostname()
+static int lorentz_hostname(lua_State *L) {
 	// Get and immediately push host name
 	const char *hname = hostname();
 	lua_pushexternalstring(L, hname, strlen(hname), NULL, NULL);
@@ -152,11 +152,11 @@ static void get_abspath(char abs_filename[1024], char rel_filename[1024], const 
 		strncat(rel_filename, filename, rel_filename_len);
 }
 
-// pihole.fileversion(<filename:str>)
+// lorentz.fileversion(<filename:str>)
 // Avoid browser caching old versions of a file, using the last modification time
 //   Receive the file URL (without "/admin/");
 //   Return the string containin URL + "?v=xxx", where xxx is the last modified time of the file.
-static int pihole_fileversion(lua_State *L) {
+static int lorentz_fileversion(lua_State *L) {
 	// Get filename (first argument to LUA function)
 	const char *filename = luaL_checkstring(L, 1);
 
@@ -194,8 +194,8 @@ static int pihole_fileversion(lua_State *L) {
 	return 1; // number of results
 }
 
-// pihole.webtheme()
-static int pihole_webtheme(lua_State *L) {
+// lorentz.webtheme()
+static int lorentz_webtheme(lua_State *L) {
 	// Get currently configured webtheme
 	const struct web_themes this_theme = webthemes[config.webserver.interface.theme.v.web_theme];
 	// Create a Lua table
@@ -220,15 +220,15 @@ static int pihole_webtheme(lua_State *L) {
 	return 1;
 }
 
-// pihole.webhome()
-static int pihole_webhome(lua_State *L) {
+// lorentz.webhome()
+static int lorentz_webhome(lua_State *L) {
 	// Get name of currently set webhome
 	lua_pushstring(L, get_prefix_webhome());
 	return 1; // number of results
 }
 
-// pihole.include(<filename:str>)
-static int pihole_include(lua_State *L) {
+// lorentz.include(<filename:str>)
+static int lorentz_include(lua_State *L) {
 	// Get filename (first argument to LUA function)
 	const char *filename = luaL_checkstring(L, 1);
 
@@ -242,14 +242,14 @@ static int pihole_include(lua_State *L) {
 	return 0; // number of results
 }
 
-// pihole.boxedlayout()
-static int pihole_boxedlayout(lua_State *L) {
+// lorentz.boxedlayout()
+static int lorentz_boxedlayout(lua_State *L) {
 	lua_pushboolean(L, config.webserver.interface.boxed.v.b);
 	return 1; // number of results
 }
 
-// pihole.needLogin()
-static int pihole_needLogin(lua_State *L) {
+// lorentz.needLogin()
+static int lorentz_needLogin(lua_State *L) {
 	// Check if password is set
 	const bool has_password = config.webserver.api.pwhash.v.s != NULL &&
 	                          config.webserver.api.pwhash.v.s[0] != '\0';
@@ -258,16 +258,16 @@ static int pihole_needLogin(lua_State *L) {
 	return 1; // number of results
 }
 
-// pihole.api_url()
-static int pihole_api_url(lua_State *L) {
+// lorentz.api_url()
+static int lorentz_api_url(lua_State *L) {
 	// Return API URL
 	lua_pushstring(L, get_api_uri());
 
 	return 1; // number of results
 }
 
-// pihole.format_path()
-static int pihole_format_path(lua_State *L) {
+// lorentz.format_path()
+static int lorentz_format_path(lua_State *L) {
 	// Get current page (first argument to LUA function)
 	const char *page = luaL_checkstring(L, 1);
 
@@ -311,27 +311,27 @@ static int pihole_format_path(lua_State *L) {
 	return 1; // number of results
 }
 
-static const luaL_Reg piholelib[] = {
-	{"ftl_version", pihole_ftl_version},
-	{"hostname", pihole_hostname},
-	{"fileversion", pihole_fileversion},
-	{"webtheme", pihole_webtheme},
-	{"webhome", pihole_webhome},
-	{"include", pihole_include},
-	{"boxedlayout", pihole_boxedlayout},
-	{"needLogin", pihole_needLogin},
-	{"api_url", pihole_api_url},
-	{"format_path", pihole_format_path},
+static const luaL_Reg lorentzlib[] = {
+	{"lorentz_version", lorentz_lorentz_version},
+	{"hostname", lorentz_hostname},
+	{"fileversion", lorentz_fileversion},
+	{"webtheme", lorentz_webtheme},
+	{"webhome", lorentz_webhome},
+	{"include", lorentz_include},
+	{"boxedlayout", lorentz_boxedlayout},
+	{"needLogin", lorentz_needLogin},
+	{"api_url", lorentz_api_url},
+	{"format_path", lorentz_format_path},
 	{NULL, NULL}
 };
 
-// Register pihole library
-LUAMOD_API int luaopen_pihole(lua_State *L) {
-	luaL_newlib(L, piholelib);
+// Register lorentz library
+LUAMOD_API int luaopen_lorentz(lua_State *L) {
+	luaL_newlib(L, lorentzlib);
 	return LUA_YIELD;
 }
 
-static bool ftl_lua_load_embedded_script(lua_State *L, const char *name, const char *script, const size_t script_len, const bool make_global)
+static bool lorentz_lua_load_embedded_script(lua_State *L, const char *name, const char *script, const size_t script_len, const bool make_global)
 {
 	// Explanation:
 	// luaL_dostring(L, script)   expands to   (luaL_loadstring(L, script) || lua_pcall(L, 0, LUA_MULTRET, 0))
@@ -376,8 +376,8 @@ void print_embedded_scripts(void)
 }
 
 // Loop over bundled LUA libraries and load them
-void ftl_lua_init(lua_State *L)
+void lorentz_lua_init(lua_State *L)
 {
 	for(unsigned int i = 0; i < sizeof(scripts)/sizeof(scripts[0]); i++)
-		ftl_lua_load_embedded_script(L, scripts[i].name, scripts[i].content, scripts[i].contentlen, scripts[i].global);
+		lorentz_lua_load_embedded_script(L, scripts[i].name, scripts[i].content, scripts[i].contentlen, scripts[i].global);
 }

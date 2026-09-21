@@ -1,8 +1,8 @@
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2022 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine
+# Lorentz Engine
 # /src/lua/scripts/CMakeList.txt
 #
 # This file is copyright under the latest version of the EUPL.
@@ -17,8 +17,8 @@ set(sources
 	scripts.h
         )
 
-# Ensure target lua_scripts is build before target ftl_lua depending on it
-add_dependencies(ftl_lua lua_scripts)
+# Ensure target lua_scripts is build before target lorentz_lua depending on it
+add_dependencies(lorentz_lua lua_scripts)
 
 # Compile resources files from raw/ into hex/
 find_program(RESOURCE_COMPILER xxd)
@@ -42,6 +42,6 @@ target_sources(
             FILES ${sources} ${COMPILED_RESOURCES}
 )
 target_include_directories(
-    ftl_lua
+    lorentz_lua
     PRIVATE src ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}
 )

@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/dns
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api.h"
@@ -27,7 +27,7 @@
 // getcpu_percentage()
 #include "daemon.h"
 
-int api_padd(struct ftl_conn *api)
+int api_padd(struct lorentz_conn *api)
 {
 	// Parse parameters
 	bool full = true;
@@ -323,13 +323,13 @@ int api_padd(struct ftl_conn *api)
 	JSON_ADD_NUMBER_TO_OBJECT(jconfig, "privacy_level", config.misc.privacylevel.v.privacy_level);
 	JSON_ADD_ITEM_TO_OBJECT(json, "config", jconfig);
 
-	// subset of info/ftl
+	// subset of info/lorentz
 	struct proc_mem pmem = { 0 };
 	struct proc_meminfo mem = { 0 };
 	parse_proc_meminfo(&mem);
 	getProcessMemory(&pmem, mem.total);
 	JSON_ADD_NUMBER_TO_OBJECT(json, "%mem", pmem.VmRSS_percent);
-	JSON_ADD_NUMBER_TO_OBJECT(json, "%cpu", get_ftl_cpu_percentage());
+	JSON_ADD_NUMBER_TO_OBJECT(json, "%cpu", get_lorentz_cpu_percentage());
 	JSON_ADD_NUMBER_TO_OBJECT(json, "pid", getpid());
 
 	// info/sensors -> CPU temp sensor

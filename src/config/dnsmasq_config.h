@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  dnsmasq config writer prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -29,14 +29,14 @@ bool read_legacy_cnames_config(void);
 bool read_legacy_custom_hosts_config(void);
 bool write_custom_list(void);
 
-#define DNSMASQ_PH_CONFIG "/etc/pihole/dnsmasq.conf"
-#define DNSMASQ_TEMP_CONF "/etc/pihole/dnsmasq.conf.temp"
-#define DNSMASQ_STATIC_LEASES MIGRATION_TARGET_V6"/04-pihole-static-dhcp.conf"
-#define DNSMASQ_CNAMES MIGRATION_TARGET_V6"/05-pihole-custom-cname.conf"
-#define DNSMASQ_HOSTSDIR "/etc/pihole/hosts"
+#define DNSMASQ_PH_CONFIG "/etc/lorentz/dnsmasq.conf"
+#define DNSMASQ_TEMP_CONF "/etc/lorentz/dnsmasq.conf.temp"
+#define DNSMASQ_STATIC_LEASES MIGRATION_TARGET_V6"/04-lorentz-static-dhcp.conf"
+#define DNSMASQ_CNAMES MIGRATION_TARGET_V6"/05-lorentz-custom-cname.conf"
+#define DNSMASQ_HOSTSDIR "/etc/lorentz/hosts"
 #define DNSMASQ_CUSTOM_LIST DNSMASQ_HOSTSDIR"/custom.list"
-#define DNSMASQ_CUSTOM_LIST_LEGACY "/etc/pihole/custom.list"
+#define DNSMASQ_CUSTOM_LIST_LEGACY "/etc/lorentz/custom.list"
 #define DNSMASQ_CUSTOM_LIST_LEGACY_TARGET MIGRATION_TARGET_V6"/custom.list"
-#define DHCPLEASESFILE "/etc/pihole/dhcp.leases"
+#define DHCPLEASESFILE "/etc/lorentz/dhcp.leases"
 
 #endif //DNSMASQ_CONFIG_H

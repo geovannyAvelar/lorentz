@@ -10,7 +10,7 @@ components:
           - Actions
         operationId: "action_gravity"
         description: |
-          Update Pi-hole's adlists by running `pihole -g`. The output of the process is streamed with chunked encoding. Use the optional `color` query parameter to include ANSI color escape codes in the output.
+          Update Lorentz's adlists by running `lorentz -g`. The output of the process is streamed with chunked encoding. Use the optional `color` query parameter to include ANSI color escape codes in the output.
         responses:
           '200':
             description: OK
@@ -52,13 +52,13 @@ components:
                       [i] Number of regex whitelist filters: 0
                       [✓] Cleaning up stray matter
 
-                      [✓] FTL is listening on port
+                      [✓] Lorentz is listening on port
                          [✓] UDP (IPv4)
                          [✓] TCP (IPv4)
                          [✓] UDP (IPv6)
                          [✓] TCP (IPv6)
 
-                      [✓] Pi-hole blocking is enabled
+                      [✓] Lorentz blocking is enabled
           '401':
             description: Unauthorized
             content:
@@ -69,12 +69,12 @@ components:
                     - $ref: 'common.yaml#/components/schemas/took'
     restartdns:
       post:
-        summary: Restart pihole-FTL
+        summary: Restart lorentz
         tags:
           - Actions
         operationId: "action_restartdns"
         description: |
-          Restarts the pihole-FTL service
+          Restarts the lorentz service
         responses:
           '200':
             description: OK
@@ -99,7 +99,7 @@ components:
           - Actions
         operationId: "action_flushlogs"
         description: |
-          Flushes the DNS logs. This includes emptying the DNS log file and purging the most recent 24 hours from both the database and FTL's internal memory.
+          Flushes the DNS logs. This includes emptying the DNS log file and purging the most recent 24 hours from both the database and Lorentz's internal memory.
         responses:
           '200':
             description: OK

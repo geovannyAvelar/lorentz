@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  TAR reading routines
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -10,7 +10,7 @@
 #ifndef TAR_H
 #define TAR_H
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/cJSON/cJSON.h"
 
 const char *find_file_in_tar(const uint8_t *tar, const size_t tarSize, const char *fileName, size_t *fileSize) __attribute__((nonnull (1,3,4)));

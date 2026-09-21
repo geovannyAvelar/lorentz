@@ -50,7 +50,7 @@ bool get_secure_randomness(uint8_t *buffer, const size_t length)
 }
 
 
-void _FTL_log(const int priority, const enum debug_flag flag, const char *format, ...)
+void _Lorentz_log(const int priority, const enum debug_flag flag, const char *format, ...)
 {
 	(void)priority;
 	(void)flag;
@@ -75,7 +75,7 @@ void log_hostname_warning(const char *ip, const char *name, const unsigned int p
 	(void)pos;
 }
 
-void *FTLcalloc(size_t n, size_t size, const char *file, const char *func, const int line)
+void *Lorentzcalloc(size_t n, size_t size, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -83,7 +83,7 @@ void *FTLcalloc(size_t n, size_t size, const char *file, const char *func, const
 	return calloc(n, size);
 }
 
-bool FTLfree(void *ptr, const char *file, const char *func, const int line)
+bool Lorentzfree(void *ptr, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -92,7 +92,7 @@ bool FTLfree(void *ptr, const char *file, const char *func, const int line)
 	return true;
 }
 
-size_t FTLstrlen(const char *s, const char *file, const char *func, const int line)
+size_t Lorentzstrlen(const char *s, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -100,7 +100,7 @@ size_t FTLstrlen(const char *s, const char *file, const char *func, const int li
 	return strlen(s);
 }
 
-char *FTLstrncpy(char *dest, const char *src, const size_t n, const char *file, const char *func, const int line)
+char *Lorentzstrncpy(char *dest, const char *src, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -108,7 +108,7 @@ char *FTLstrncpy(char *dest, const char *src, const size_t n, const char *file, 
 	return strncpy(dest, src, n);
 }
 
-char *FTLstrncat(char *dest, const char *src, const size_t n, const char *file, const char *func, const int line)
+char *Lorentzstrncat(char *dest, const char *src, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -116,7 +116,7 @@ char *FTLstrncat(char *dest, const char *src, const size_t n, const char *file, 
 	return strncat(dest, src, n);
 }
 
-void *FTLmemcpy(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
+void *Lorentzmemcpy(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -124,7 +124,7 @@ void *FTLmemcpy(void *dest, const void *src, const size_t n, const char *file, c
 	return memcpy(dest, src, n);
 }
 
-void *FTLmemset(void *s, const int c, const size_t n, const char *file, const char *func, const int line)
+void *Lorentzmemset(void *s, const int c, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -132,7 +132,7 @@ void *FTLmemset(void *s, const int c, const size_t n, const char *file, const ch
 	return memset(s, c, n);
 }
 
-char *FTLstrstr(const char *haystack, const char *needle, const char *file, const char *func, const int line)
+char *Lorentzstrstr(const char *haystack, const char *needle, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -140,7 +140,7 @@ char *FTLstrstr(const char *haystack, const char *needle, const char *file, cons
 	return strstr(haystack, needle);
 }
 
-int FTLstrcmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
+int Lorentzstrcmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -148,7 +148,7 @@ int FTLstrcmp(const char *s1, const char *s2, const char *file, const char *func
 	return strcmp(s1, s2);
 }
 
-int FTLstrcasecmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
+int Lorentzstrcasecmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -156,7 +156,7 @@ int FTLstrcasecmp(const char *s1, const char *s2, const char *file, const char *
 	return strcasecmp(s1, s2);
 }
 
-int FTLsnprintf(const char *file, const char *func, const int line,
+int Lorentzsnprintf(const char *file, const char *func, const int line,
                 char *buffer, const size_t maxlen, const char *format, ...)
 {
 	(void)file;
@@ -169,7 +169,7 @@ int FTLsnprintf(const char *file, const char *func, const int line,
 	return result;
 }
 
-ssize_t FTLsendto(int sockfd, void *buf, size_t len, int flags,
+ssize_t Lorentzsendto(int sockfd, void *buf, size_t len, int flags,
                   const struct sockaddr *dest_addr, socklen_t addrlen, const bool warn,
                   const char *file, const char *func, const int line)
 {
@@ -180,7 +180,7 @@ ssize_t FTLsendto(int sockfd, void *buf, size_t len, int flags,
 	return sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
 
-ssize_t FTLrecvfrom(int sockfd, void *buf, size_t len, int flags,
+ssize_t Lorentzrecvfrom(int sockfd, void *buf, size_t len, int flags,
                     struct sockaddr *src_addr, socklen_t *addrlen,
                     const char *file, const char *func, const int line)
 {
@@ -190,7 +190,7 @@ ssize_t FTLrecvfrom(int sockfd, void *buf, size_t len, int flags,
 	return recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
 }
 
-ssize_t FTLrecv(int sockfd, void *buf, size_t len, int flags, const bool warn,
+ssize_t Lorentzrecv(int sockfd, void *buf, size_t len, int flags, const bool warn,
                 const char *file, const char *func, const int line)
 {
 	(void)warn;
@@ -392,9 +392,9 @@ int main(void)
 		return EXIT_FAILURE;
 	}
 
-	// FTL connects its resolver sockets, see create_socket(). That is what
+	// Lorentz connects its resolver sockets, see create_socket(). That is what
 	// makes the kernel filter foreign sources and deliver ICMP errors, so
-	// the harness has to do the same to exercise the code path FTL uses.
+	// the harness has to do the same to exercise the code path Lorentz uses.
 	//
 	// Note this one socket is deliberately reused for both lookups below,
 	// which the resolver itself no longer does - it creates one per lookup.

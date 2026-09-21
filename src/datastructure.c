@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Query processing routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "datastructure.h"
 #include "shmem.h"
 #include "log.h"
@@ -448,7 +448,7 @@ int _findClientID(const char *clientIP, const bool count, const bool aliasclient
 	// Note 2: We don't do this before starting up is done as the gravity
 	//         database may not be available. All clients initialized
 	//         during history reading get their enabled regexs reloaded
-	//         in the initial call to FTL_reload_all_domainlists()
+	//         in the initial call to Lorentz_reload_all_domainlists()
 	if(!startup && !aliasclient)
 		reload_per_client_regex(client);
 
@@ -701,7 +701,7 @@ const char *getClientNameString(const queriesData *query)
 		return HIDDEN_CLIENT;
 }
 
-void FTL_reset_per_client_domain_data(void)
+void Lorentz_reset_per_client_domain_data(void)
 {
 	log_debug(DEBUG_DATABASE, "Resetting per-client DNS cache, size is %u", counters->dns_cache_size);
 
@@ -726,7 +726,7 @@ void FTL_reset_per_client_domain_data(void)
 // Reloads all domainlists and performs a few extra tasks such as cleaning the
 // message table
 // May only be called from the database thread
-void FTL_reload_all_domainlists(void)
+void Lorentz_reload_all_domainlists(void)
 {
 	lock_shm();
 
@@ -762,9 +762,9 @@ void FTL_reload_all_domainlists(void)
 	// Check for restored gravity database
 	check_restored_gravity();
 
-	// Reset FTL's internal DNS cache storing whether a specific domain
+	// Reset Lorentz's internal DNS cache storing whether a specific domain
 	// has already been validated for a specific user
-	FTL_reset_per_client_domain_data();
+	Lorentz_reset_per_client_domain_data();
 
 	unlock_shm();
 }
@@ -1403,12 +1403,12 @@ void _query_set_status(queriesData *query, const enum query_status new_status, c
 	query->status = new_status;
 }
 
-const char * __attribute__ ((const)) get_ptr_type_str(const enum ptr_type piholePTR)
+const char * __attribute__ ((const)) get_ptr_type_str(const enum ptr_type lorentzPTR)
 {
-	switch(piholePTR)
+	switch(lorentzPTR)
 	{
-		case PTR_PIHOLE:
-			return "PI.HOLE";
+		case PTR_LORENTZ:
+			return "LORENTZ.LAN";
 		case PTR_HOSTNAME:
 			return "HOSTNAME";
 		case PTR_HOSTNAMEFQDN:
@@ -1421,16 +1421,16 @@ const char * __attribute__ ((const)) get_ptr_type_str(const enum ptr_type pihole
 	}
 }
 
-int __attribute__ ((pure)) get_ptr_type_val(const char *piholePTR)
+int __attribute__ ((pure)) get_ptr_type_val(const char *lorentzPTR)
 {
-	if(strcasecmp(piholePTR, "pi.hole") == 0)
-		return PTR_PIHOLE;
-	else if(strcasecmp(piholePTR, "hostname") == 0)
+	if(strcasecmp(lorentzPTR, "lorentz.lan") == 0)
+		return PTR_LORENTZ;
+	else if(strcasecmp(lorentzPTR, "hostname") == 0)
 		return PTR_HOSTNAME;
-	else if(strcasecmp(piholePTR, "hostnamefqdn") == 0)
+	else if(strcasecmp(lorentzPTR, "hostnamefqdn") == 0)
 		return PTR_HOSTNAMEFQDN;
-	else if(strcasecmp(piholePTR, "none") == 0 ||
-		strcasecmp(piholePTR, "false") == 0)
+	else if(strcasecmp(lorentzPTR, "none") == 0 ||
+		strcasecmp(lorentzPTR, "false") == 0)
 		return PTR_NONE;
 
 	// Invalid value

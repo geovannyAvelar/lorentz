@@ -1,8 +1,8 @@
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine - auxiliary files
+# Lorentz Engine - auxiliary files
 # MAC -> Vendor database generator
 #
 # This is a python3 script

@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2025 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Version-related prototype declarations
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -16,7 +16,7 @@ const char *git_date(void) __attribute__ ((const));
 const char *git_branch(void) __attribute__ ((const));
 const char *git_tag(void) __attribute__ ((const));
 const char *git_hash(void) __attribute__ ((const));
-const char *ftl_arch(void) __attribute__ ((const));
-const char *ftl_cc(void) __attribute__ ((const));
+const char *lorentz_arch(void) __attribute__ ((const));
+const char *lorentz_cc(void) __attribute__ ((const));
 
 #endif // VERSION_H

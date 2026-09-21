@@ -159,7 +159,7 @@ unsigned short rrtype(char *in)
   return 0;
 }
 
-/* Pi-hole function: return name of RR type */
+/* Lorentz function: return name of RR type */
 const char *rrtype_name(unsigned short type)
 {
   unsigned int i;
@@ -1971,7 +1971,7 @@ int cache_make_stat(struct txt_record *t)
       break;
 #endif
 
-    /* Pi-hole modification */
+    /* Lorentz modification */
     case TXT_API_DOMAIN:
     {
       t->len = get_api_string(&buff, true);
@@ -2164,7 +2164,7 @@ static void dump_cache_entry(struct crec *cache, time_t now)
   my_syslog(LOG_INFO, "%s", buff);
 }
  
-/***************** Pi-hole modification *****************/
+/***************** Lorentz modification *****************/
 void get_dnsmasq_metrics(struct metrics *ci)
 {
   // Prepare the metrics struct
@@ -2340,7 +2340,7 @@ char *record_source(unsigned int index)
   return "<unknown>";
 }
 
-// Pi-hole modified
+// Lorentz modified
 char *querystr(char *desc, unsigned short type)
 {
   unsigned int i;
@@ -2387,7 +2387,7 @@ char *querystr(char *desc, unsigned short type)
   return buffp;
 }
 
-/**** Pi-hole modified: removed static and added prototype to dnsmasq.h ****/
+/**** Lorentz modified: removed static and added prototype to dnsmasq.h ****/
 const char *edestr(int ede)
 {
   switch (ede)
@@ -2445,7 +2445,7 @@ void _log_query(unsigned int flags, char *name, union all_addr *addr, char *arg,
   char *gap = " ";
   char portstring[7]; /* space for #<portnum> */
 
-  FTL_hook(flags, name, addr, arg, daemon->log_display_id, type, file, line);
+  Lorentz_hook(flags, name, addr, arg, daemon->log_display_id, type, file, line);
   char opcodestring[3]; /* maximum is 15 */
 
   if (!option_bool(OPT_LOG))

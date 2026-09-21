@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  String suggestion prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -10,7 +10,7 @@
 #ifndef LEVENSHTEIN_H
 #define LEVENSHTEIN_H
 
-#include "FTL.h"
+#include "lorentz.h"
 // union conf_value
 #include "config.h"
 

@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/auth
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "api/auth.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
@@ -27,7 +27,7 @@
 #include <nettle/memops.h>
 // database session functions
 #include "database/session-table.h"
-// FTLDBerror()
+// LorentzDBerror()
 #include "database/common.h"
 // pthread_mutex_t
 #include <pthread.h>
@@ -55,7 +55,7 @@ static inline void auto_unlock(pthread_mutex_t **mtx) {
 		(cond) ? (pthread_mutex_lock(m), (m)) : NULL
 #define AUTOUNLOCK() do { pthread_mutex_unlock(_alock); _alock = NULL; } while(0)
 
-static void add_request_info(struct ftl_conn *api, const char *csrf)
+static void add_request_info(struct lorentz_conn *api, const char *csrf)
 {
 	// Copy CSRF token into request
 	if(csrf != NULL)
@@ -79,7 +79,7 @@ void init_api_sessions(void)
 		exit(EXIT_FAILURE);
 	}
 
-	if(!FTLDBerror())
+	if(!LorentzDBerror())
 		restore_db_sessions(auth_data, max_sessions);
 }
 
@@ -98,7 +98,7 @@ void free_api(void)
 // Can we validate this client?
 // Returns -1 if not authenticated or expired
 // Returns >= 0 for any valid authentication
-int check_client_auth(struct ftl_conn *api, const bool is_api)
+int check_client_auth(struct lorentz_conn *api, const bool is_api)
 {
 	// When the pwhash is unset, authentication is disabled
 	if(config.webserver.api.pwhash.v.s[0] == '\0')
@@ -158,7 +158,7 @@ int check_client_auth(struct ftl_conn *api, const bool is_api)
 		const char *sid_header = NULL;
 		// Try to extract SID from header
 		if((sid_header = mg_get_header(api->conn, "sid")) != NULL ||
-		   (sid_header = mg_get_header(api->conn, "X-FTL-SID")) != NULL)
+		   (sid_header = mg_get_header(api->conn, "X-Lorentz-SID")) != NULL)
 		{
 			// Copy SID string
 			strncpy(sid, sid_header, SID_SIZE - 1u);
@@ -285,8 +285,8 @@ int check_client_auth(struct ftl_conn *api, const bool is_api)
 		auth_data[user_id].tls.mixed |= api->request->is_ssl != auth_data[user_id].tls.login;
 
 		// Update user cookie
-		if(snprintf(pi_hole_extra_headers, sizeof(pi_hole_extra_headers),
-		            FTL_SET_COOKIE,
+		if(snprintf(lorentz_extra_headers, sizeof(lorentz_extra_headers),
+		            LORENTZ_SET_COOKIE,
 		            auth_data[user_id].sid, config.webserver.session.timeout.v.ui,
 		            api->request->is_ssl ? "; Secure" : "") < 0)
 		{
@@ -322,7 +322,7 @@ int check_client_auth(struct ftl_conn *api, const bool is_api)
 	return user_id;
 }
 
-static int get_all_sessions(struct ftl_conn *api, cJSON *json)
+static int get_all_sessions(struct lorentz_conn *api, cJSON *json)
 {
 	const time_t now = time(NULL);
 	cJSON *sessions = JSON_NEW_ARRAY();
@@ -360,7 +360,7 @@ static int get_all_sessions(struct ftl_conn *api, cJSON *json)
 	return 0;
 }
 
-static int get_session_object(struct ftl_conn *api, cJSON *json, const int user_id, const time_t now)
+static int get_session_object(struct lorentz_conn *api, cJSON *json, const int user_id, const time_t now)
 {
 	cJSON *session = JSON_NEW_OBJECT();
 
@@ -425,15 +425,15 @@ void delete_all_sessions(void)
 	memset(auth_data, 0, max_sessions*sizeof(*auth_data));
 }
 
-static int send_api_auth_status(struct ftl_conn *api, const int user_id, const time_t now)
+static int send_api_auth_status(struct lorentz_conn *api, const int user_id, const time_t now)
 {
 	if(user_id > API_AUTH_UNAUTHORIZED && (api->method == HTTP_GET || api->method == HTTP_POST))
 	{
 		log_debug(DEBUG_API, "API Auth status: OK");
 
 		AUTOLOCK(&auth_lock);
-		if(snprintf(pi_hole_extra_headers, sizeof(pi_hole_extra_headers),
-		            FTL_SET_COOKIE,
+		if(snprintf(lorentz_extra_headers, sizeof(lorentz_extra_headers),
+		            LORENTZ_SET_COOKIE,
 		            auth_data[user_id].sid, config.webserver.session.timeout.v.ui,
 		            api->request->is_ssl ? "; Secure" : "") < 0)
 		{
@@ -451,8 +451,8 @@ static int send_api_auth_status(struct ftl_conn *api, const int user_id, const t
 		{
 			log_debug(DEBUG_API, "API Auth status: Logout, asking to delete cookie");
 
-			snprintf(pi_hole_extra_headers, sizeof(pi_hole_extra_headers),
-			         FTL_DELETE_COOKIE, api->request->is_ssl ? " Secure" : "");
+			snprintf(lorentz_extra_headers, sizeof(lorentz_extra_headers),
+			         LORENTZ_DELETE_COOKIE, api->request->is_ssl ? " Secure" : "");
 
 			// Revoke client authentication. This slot can be used by a new client afterwards.
 			const int code = delete_session(user_id, false) ? 204 : 404;
@@ -482,8 +482,8 @@ static int send_api_auth_status(struct ftl_conn *api, const int user_id, const t
 	{
 		log_debug(DEBUG_API, "API Auth status: Invalid, asking to delete cookie");
 
-		snprintf(pi_hole_extra_headers, sizeof(pi_hole_extra_headers),
-		         FTL_DELETE_COOKIE, api->request->is_ssl ? " Secure" : "");
+		snprintf(lorentz_extra_headers, sizeof(lorentz_extra_headers),
+		         LORENTZ_DELETE_COOKIE, api->request->is_ssl ? " Secure" : "");
 		cJSON *json = JSON_NEW_OBJECT();
 		get_session_object(api, json, user_id, now);
 		JSON_SEND_OBJECT_CODE(json, 401); // 401 Unauthorized
@@ -505,7 +505,7 @@ static bool generateSID(char *sid)
 //  GET: Check authentication
 //  POST: Login
 //  DELETE: Logout
-int api_auth(struct ftl_conn *api)
+int api_auth(struct lorentz_conn *api)
 {
 	// Check HTTP method
 	char *password = NULL;
@@ -760,7 +760,7 @@ int api_auth(struct ftl_conn *api)
 	return send_api_auth_status(api, user_id, now);
 }
 
-int api_auth_sessions(struct ftl_conn *api)
+int api_auth_sessions(struct lorentz_conn *api)
 {
 	// Get session object
 	cJSON *json = JSON_NEW_OBJECT();
@@ -768,7 +768,7 @@ int api_auth_sessions(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int api_auth_session_delete(struct ftl_conn *api)
+int api_auth_session_delete(struct lorentz_conn *api)
 {
 	// Get user ID
 	int uid;

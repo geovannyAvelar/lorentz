@@ -180,7 +180,7 @@ components:
               name: null
               total: 254
             "::":
-              name: "pi.hole"
+              name: "lorentz.lan"
               total: 29
             "0.0.0.0":
               name: "other clients"

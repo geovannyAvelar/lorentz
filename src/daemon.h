@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Daemon prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -23,7 +23,7 @@ bool is_fork(const pid_t mpid, const pid_t pid) __attribute__ ((const));
 void cleanup(const int ret);
 void set_nice(void);
 void calc_cpu_usage(const unsigned int interval);
-float get_ftl_cpu_percentage(void) __attribute__((pure));
+float get_lorentz_cpu_percentage(void) __attribute__((pure));
 float get_total_cpu_percentage(void) __attribute__((pure));
 bool ipv6_enabled(void);
 void init_locale(void);
@@ -40,8 +40,8 @@ void init_locale(void);
 #if !defined(SYS_gettid) && defined(__NR_gettid)
 #define SYS_gettid __NR_gettid
 #endif // !SYS_gettid && __NR_gettid
-pid_t FTL_gettid(void);
-#define gettid FTL_gettid
+pid_t Lorentz_gettid(void);
+#define gettid Lorentz_gettid
 
 // getrandom() is only available since glibc 2.25
 // https://www.gnu.org/software/gnulib/manual/html_node/sys_002frandom_002eh.html

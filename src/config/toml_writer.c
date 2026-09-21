@@ -1,16 +1,16 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  TOML config writer routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "config.h"
-// get_timestr(), get_FTL_version())
+// get_timestr(), get_Lorentz_version())
 #include "log.h"
 #include "tomlc17/tomlc17.h"
 #include "toml_writer.h"
@@ -33,7 +33,7 @@
 // defined in config/config.c
 extern uint8_t last_checksum[SHA256_DIGEST_SIZE];
 
-// Release the lock that serialises writing and installing pihole.toml
+// Release the lock that serialises writing and installing lorentz.toml
 static void release_install_lock(int *fd)
 {
 	if(*fd < 0)
@@ -44,7 +44,7 @@ static void release_install_lock(int *fd)
 	*fd = -1;
 }
 
-bool writeFTLtoml(const bool verbose, FILE *fp)
+bool writeLorentztoml(const bool verbose, FILE *fp)
 {
 	// Return early without writing if we are in config read-only mode
 	if(config.misc.readOnly.v.b)
@@ -61,7 +61,7 @@ bool writeFTLtoml(const bool verbose, FILE *fp)
 
 	// Serialise the whole write-and-install against another writer. The lock
 	// has to sit on a path nothing ever renames: locking the temporary file
-	// or pihole.toml itself would leave the next writer holding a lock on a
+	// or lorentz.toml itself would leave the next writer holding a lock on a
 	// different inode the moment one of them renames, which serialises
 	// nothing. Held until this function returns
 	int install_lock = -1;
@@ -69,11 +69,11 @@ bool writeFTLtoml(const bool verbose, FILE *fp)
 	if(opened)
 	{
 		// flock() does not need write access, so read-only lets members
-		// of the pihole group take the lock as well
+		// of the lorentz group take the lock as well
 		install_lock = open(GLOBALTOMLPATH".lock", O_RDONLY | O_CREAT | O_CLOEXEC,
 		                    S_IRUSR | S_IWUSR | S_IRGRP);
 		if(install_lock >= 0 && geteuid() == 0)
-			chown_pihole(GLOBALTOMLPATH".lock", NULL);
+			chown_lorentz(GLOBALTOMLPATH".lock", NULL);
 		if(install_lock < 0)
 			log_warn("Cannot open %s (%s), writing the config unserialised",
 			         GLOBALTOMLPATH".lock", strerror(errno));
@@ -92,7 +92,7 @@ bool writeFTLtoml(const bool verbose, FILE *fp)
 	if(fp == NULL)
 	{
 		// Try to open a temporary config file for writing
-		fp = openFTLtoml("w", 0, &locked);
+		fp = openLorentztoml("w", 0, &locked);
 		if(fp == NULL)
 		{
 			release_install_lock(&install_lock);
@@ -101,11 +101,11 @@ bool writeFTLtoml(const bool verbose, FILE *fp)
 	}
 
 	// Write header
-	fprintf(fp, "# Pi-hole configuration file (%s)", get_FTL_version());
+	fprintf(fp, "# Lorentz configuration file (%s)", get_Lorentz_version());
 	if(strcmp(git_branch(), "master") != 0)
 		fprintf(fp, " on branch %s", git_branch());
 	fputs("\n# Encoding: UTF-8\n", fp);
-	fputs("# This file is managed by pihole-FTL\n", fp);
+	fputs("# This file is managed by lorentz\n", fp);
 	char timestring[TIMESTR_SIZE];
 	get_timestr(timestring, time(NULL), false, false);
 	fputs("# Last updated on ", fp);
@@ -231,11 +231,11 @@ bool writeFTLtoml(const bool verbose, FILE *fp)
 	// this
 	if(opened)
 	{
-		if(!closeFTLtoml(fp, locked))
+		if(!closeLorentztoml(fp, locked))
 		{
 			// The temporary file is short or was never written.
 			// Rotating the good config away and renaming this over
-			// it would leave FTL starting from a file cut off
+			// it would leave Lorentz starting from a file cut off
 			// mid-value next time
 			log_err("Not replacing "GLOBALTOMLPATH", the new config could not be written");
 			if(unlink(GLOBALTOMLPATH".tmp") != 0)
@@ -287,7 +287,7 @@ bool writeFTLtoml(const bool verbose, FILE *fp)
 		}
 
 		// Log that the config file has not changed if in debug mode
-		log_debug(DEBUG_CONFIG, "pihole.toml unchanged");
+		log_debug(DEBUG_CONFIG, "lorentz.toml unchanged");
 	}
 
 	if(!sha256sum(GLOBALTOMLPATH, last_checksum, false))

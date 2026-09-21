@@ -1,8 +1,8 @@
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine
+# Lorentz Engine
 # /src/database/CMakeList.txt
 #
 # This file is copyright under the latest version of the EUPL.
@@ -21,7 +21,7 @@ set(sqlite3_sources
 
 add_library(sqlite3 OBJECT ${sqlite3_sources})
 # Define the function that will be called to initialize the sqlite3 shell
-target_compile_definitions(sqlite3 PRIVATE "-DSQLITE_ENABLE_EXPLAIN_COMMENTS -DSQLITE_SHELL_INIT_PROC=pihole_sqlite3_initalize")
+target_compile_definitions(sqlite3 PRIVATE "-DSQLITE_ENABLE_EXPLAIN_COMMENTS -DSQLITE_SHELL_INIT_PROC=lorentz_sqlite3_initalize")
 target_compile_options(sqlite3 PRIVATE -Wno-implicit-fallthrough -Wno-cast-function-type -Wno-sign-compare -Wno-implicit-function-declaration -Wno-int-conversion)
 
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang")

@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2018 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Shared memory header
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -211,7 +211,7 @@ void addOverTimeClientSlot(void);
 // Change ownership of shared memory objects
 void chown_all_shmem(struct passwd *ent_pw);
 
-// Get details about shared memory used by FTL
+// Get details about shared memory used by Lorentz
 void log_shmem_details(void);
 
 // Per-client regex buffer storing whether or not a specific regex is enabled for a particular client

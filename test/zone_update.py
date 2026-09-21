@@ -1,9 +1,9 @@
 #!/bin/python3
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine - auxiliary files
+# Lorentz Engine - auxiliary files
 # Send a dynamic update to the DNS server to update the a zone
 #
 # This file is copyright under the latest version of the EUPL.

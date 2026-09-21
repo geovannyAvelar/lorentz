@@ -1,16 +1,16 @@
 #!/bin/bash
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2022 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine
-# Deploy script for FTL
+# Lorentz Engine
+# Deploy script for Lorentz
 #
 # This file is copyright under the latest version of the EUPL.
 # Please see LICENSE file for your rights under this license.
 
 
-# Transfer Builds to Pi-hole server for pihole checkout
+# Transfer Builds to Lorentz server for lorentz checkout
 # We use sftp for secure transfer and use the branch name as dir on the server.
 # The branch name could contain slashes, creating hierarchical dirs. However,
 # this is not supported by sftp's `mkdir` (option -p) is not available. Therefore,

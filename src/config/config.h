@@ -1,9 +1,9 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
-*  FTL config file prototypes
+*  Lorentz Engine
+*  Lorentz config file prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
@@ -11,7 +11,7 @@
 #define CONFIG_H
 
 // Hardcoded PID path — see GHSA-6w8x-p785-6pm4
-#define FTL_PID_FILE "/run/pihole-FTL.pid"
+#define LORENTZ_PID_FILE "/run/lorentz.pid"
 
 // enum privacy_level
 #include "enums.h"
@@ -31,8 +31,8 @@
 // enum web_theme
 #include "api/theme.h"
 
-#define CONFIG_DIR "/etc/pihole"
-#define GLOBALTOMLPATH CONFIG_DIR"/pihole.toml"
+#define CONFIG_DIR "/etc/lorentz"
+#define GLOBALTOMLPATH CONFIG_DIR"/lorentz.toml"
 
 // This static string represents an unchanged password
 #define PASSWORD_VALUE "********"
@@ -41,13 +41,13 @@
 #define VALIDATOR_ERRBUF_LEN 256
 
 // Location of the legacy (pre-v6.0) config file
-#define GLOBALCONFFILE_LEGACY "/etc/pihole/pihole-FTL.conf"
+#define GLOBALCONFFILE_LEGACY "/etc/lorentz/lorentz.conf"
 
 // Migration target for the legacy (pre-v6.0) config file
-#define MIGRATION_TARGET_V6 "/etc/pihole/migration_backup_v6"
+#define MIGRATION_TARGET_V6 "/etc/lorentz/migration_backup_v6"
 
 // Location of the legacy (pre-v6.0) setupVars config file
-#define SETUPVARS_CONF "/etc/pihole/setupVars.conf"
+#define SETUPVARS_CONF "/etc/lorentz/setupVars.conf"
 
 union conf_value {
 	bool b;                                     // boolean value
@@ -100,19 +100,19 @@ enum conf_type {
 
 #define MAX_CONFIG_PATH_DEPTH 6
 
-#define FLAG_RESTART_FTL           (1 << 0)
+#define FLAG_RESTART_LORENTZ           (1 << 0)
 #define FLAG_PSEUDO_ITEM           (1 << 1)
 #define FLAG_INVALIDATE_SESSIONS   (1 << 2)
 #define FLAG_WRITE_ONLY            (1 << 3)
 #define FLAG_ENV_VAR               (1 << 4)
 #define FLAG_CONF_IMPORTED         (1 << 5)
-// Settable in pihole.toml or through an environment variable, but neither
+// Settable in lorentz.toml or through an environment variable, but neither
 // through the API nor the CLI. For the switch that locks the configuration
 // itself: letting either of them change it would defeat the lock.
 #define FLAG_API_CLI_READ_ONLY     (1 << 6)
-#define FLAG_FTL_LOG               (1 << 7)
+#define FLAG_LORENTZ_LOG               (1 << 7)
 // As above, but the CLI may still set it. For options that hand code to
-// something Pi-hole then runs: configuring those needs access to the host, which
+// something Lorentz then runs: configuring those needs access to the host, which
 // everyone with a legitimate use for them already has, and a web session on its
 // own should not be enough.
 #define FLAG_API_READ_ONLY         (1 << 8)
@@ -137,7 +137,7 @@ struct enum_options {
 
 // When new config items are added, the following places need to be updated:
 // - src/config/config.c: New default item
-// - test/pihole.toml: Add the new item to the test config file
+// - test/lorentz.toml: Add the new item to the test config file
 // - api/docs/content/specs/config.yml: Add the new item to the API documentation
 struct config {
 	struct {
@@ -148,7 +148,7 @@ struct config {
 		struct conf_item ignoreLocalhost;
 		struct conf_item showDNSSEC;
 		struct conf_item analyzeOnlyAandAAAA;
-		struct conf_item piholePTR;
+		struct conf_item lorentzPTR;
 		struct conf_item replyWhenBusy;
 		struct conf_item blockTTL;
 		struct conf_item hosts;
@@ -316,7 +316,7 @@ struct config {
 		struct conf_item macvendor;
 		struct conf_item pcap;
 		struct {
-			struct conf_item ftl;
+			struct conf_item lorentz;
 			struct conf_item dnsmasq;
 			struct conf_item webserver;
 		} log;
@@ -391,7 +391,7 @@ void initConfig(struct config *conf);
 void set_debug_flags(struct config *conf);
 void set_all_debug(struct config *conf, const bool status);
 bool migrate_config_v6(void);
-bool readFTLconf(struct config *conf, const bool rewrite);
+bool readLorentzconf(struct config *conf, const bool rewrite);
 bool getLogFilePath(bool try_read);
 struct conf_item *get_conf_item(struct config *conf, const unsigned int n);
 struct conf_item *get_debug_item(struct config *conf, const enum debug_flag debug);

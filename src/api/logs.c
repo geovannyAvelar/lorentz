@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/logs
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api/api.h"
@@ -19,7 +19,7 @@
 #include "signals.h"
 
 // fifologData is allocated in shared memory for cross-fork compatibility
-int api_logs(struct ftl_conn *api)
+int api_logs(struct lorentz_conn *api)
 {
 	unsigned int start = 0u;
 	if(api->request->query_string != NULL)
@@ -79,8 +79,8 @@ int api_logs(struct ftl_conn *api)
 	const char *logfile = NULL;
 	switch(api->opts.which)
 	{
-		case FIFO_FTL:
-			logfile = config.files.log.ftl.v.s;
+		case FIFO_LORENTZ:
+			logfile = config.files.log.lorentz.v.s;
 			break;
 		case FIFO_DNSMASQ:
 			logfile = config.files.log.dnsmasq.v.s;

@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Environment-related routines
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -21,7 +21,7 @@
 #include "config/suggest.h"
 // LINE_MAX
 #include <limits.h>
-// openFTLtoml()
+// openLorentztoml()
 #include "config/toml_helper.h"
 // escape_json()
 #include "webserver/http-common.h"
@@ -47,8 +47,8 @@ void getEnvVars(void)
 	// Get all environment variables
 	for(char **env = environ; *env != NULL; env++)
 	{
-		// Check if this is a FTLCONF_ variable
-		if(strncmp(*env, FTLCONF_PREFIX, sizeof(FTLCONF_PREFIX) - 1) == 0)
+		// Check if this is a LORENTZCONF_ variable
+		if(strncmp(*env, LORENTZCONF_PREFIX, sizeof(LORENTZCONF_PREFIX) - 1) == 0)
 		{
 			// Make a copy of the environment variable to avoid
 			// modifying the original string
@@ -89,7 +89,7 @@ void getEnvVars(void)
 
 }
 
-void printFTLenv(void)
+void printLorentzenv(void)
 {
 	// Nothing to print if no env vars are used
 	if(env_list == NULL)
@@ -109,10 +109,10 @@ void printFTLenv(void)
 	}
 
 	const unsigned int sum = used + invalid + ignored;
-	log_info("%u FTLCONF environment variable%s found (%u used, %u invalid, %u ignored)",
+	log_info("%u LORENTZCONF environment variable%s found (%u used, %u invalid, %u ignored)",
 	         sum, sum == 1 ? "" : "s", used, invalid, ignored);
 
-	// Iterate over all known FTLCONF environment variables
+	// Iterate over all known LORENTZCONF environment variables
 	for(struct env_item *item = env_list; item != NULL; item = item->next)
 	{
 		if(item->used)
@@ -150,11 +150,11 @@ void printFTLenv(void)
 	}
 }
 
-static struct env_item *__attribute__((pure)) getFTLenv(const char *key)
+static struct env_item *__attribute__((pure)) getLorentzenv(const char *key)
 {
 	// "Normalize" the environment variable to conventional names by using a case insensitive comparison,
 	// See: https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html
-	// Iterate over all known FTLCONF environment variables
+	// Iterate over all known LORENTZCONF environment variables
 	for(struct env_item *item = env_list; item != NULL; item = item->next)
 	{
 		// Check if this is the requested key
@@ -200,7 +200,7 @@ static void invalid_enum_item(const char *envvar, struct conf_item *conf_item, s
 	char *allowed_values = cJSON_PrintUnformatted(allowed_items);
 	char *escaped_value = escape_json(envvar);
 
-	// Build the error message. Mark it as allocated so printFTLenv()
+	// Build the error message. Mark it as allocated so printLorentzenv()
 	// actually frees it again instead of leaking it on every reload.
 	if(asprintf(&item->error, "= %s is invalid, allowed options are: %s",
 	            escaped_value ? escaped_value : "(null)",
@@ -217,8 +217,8 @@ static void invalid_enum_item(const char *envvar, struct conf_item *conf_item, s
 bool __attribute__((nonnull(1,2,3))) readEnvValue(struct conf_item *conf_item, struct config *newconf, cJSON *forced_vars, bool *reset)
 {
 	// First check if a environmental variable with the given key exists by
-	// iterating over the list of FTLCONF_ variables
-	struct env_item *item = getFTLenv(conf_item->e);
+	// iterating over the list of LORENTZCONF_ variables
+	struct env_item *item = getLorentzenv(conf_item->e);
 
 	if(item == NULL)
 	{
@@ -674,7 +674,7 @@ cJSON *read_forced_vars(const unsigned int version)
 
 	// Try to open default config file. Use fallback if not found
 	bool locked = false;
-	FILE *fp = openFTLtoml("r", version, &locked);
+	FILE *fp = openLorentztoml("r", version, &locked);
 	if(fp == NULL)
 	{
 		// Return empty cJSON array
@@ -713,7 +713,7 @@ cJSON *read_forced_vars(const unsigned int version)
 	}
 
 	// Close file and release exclusive lock
-	closeFTLtoml(fp, locked);
+	closeLorentztoml(fp, locked);
 
 	// Return cJSON array
 	return env_vars;

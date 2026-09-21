@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Config validation routines
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -385,8 +385,8 @@ static bool paths_overlap(const char *a, const size_t alen, const char *b)
 // Rewrite an absolute path into the one spelling of it we compare against:
 // repeated slashes collapsed, "." segments dropped and ".." resolved, clamping
 // at the root. Without this the comparisons below are defeated by writing the
-// same directory differently - "/." and "//etc/pihole" name the root and the
-// configuration directory just as well as "/" and "/etc/pihole" do.
+// same directory differently - "/." and "//etc/lorentz" name the root and the
+// configuration directory just as well as "/" and "/etc/lorentz" do.
 //
 // Resolution is lexical, so a symbolic link still points where it points. That
 // is deliberate: realpath() needs the path to exist, which would stop a
@@ -450,13 +450,13 @@ static size_t normalize_path(const char *path, char *out, const size_t outlen)
 	return o;
 }
 
-// The files Pi-hole writes and therefore must keep out of the document root.
+// The files Lorentz writes and therefore must keep out of the document root.
 // Their content follows from what clients send - logged requests, resolved
 // names, imported settings - so serving them hands that straight back out, and a
 // name matching the Lua server-page pattern makes the web server evaluate them
 // rather than serve them.
 #define WRITTEN_FILES(conf) { \
-	&(conf).files.log.ftl, &(conf).files.log.dnsmasq, &(conf).files.log.webserver, \
+	&(conf).files.log.lorentz, &(conf).files.log.dnsmasq, &(conf).files.log.webserver, \
 	&(conf).files.database, &(conf).files.tmp_db, &(conf).files.gravity, \
 	&(conf).files.gravity_tmp, &(conf).files.pcap }
 
@@ -465,7 +465,7 @@ static size_t normalize_path(const char *path, char *out, const size_t outlen)
 // The per-item validators can only compare a new value against the values
 // currently in effect, which is not enough when several of them change together:
 // a request moving the document root and a log file below it in one go passes
-// both individual checks. Config also reaches FTL through the Teleporter, which
+// both individual checks. Config also reaches Lorentz through the Teleporter, which
 // parses a whole file at once and never ran the per-item validators at all. This
 // runs over the resulting configuration instead and is the authoritative check -
 // call it before putting a new configuration in place.
@@ -488,7 +488,7 @@ bool validate_config_paths(struct config *conf, char err[VALIDATOR_ERRBUF_LEN],
 	if(wlen == 0 || wlen == 1 || paths_overlap(wnorm, wlen, CONFIG_DIR))
 	{
 		snprintf(err, VALIDATOR_ERRBUF_LEN,
-		         "%s: must not be \"/\" or overlap Pi-hole's configuration directory (\"%s\")",
+		         "%s: must not be \"/\" or overlap Lorentz's configuration directory (\"%s\")",
 		         conf->webserver.paths.webroot.k, CONFIG_DIR);
 		return false;
 	}
@@ -521,11 +521,11 @@ bool validate_config_paths(struct config *conf, char err[VALIDATOR_ERRBUF_LEN],
 //
 // Every file below this directory can be requested over the network once
 // webserver.serve_all is enabled, and files outside the web home are served
-// without authentication. A document root spanning Pi-hole's own configuration
+// without authentication. A document root spanning Lorentz's own configuration
 // would therefore hand out the API password hash, the TLS private key and the
-// databases; "/" would hand out everything the pihole user can open.
+// databases; "/" would hand out everything the lorentz user can open.
 //
-// Whether it comes to span a file Pi-hole writes depends on a second item, so
+// Whether it comes to span a file Lorentz writes depends on a second item, so
 // that half is checked in validate_config_paths() on the assembled config.
 bool validate_webroot(union conf_value *val, const char *key, char err[VALIDATOR_ERRBUF_LEN])
 {
@@ -545,7 +545,7 @@ bool validate_webroot(union conf_value *val, const char *key, char err[VALIDATOR
 	if(len == 0 || len == 1 || paths_overlap(norm, len, CONFIG_DIR))
 	{
 		snprintf(err, VALIDATOR_ERRBUF_LEN,
-		         "%s: must not be \"/\" or overlap Pi-hole's configuration directory (\"%s\")",
+		         "%s: must not be \"/\" or overlap Lorentz's configuration directory (\"%s\")",
 		         key, CONFIG_DIR);
 		return false;
 	}
@@ -812,7 +812,7 @@ bool validate_ui_min_7_or_0(union conf_value *val, const char *key, char err[VAL
 
 // Sanitize the dns.hosts array
 // This function normalizes whitespace formatting in the dns.hosts entries
-// to ensure consistent formatting when saving to pihole.toml
+// to ensure consistent formatting when saving to lorentz.toml
 void sanitize_dns_hosts(union conf_value *val)
 {
 	if(!cJSON_IsArray(val->json))

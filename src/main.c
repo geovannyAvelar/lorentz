@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Core routine
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "daemon.h"
 #include "log.h"
 #include "config/setupVars.h"
@@ -31,13 +31,13 @@
 #include "database/query-table.h"
 // db_import_done
 #include "gc.h"
-// verify_FTL()
+// verify_Lorentz()
 #include "files.h"
 // init_entropy()
 #include "webserver/x509.h"
 // SQLite3LogCallback()
 #include "database/common.h"
-// pihole_sqlite3_initalize()
+// lorentz_sqlite3_initalize()
 #include "database/sqlite3-ext.h"
 
 char *username;
@@ -50,7 +50,7 @@ int main (int argc, char *argv[])
 	// Initialize locale (needed for libidn)
 	init_locale();
 
-	// Get user pihole-FTL is running as
+	// Get user lorentz is running as
 	// We store this in a global variable
 	// such that the log routine can access
 	// it if needed
@@ -69,26 +69,26 @@ int main (int argc, char *argv[])
 	// to have arg{c,v}_dnsmasq initialized
 	parse_args(argc, argv);
 
-	// Initialize FTL log
-	init_FTL_log(argc > 0 ? argv[0] : NULL);
-	// Try to open FTL log
+	// Initialize Lorentz log
+	init_Lorentz_log(argc > 0 ? argv[0] : NULL);
+	// Try to open Lorentz log
 	init_config_mutex();
 	timer_start(EXIT_TIMER);
-	log_info("########## FTL started on %s! ##########", hostname());
-	log_FTL_version(false);
+	log_info("########## Lorentz started on %s! ##########", hostname());
+	log_Lorentz_version(false);
 
 	// Catch signals not handled by dnsmasq
 	// We configure real-time signals later (after dnsmasq has forked)
 	handle_signals();
 
-	// Process pihole.toml configuration file
+	// Process lorentz.toml configuration file
 	// The file is rewritten after parsing to ensure that all
 	// settings are present and have a valid value
-	if(readFTLconf(&config, true))
+	if(readLorentzconf(&config, true))
 		log_info("Parsed config file "GLOBALTOMLPATH" successfully");
 
-	// Check if another FTL process is already running
-	if(another_FTL())
+	// Check if another Lorentz process is already running
+	if(another_Lorentz())
 		return EXIT_FAILURE;
 
 	// Set process priority
@@ -101,10 +101,10 @@ int main (int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	// pihole-FTL should really be run as user "pihole" to not mess up with file permissions
+	// lorentz should really be run as user "lorentz" to not mess up with file permissions
 	// print warning otherwise
-	if(strcmp(username, "pihole") != 0)
-		log_warn("Starting pihole-FTL as user %s is not recommended", username);
+	if(strcmp(username, "lorentz") != 0)
+		log_warn("Starting lorentz as user %s is not recommended", username);
 
 	// Write PID early on so systemd cannot be fooled during DELAY_STARTUP
 	// times. The PID in this file will later be overwritten after forking
@@ -120,7 +120,7 @@ int main (int argc, char *argv[])
 	initOverTime();
 
 	// Check for availability of capabilities. The per-capability table this
-	// prints is behind DEBUG_CAPS, but the warnings about the ones FTL needs
+	// prints is behind DEBUG_CAPS, but the warnings about the ones Lorentz needs
 	// and does not have are not, and they are the reason to run this at all:
 	// hiding them behind a debug flag means nobody sees them until they
 	// already suspect the problem
@@ -135,14 +135,14 @@ int main (int argc, char *argv[])
 	log_ctrl(true, false);
 
 	// Initialize SQLite3 logging callback
-	// This ensures SQLite3 errors and warnings are logged to FTL.log
+	// This ensures SQLite3 errors and warnings are logged to lorentz.log
 	// We use this to possibly catch even more errors in places we do not
 	// explicitly check for failures to have happened
 	db_driver_active()->set_log_callback(SQLite3LogCallback, NULL);
 
-	// Register Pi-hole provided SQLite3 extensions (see sqlite3-ext.c) and
+	// Register Lorentz provided SQLite3 extensions (see sqlite3-ext.c) and
 	// initialize SQLite3 engine
-	pihole_sqlite3_initalize();
+	lorentz_sqlite3_initalize();
 
 	// Call embedded dnsmasq only on the first run
 	// Skip it here if we jump back to this point from die()
@@ -167,7 +167,7 @@ int main (int argc, char *argv[])
 		{
 			// If dnsmasq never finished initializing, we need to
 			// launch the threads
-			FTL_fork_and_bind_sockets(NULL, false);
+			Lorentz_fork_and_bind_sockets(NULL, false);
 		}
 
 		// Loop here to keep the webserver running unless requested to restart
@@ -191,11 +191,11 @@ int main (int argc, char *argv[])
 
 	cleanup(exit_code);
 
-	if(exit_code == RESTART_FTL_CODE)
+	if(exit_code == RESTART_LORENTZ_CODE)
 	{
 		// A binary without file capabilities only keeps the ambient set
 		// across execvp(). All threads are gone and nothing else is
-		// executed from here, the restarted FTL withholds it again
+		// executed from here, the restarted Lorentz withholds it again
 		if(getuid() != 0)
 			restore_capability_for_exec(CAP_CHOWN);
 		execvp(argv[0], argv);

@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  /proc system prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -17,7 +17,7 @@
 #define PROC_PATH_SIZ 64
 
 bool get_process_name(const pid_t pid, char name[PROC_PATH_SIZ]);
-bool another_FTL(void);
+bool another_Lorentz(void);
 
 struct proc_mem {
 	// Memory currently resident in RAM (in kB)

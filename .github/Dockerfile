@@ -21,15 +21,15 @@ ENV TERM=xterm
 # This is not supported by Github Actions as it does not provide a TTY to the docker build container
 RUN sed -i '/buffer_with_truncation /d' /bats/bats-core/libexec/bats-core/bats-format-pretty
 
-# Build FTL
+# Build Lorentz
 # Remove possible old build files
 RUN rm -rf cmake && \
-# Build and test FTL
+# Build and test Lorentz
     bash build.sh "-DSTATIC=${STATIC} -DBUILD_TAR_REGRESSION=ON -DBUILD_GZIP_REGRESSION=ON -DBUILD_PTR_RESPONSE_REGRESSION=ON" ${BUILD_OPTS} && \
-# Copy FTL binary to root directory
+# Copy Lorentz binary to root directory
     cd / &&\
-    cp /app/pihole-FTL . && \
+    cp /app/lorentz . && \
 # Create tarball of API docs
     tar -C /app/src/api/docs/content/ -czvf /api-docs.tar.gz . && \
 # Generate default config file
-    ./pihole-FTL create-default-config pihole.toml
+    ./lorentz create-default-config lorentz.toml

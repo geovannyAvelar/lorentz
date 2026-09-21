@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Sessions table database routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "database/session-table.h"
 #include "database/common.h"
 #include "config/config.h"
@@ -32,7 +32,7 @@ bool create_session_table(db_conn *db)
 	                                   "tls_mixed BOOL);");
 
 	// Update database version to 15
-	if(!db_set_FTL_property(db, DB_VERSION, 15))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 15))
 	{
 		log_err("create_session_table(): Failed to update database version!");
 		dbquery(db, "ROLLBACK");
@@ -54,7 +54,7 @@ bool add_session_app_column(db_conn *db)
 	SQL_bool(db, "ALTER TABLE session ADD COLUMN app BOOL;");
 
 	// Update database version to 16
-	if(!db_set_FTL_property(db, DB_VERSION, 16))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 16))
 	{
 		log_err("add_session_app_column(): Failed to update database version!");
 		dbquery(db, "ROLLBACK");
@@ -76,7 +76,7 @@ bool add_session_cli_column(db_conn *db)
 	SQL_bool(db, "ALTER TABLE session ADD COLUMN cli BOOL;");
 
 	// Update database version to 18
-	if(!db_set_FTL_property(db, DB_VERSION, 18))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 18))
 	{
 		log_err("add_session_cli_column(): Failed to update database version!");
 		dbquery(db, "ROLLBACK");
@@ -98,7 +98,7 @@ bool add_session_x_forwarded_for_column(db_conn *db)
 	SQL_bool(db, "ALTER TABLE session ADD COLUMN x_forwarded_for TEXT;");
 
 	// Update database version to 18
-	if(!db_set_FTL_property(db, DB_VERSION, 19))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 19))
 	{
 		log_err("add_session_x_forwarded_for_column(): Failed to update database version!");
 		dbquery(db, "ROLLBACK");

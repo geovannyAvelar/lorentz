@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Gravity database routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "gravity-db.h"
 // Database driver layer
 #include "db-driver.h"
@@ -355,7 +355,7 @@ static const struct gravity_pragma {
 	{ "PRAGMA temp_store = MEMORY", true },
 	// Read B-tree pages straight from the kernel page cache by virtual address
 	// instead of pread() plus a copy. gravity.db is effectively read-only at
-	// runtime (journal_mode = OFF, "pihole -g" swaps in a new file), 256 MiB
+	// runtime (journal_mode = OFF, "lorentz -g" swaps in a new file), 256 MiB
 	// covers every real-world gravity, and SQLite falls back to regular I/O
 	// where mmap is unavailable. The in-process page cache is raised globally
 	// via -DSQLITE_DEFAULT_CACHE_SIZE, so no cache_size pragma here
@@ -422,7 +422,7 @@ static bool gravityDB_open(void)
 
 	// Pre-warm: advise kernel to read gravity.db into page cache
 	// asynchronously. This eliminates cold-start page faults for the
-	// first DNS queries after restart or after `pihole -g`.
+	// first DNS queries after restart or after `lorentz -g`.
 	//
 	// Programs can use posix_fadvise() to announce an intention to access
 	// file data in a specific pattern in the future, thus allowing the
@@ -461,7 +461,7 @@ static bool gravityDB_open(void)
 	// but rejected: cached IDs become stale when users disable a group,
 	// toggle an adlist, or change group assignments without triggering
 	// RELOAD_GRAVITY — the info.updated timestamp only changes on
-	// "pihole -g", not on individual table modifications.
+	// "lorentz -g", not on individual table modifications.
 	struct { db_stmt **stmt; const char *sql; const char *name; } shared_stmts[] = {
 		{ &gravity_shared_stmt,
 		  "SELECT adlist_id FROM vw_gravity WHERE domain = ?1 AND group_id IN carray(?2);",
@@ -778,7 +778,7 @@ static bool get_client_groupids(clientsData *client)
 		}
 		else
 		{
-			// Fall back to the network table for clients FTL only knows
+			// Fall back to the network table for clients Lorentz only knows
 			// from imported history (no live query yet, so no name)
 			log_debug(DEBUG_CLIENTS, "Querying gravity database for host name of %s...", ip);
 
@@ -851,7 +851,7 @@ static bool get_client_groupids(clientsData *client)
 
 	// If we did neither find an IP nor a MAC address and also no host name
 	// match above, we try to look up the client using its interface
-	// 1. Look up the interface of this client (FTL isn't aware of it
+	// 1. Look up the interface of this client (Lorentz isn't aware of it
 	//    when creating the client from history data!)
 	// 2. If found -> Get groups by looking up interface in client table
 	char interface[MAXIFACESTRLEN] = { 0 };
@@ -860,7 +860,7 @@ static bool get_client_groupids(clientsData *client)
 	{
 		// Prefer the interface the client's queries actually arrive on.
 		// It is recorded in-memory on the client's very first query (see
-		// _FTL_new_query()), so it is already available here without the
+		// _Lorentz_new_query()), so it is already available here without the
 		// one-DBinterval lag of the network_addresses table and lets
 		// interface-based group assignment apply from the first query on.
 		const char *clientIface = getstr(client->ifacepos);
@@ -873,7 +873,7 @@ static bool get_client_groupids(clientsData *client)
 		}
 		else
 		{
-			// Fall back to the network table for clients FTL only knows
+			// Fall back to the network table for clients Lorentz only knows
 			// from imported history (no live query yet, so no interface)
 			log_debug(DEBUG_CLIENTS, "Querying gravity database for interface of %s...", ip);
 
@@ -1258,7 +1258,7 @@ bool gravityDB_getTable(const unsigned char list)
 // This function returns a pointer to a string as long as there are domains
 // available. Once we reached the end of the table, it returns NULL. It also
 // returns NULL when it encounters an error (e.g., on reading errors). Errors
-// are logged to FTL.log
+// are logged to lorentz.log
 // This function is performance critical as it might be called millions of times
 // for large blocking lists
 inline const char* gravityDB_getDomain(int *rowid)
@@ -1304,7 +1304,7 @@ void gravityDB_finalizeTable(void)
 }
 
 // Get number of domains in a specified table of the gravity database We return
-// the constant DB_FAILED and log to FTL.log if we encounter any error
+// the constant DB_FAILED and log to lorentz.log if we encounter any error
 int gravityDB_count(const enum gravity_tables list, const bool total)
 {
 	if(!gravityDB_opened && !gravityDB_open())
@@ -1373,7 +1373,7 @@ int gravityDB_count(const enum gravity_tables list, const bool total)
 		log_err("gravityDB_count(%s) - SQL error step %s", querystr, DB_LAST_ERR(gravity_db));
 
 		if(list == GRAVITY_TABLE)
-			log_warn("Count of gravity domains not available. Please run pihole -g");
+			log_warn("Count of gravity domains not available. Please run lorentz -g");
 
 		gravityDB_finalizeTable();
 		gravityDB_close();
@@ -3128,7 +3128,7 @@ void check_inaccessible_adlists(void)
 {
 	// Check if any adlist was inaccessible in the last gravity run
 	// If so, gravity stored `status` in the adlist table with
-	// "3": List unavailable, Pi-hole used a local copy
+	// "3": List unavailable, Lorentz used a local copy
 	// "4": List unavailable, there is no local copy available
 
 	// Do not proceed when database is not available

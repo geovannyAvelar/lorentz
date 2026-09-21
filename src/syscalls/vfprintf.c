@@ -1,15 +1,15 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
-*  Pi-hole syscall implementation for vfprintf
+*  Lorentz Engine
+*  Lorentz syscall implementation for vfprintf
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
-//#include "syscalls.h" is implicitly done in FTL.h
+#include "lorentz.h"
+//#include "syscalls.h" is implicitly done in lorentz.h
 #include "log.h"
 
 // itoa implementation using only static memory
@@ -95,7 +95,7 @@ void syscalls_report_error(const char *error, FILE *stream, const int _errno, co
 }
 
 // The actual vfprintf() routine
-int FTLvfprintf(FILE *stream, const char *file, const char *func, const int line, const char *format, va_list args)
+int Lorentzvfprintf(FILE *stream, const char *file, const char *func, const int line, const char *format, va_list args)
 {
 	// Print into dynamically allocated memory
 	char *buffer = NULL;

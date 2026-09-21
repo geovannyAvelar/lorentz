@@ -1,15 +1,15 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  ARP scanning routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 // Inspired by https://stackoverflow.com/a/39287433 but heavily modified
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "arp-scan.h"
 #include "log.h"
 // get_hardware_address()
@@ -684,7 +684,7 @@ int run_arp_scan(const bool scan_all, const bool extreme_mode)
 				// STATUS_INITIALIZING, and the progress loop
 				// below waits for every counted slot to reach a
 				// finished state, so counting it hangs
-				// pihole-FTL arp-scan for good
+				// lorentz arp-scan for good
 				if(pthread_create(&scanthread[tid], &attr, arp_scan_iface, &thread_data[tid] ) != 0)
 					printf("Unable to launch thread for interface %s, skipping...\n",
 						tmp->ifa_name);

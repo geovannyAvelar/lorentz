@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/network
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api/api.h"
@@ -32,7 +32,7 @@
 // nlroutes(), nladdrs(), nllinks()
 #include "tools/netlink.h"
 
-int get_gateway(struct ftl_conn *api, cJSON * json, const bool detailed)
+int get_gateway(struct lorentz_conn *api, cJSON * json, const bool detailed)
 {
 	// Get routing information
 	cJSON *routes = JSON_NEW_ARRAY();
@@ -119,7 +119,7 @@ int get_gateway(struct ftl_conn *api, cJSON * json, const bool detailed)
 	return 0;
 }
 
-int api_network_gateway(struct ftl_conn *api)
+int api_network_gateway(struct lorentz_conn *api)
 {
 	// Get ?detailed parameter
 	bool detailed = false;
@@ -131,7 +131,7 @@ int api_network_gateway(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int api_network_routes(struct ftl_conn *api)
+int api_network_routes(struct lorentz_conn *api)
 {
 	// Get ?detailed parameter
 	bool detailed = false;
@@ -145,7 +145,7 @@ int api_network_routes(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int api_network_interfaces(struct ftl_conn *api)
+int api_network_interfaces(struct lorentz_conn *api)
 {
 	// Get ?detailed parameter
 	bool detailed = false;
@@ -162,7 +162,7 @@ int api_network_interfaces(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-static int api_network_devices_GET(struct ftl_conn *api)
+static int api_network_devices_GET(struct lorentz_conn *api)
 {
 	// Does the user request a custom number of devices to be included?
 	unsigned int device_count = 10;
@@ -172,7 +172,7 @@ static int api_network_devices_GET(struct ftl_conn *api)
 	unsigned int address_count = 3;
 	get_uint_var(api->request->query_string, "max_addresses", &address_count);
 
-	// Open pihole-FTL.db database file
+	// Open lorentz.db database file
 	db_stmt *device_stmt = NULL, *ip_stmt = NULL;
 	db_conn *db = dbopen(true, false);
 	if(db == NULL)
@@ -280,7 +280,7 @@ static int api_network_devices_GET(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-static int api_network_devices_DELETE(struct ftl_conn *api)
+static int api_network_devices_DELETE(struct lorentz_conn *api)
 {
 	// Get device ID
 	int device_id = 0;
@@ -292,7 +292,7 @@ static int api_network_devices_DELETE(struct ftl_conn *api)
 		                       NULL);
 	}
 
-	// Open pihole-FTL.db database file
+	// Open lorentz.db database file
 	db_conn *db = dbopen(false, false);
 	if(db == NULL)
 	{
@@ -326,7 +326,7 @@ static int api_network_devices_DELETE(struct ftl_conn *api)
 	JSON_SEND_OBJECT_CODE(json, deleted > 0 ? 204 : 404);
 }
 
-int api_network_devices(struct ftl_conn *api)
+int api_network_devices(struct lorentz_conn *api)
 {
 	if(api->method == HTTP_GET)
 	{
@@ -345,7 +345,7 @@ int api_network_devices(struct ftl_conn *api)
 	}
 }
 
-int api_client_suggestions(struct ftl_conn *api)
+int api_client_suggestions(struct lorentz_conn *api)
 {
 	// Get client suggestions
 	if(api->method != HTTP_GET)
@@ -361,7 +361,7 @@ int api_client_suggestions(struct ftl_conn *api)
 	bool ipv4_only = true;
 	get_bool_var(api->request->query_string, "ipv4_only", &ipv4_only);
 
-	// Open pihole-FTL.db database file connection
+	// Open lorentz.db database file connection
 	db_conn *db = dbopen(true, false);
 	if(db == NULL)
 	{

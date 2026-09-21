@@ -1,15 +1,15 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Event queue processing routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
 
-#include "FTL.h"
+#include "lorentz.h"
 // public prototypes
 #include "events.h"
 // atomic_exchange()
@@ -50,7 +50,7 @@ void _set_event(const enum events event, int line, const char *function, const c
 
 // Raise an event from a signal handler
 // SIGRT_handler() already states that nothing async-signal-unsafe may run in
-// it, but set_event() reaches log_debug() and from there _FTL_log(), which
+// it, but set_event() reaches log_debug() and from there _Lorentz_log(), which
 // formats with printf and can take the SHM lock. Neither is allowed to happen
 // with a signal interrupting arbitrary code, so the signal path gets the
 // exchange on its own: the event is logged where it is processed anyway

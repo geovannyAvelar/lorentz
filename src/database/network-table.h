@@ -1,16 +1,16 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
-*  pihole-FTL.db -> network tables prototypes
+*  Lorentz Engine
+*  lorentz.db -> network tables prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 #ifndef NETWORKTABLE_H
 #define NETWORKTABLE_H
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "db-driver.h"
 
 bool create_network_table(db_conn *db);

@@ -1,6 +1,6 @@
 
 """
-Pi-hole FTL API integration tests -- authentication workflow.
+Lorentz API integration tests -- authentication workflow.
 
 These tests are ORDER-DEPENDENT: the application password must be created
 and set before the regular password tests can run. Method names are
@@ -21,7 +21,7 @@ import stat
 import pytest
 import requests
 
-FTL_URL = "http://127.0.0.1"
+LORENTZ_URL = "http://127.0.0.1"
 
 
 class TestAuthWorkflow:
@@ -46,7 +46,7 @@ class TestAuthWorkflow:
 
     def test_01_no_password_means_session_valid(self):
         """API authorization (without password): No login required."""
-        r = requests.get(f"{FTL_URL}/api/auth", timeout=5)
+        r = requests.get(f"{LORENTZ_URL}/api/auth", timeout=5)
         assert r.status_code == 200
         data = r.json()
         session = data["session"]
@@ -60,7 +60,7 @@ class TestAuthWorkflow:
 
     def test_02_create_app_password(self):
         """Create application password and extract password + hash."""
-        r = requests.get(f"{FTL_URL}/api/auth/app", timeout=5)
+        r = requests.get(f"{LORENTZ_URL}/api/auth/app", timeout=5)
         assert r.status_code == 200
         data = r.json()
 
@@ -83,7 +83,7 @@ class TestAuthWorkflow:
 
         pwhash = TestAuthWorkflow._app_pwhash
         r = requests.patch(
-            f"{FTL_URL}/api/config/webserver/api/app_pwhash",
+            f"{LORENTZ_URL}/api/config/webserver/api/app_pwhash",
             json={"config": {"webserver": {"api": {"app_pwhash": pwhash}}}},
             timeout=20,
         )
@@ -99,7 +99,7 @@ class TestAuthWorkflow:
             "test_02 must run first to generate the password"
 
         r = requests.post(
-            f"{FTL_URL}/api/auth",
+            f"{LORENTZ_URL}/api/auth",
             json={"password": TestAuthWorkflow._app_password},
             timeout=10,
         )
@@ -110,8 +110,8 @@ class TestAuthWorkflow:
     # -- 04b: CLI password file is correct --
 
     def test_04b_cli_password_file(self):
-        """CLI password file (/etc/pihole/cli_pw) is well-formed."""
-        cli_pw_path = "/etc/pihole/cli_pw"
+        """CLI password file (/etc/lorentz/cli_pw) is well-formed."""
+        cli_pw_path = "/etc/lorentz/cli_pw"
 
         assert os.path.isfile(cli_pw_path), f"{cli_pw_path} does not exist"
 
@@ -143,7 +143,7 @@ class TestAuthWorkflow:
         and the config is written to disk.
         """
         r = requests.patch(
-            f"{FTL_URL}/api/config/webserver/api/password",
+            f"{LORENTZ_URL}/api/config/webserver/api/password",
             json={"config": {"webserver": {"api": {"password": "ABC"}}}},
             timeout=20,
         )
@@ -156,7 +156,7 @@ class TestAuthWorkflow:
     def test_06_incorrect_password_rejected(self):
         """API authorization (with password): Incorrect password is rejected."""
         r = requests.post(
-            f"{FTL_URL}/api/auth",
+            f"{LORENTZ_URL}/api/auth",
             json={"password": "XXX"},
             timeout=5,
         )
@@ -174,7 +174,7 @@ class TestAuthWorkflow:
     def test_07_correct_password_accepted(self):
         """API authorization (with password): Correct password is accepted."""
         r = requests.post(
-            f"{FTL_URL}/api/auth",
+            f"{LORENTZ_URL}/api/auth",
             json={"password": "ABC"},
             timeout=5,
         )
@@ -194,7 +194,7 @@ class TestAuthWorkflow:
         """DELETE /api/auth invalidates the current session (returns 204)."""
         # Login to get a valid session
         r = requests.post(
-            f"{FTL_URL}/api/auth",
+            f"{LORENTZ_URL}/api/auth",
             json={"password": "ABC"},
             timeout=5,
         )
@@ -204,8 +204,8 @@ class TestAuthWorkflow:
 
         # Logout via DELETE
         r = requests.delete(
-            f"{FTL_URL}/api/auth",
-            headers={"X-FTL-SID": sid},
+            f"{LORENTZ_URL}/api/auth",
+            headers={"X-Lorentz-SID": sid},
             timeout=5,
         )
         assert r.status_code == 204, \
@@ -213,8 +213,8 @@ class TestAuthWorkflow:
 
         # Verify session is no longer valid
         r = requests.get(
-            f"{FTL_URL}/api/auth",
-            headers={"X-FTL-SID": sid},
+            f"{LORENTZ_URL}/api/auth",
+            headers={"X-Lorentz-SID": sid},
             timeout=5,
         )
         assert r.status_code == 401, \
@@ -226,7 +226,7 @@ class TestAuthWorkflow:
         """DELETE /api/auth/session/{id} removes a specific session."""
         # Login to get a session
         r = requests.post(
-            f"{FTL_URL}/api/auth",
+            f"{LORENTZ_URL}/api/auth",
             json={"password": "ABC"},
             timeout=5,
         )
@@ -235,8 +235,8 @@ class TestAuthWorkflow:
 
         # List sessions to find the ID
         r = requests.get(
-            f"{FTL_URL}/api/auth/sessions",
-            headers={"X-FTL-SID": sid},
+            f"{LORENTZ_URL}/api/auth/sessions",
+            headers={"X-Lorentz-SID": sid},
             timeout=5,
         )
         assert r.status_code == 200
@@ -250,8 +250,8 @@ class TestAuthWorkflow:
 
         # Delete by ID
         r = requests.delete(
-            f"{FTL_URL}/api/auth/session/{session_id}",
-            headers={"X-FTL-SID": sid},
+            f"{LORENTZ_URL}/api/auth/session/{session_id}",
+            headers={"X-Lorentz-SID": sid},
             timeout=5,
         )
         assert r.status_code == 204, \
@@ -269,17 +269,17 @@ class TestAuthWorkflow:
             pw = "".join(random.choices(string.printable, k=random.randint(1, 64)))
             try:
                 r = requests.post(
-                    f"{FTL_URL}/api/auth",
+                    f"{LORENTZ_URL}/api/auth",
                     json={"password": pw},
                     timeout=5,
                 )
             except requests.ConnectionError:
-                # FTL may forcefully close the connection when rate limiting
-                # Wait for FTL to recover before subsequent tests
+                # Lorentz may forcefully close the connection when rate limiting
+                # Wait for Lorentz to recover before subsequent tests
                 time.sleep(2)
                 return
             if r.status_code == 429:
-                # Wait for FTL to recover from rate limiting
+                # Wait for Lorentz to recover from rate limiting
                 time.sleep(2)
                 return
 
@@ -288,14 +288,14 @@ class TestAuthWorkflow:
     # -- 09: remove the password --
 
     def test_09_remove_password(self):
-        """Remove the password so FTL returns to unauthenticated state.
+        """Remove the password so Lorentz returns to unauthenticated state.
 
         We first need to log in to get a valid session, then use that
         session to remove the password.
         """
         # Login first
         r = requests.post(
-            f"{FTL_URL}/api/auth",
+            f"{LORENTZ_URL}/api/auth",
             json={"password": "ABC"},
             timeout=10,
         )
@@ -304,16 +304,16 @@ class TestAuthWorkflow:
 
         # Remove password using the session
         r = requests.patch(
-            f"{FTL_URL}/api/config/webserver/api/password",
+            f"{LORENTZ_URL}/api/config/webserver/api/password",
             json={"config": {"webserver": {"api": {"password": ""}}}},
-            headers={"X-FTL-SID": sid},
+            headers={"X-Lorentz-SID": sid},
             timeout=20,
         )
         assert r.status_code == 200
 
         # Also clear the app password hash
         r = requests.patch(
-            f"{FTL_URL}/api/config/webserver/api/app_pwhash",
+            f"{LORENTZ_URL}/api/config/webserver/api/app_pwhash",
             json={"config": {"webserver": {"api": {"app_pwhash": ""}}}},
             timeout=20,
         )
@@ -323,7 +323,7 @@ class TestAuthWorkflow:
 
     def test_10_no_password_after_removal(self):
         """After password removal, session is valid without login."""
-        r = requests.get(f"{FTL_URL}/api/auth", timeout=5)
+        r = requests.get(f"{LORENTZ_URL}/api/auth", timeout=5)
         assert r.status_code == 200
         data = r.json()
         session = data["session"]

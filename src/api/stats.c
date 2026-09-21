@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api/api.h"
@@ -112,7 +112,7 @@ static bool matches_filter(const regex_t *regex, const unsigned int N_regex, con
 	return false;
 }
 
-static int get_query_types_obj(struct ftl_conn *api, cJSON *types)
+static int get_query_types_obj(struct lorentz_conn *api, cJSON *types)
 {
 	for(unsigned int i = TYPE_A; i < TYPE_MAX; i++)
 	{
@@ -144,7 +144,7 @@ unsigned int get_active_clients(void)
 	return activeclients;
 }
 
-int api_stats_summary(struct ftl_conn *api)
+int api_stats_summary(struct lorentz_conn *api)
 {
 	// Lock shared memory
 	lock_shm();
@@ -210,7 +210,7 @@ int api_stats_summary(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-cJSON *get_top_domains(struct ftl_conn *api, const int count,
+cJSON *get_top_domains(struct lorentz_conn *api, const int count,
                        const bool blocked, const bool domains_only)
 {
 	// Exit before processing any data if requested via config setting
@@ -387,7 +387,7 @@ cJSON *get_top_domains(struct ftl_conn *api, const int count,
 	return json;
 }
 
-int api_stats_top_domains(struct ftl_conn *api)
+int api_stats_top_domains(struct lorentz_conn *api)
 {
 	bool blocked = false; // Can be overwritten by query string
 	int count = 10;
@@ -406,7 +406,7 @@ int api_stats_top_domains(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-cJSON *get_top_clients(struct ftl_conn *api, const int count,
+cJSON *get_top_clients(struct lorentz_conn *api, const int count,
                        const bool blocked, const bool clients_only,
                        const bool names_only, const bool ip_if_no_name)
 {
@@ -616,7 +616,7 @@ cJSON *get_top_clients(struct ftl_conn *api, const int count,
 	return json;
 }
 
-int api_stats_top_clients(struct ftl_conn *api)
+int api_stats_top_clients(struct lorentz_conn *api)
 {
 	bool blocked = false; // Can be overwritten by query string
 	int count = 10;
@@ -635,7 +635,7 @@ int api_stats_top_clients(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-cJSON *get_top_upstreams(struct ftl_conn *api, const bool upstreams_only)
+cJSON *get_top_upstreams(struct lorentz_conn *api, const bool upstreams_only)
 {
 	const int upstreams = counters->upstreams;
 	const int forwarded_count = get_forwarded_count();
@@ -791,13 +791,13 @@ cJSON *get_top_upstreams(struct ftl_conn *api, const bool upstreams_only)
 	return json;
 }
 
-int api_stats_upstreams(struct ftl_conn *api)
+int api_stats_upstreams(struct lorentz_conn *api)
 {
 	cJSON *json = get_top_upstreams(api, false);
 	JSON_SEND_OBJECT(json);
 }
 
-int api_stats_query_types(struct ftl_conn *api)
+int api_stats_query_types(struct lorentz_conn *api)
 {
 	// Lock shared memory
 	lock_shm();
@@ -820,7 +820,7 @@ int api_stats_query_types(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int api_stats_recentblocked(struct ftl_conn *api)
+int api_stats_recentblocked(struct lorentz_conn *api)
 {
 	// Exit before processing any data if requested via config setting
 	if(config.misc.privacylevel.v.privacy_level >= PRIVACY_HIDE_DOMAINS)

@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Global enums
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -284,7 +284,7 @@ enum message_type {
 } __attribute__ ((packed));
 
 enum ptr_type {
-	PTR_PIHOLE,
+	PTR_LORENTZ,
 	PTR_HOSTNAME,
 	PTR_HOSTNAMEFQDN,
 	PTR_NONE,
@@ -307,7 +307,7 @@ enum listening_mode {
 } __attribute__ ((packed));
 
 enum fifo_logs {
-	FIFO_FTL = 1,
+	FIFO_LORENTZ = 1,
 	FIFO_DNSMASQ,
 	FIFO_WEBSERVER,
 	FIFO_MAX

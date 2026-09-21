@@ -19,7 +19,7 @@
 #include "dnsmasq.h"
 #include <setjmp.h>
 
-/* Pi-hole modification */
+/* Lorentz modification */
 #include "log.h"
 /************************/
 
@@ -6112,11 +6112,11 @@ void read_opts(int argc, char **argv, char *compile_opts)
       add_txt("auth.bind", NULL, TXT_STAT_AUTH);
 #endif
       add_txt("servers.bind", NULL, TXT_STAT_SERVERS);
-      /* Pi-hole modification */
-      add_txt("version.ftl", (char*)get_FTL_version(), 0 );
-      add_txt("api.ftl", NULL, TXT_API_DOMAIN);
-      add_txt("domain.api.ftl", NULL, TXT_API_DOMAIN);
-      add_txt("local.api.ftl", NULL, TXT_API_LOCAL);
+      /* Lorentz modification */
+      add_txt("version.lorentz", (char*)get_Lorentz_version(), 0 );
+      add_txt("api.lorentz", NULL, TXT_API_DOMAIN);
+      add_txt("domain.api.lorentz", NULL, TXT_API_DOMAIN);
+      add_txt("local.api.lorentz", NULL, TXT_API_LOCAL);
       /************************/
     }
 #endif
@@ -6336,7 +6336,7 @@ void read_opts(int argc, char **argv, char *compile_opts)
     }
 }  
 
-/******************** Pi-hole extension ********************/
+/******************** Lorentz extension ********************/
 void reset_usage_indicator(void)
 {
   for (unsigned int i = 0; usage[i].opt != 0; i++)

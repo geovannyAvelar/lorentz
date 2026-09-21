@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  TOML config writer prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -10,6 +10,6 @@
 #ifndef TOML_WRITER_H
 #define TOML_WRITER_H
 
-bool writeFTLtoml(const bool verbose, FILE *fp);
+bool writeLorentztoml(const bool verbose, FILE *fp);
 
 #endif //TOML_WRITER_H

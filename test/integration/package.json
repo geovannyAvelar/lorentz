@@ -1,15 +1,15 @@
 {
-  "name": "pihole-ftl-integration-tests",
+  "name": "lorentz-integration-tests",
   "private": true,
   "version": "1.0.0",
-  "description": "Container based integration tests that run a real pihole-FTL binary",
+  "description": "Container based integration tests that run a real lorentz binary",
   "type": "module",
   "license": "EUPL-1.2",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 --test-timeout=900000 ftl.integration.test.mjs"
+    "test": "node --test --test-concurrency=1 --test-timeout=900000 lorentz.integration.test.mjs"
   },
   "devDependencies": {
     "testcontainers": "^11.0.0"

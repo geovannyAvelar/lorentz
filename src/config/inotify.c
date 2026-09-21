@@ -1,15 +1,15 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Config inotify routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
 #include "config/inotify.h"
-#include "FTL.h"
+#include "lorentz.h"
 #include "log.h"
 #include <sys/inotify.h>
 // NAME_MAX
@@ -24,7 +24,7 @@
 // free()
 #include <stdlib.h>
 
-#define WATCHDIR "/etc/pihole"
+#define WATCHDIR "/etc/lorentz"
 
 static int inotify_fd = -1;
 static int inotify_wd = -1;
@@ -118,7 +118,7 @@ bool check_inotify_event(void)
 		{
 			// File opened for writing was closed
 			log_debug(DEBUG_INOTIFY, "File written: "WATCHDIR"/%s", event->name);
-			if(strcmp(event->name, "pihole.toml") == 0)
+			if(strcmp(event->name, "lorentz.toml") == 0)
 				config_changed = true;
 		}
 		else if(event->mask & IN_CREATE)
@@ -135,7 +135,7 @@ bool check_inotify_event(void)
 		{
 			// File was moved (target)
 			log_debug(DEBUG_INOTIFY, "File moved to: "WATCHDIR"/%s", event->name);
-			if(strcmp(event->name, "pihole.toml") == 0)
+			if(strcmp(event->name, "lorentz.toml") == 0)
 				config_changed = true;
 		}
 		else if(event->mask & IN_DELETE)

@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2026 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Regression harness for the Teleporter database code
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -11,7 +11,7 @@
 // The Teleporter keeps its database code in file-internal functions. Including
 // the implementation files here makes them reachable; the harness is linked
 // with --allow-multiple-definition so the copies built into this translation
-// unit take the place of the ones in the FTL object set.
+// unit take the place of the ones in the Lorentz object set.
 #include "zip/teleporter.c"
 #include "api/teleporter.c"
 #include "../test/db_layer_test.h"
@@ -78,9 +78,9 @@ void test_teleporter(void)
 	CHECK(count(dest, "domainlist") > 0);
 	db_free_buffer(image);
 
-	// FTL database tables
-	const char *ftl = db_test_path("tele-ftl.db");
-	db = db_open(ftl, DB_OPEN_READWRITE | DB_OPEN_CREATE);
+	// Lorentz database tables
+	const char *lorentz = db_test_path("tele-lorentz.db");
+	db = db_open(lorentz, DB_OPEN_READWRITE | DB_OPEN_CREATE);
 	CHECK(db_exec(db, "CREATE TABLE message(id INTEGER PRIMARY KEY, x TEXT);"
 	                  "INSERT INTO message(x) VALUES('a'),('b');"
 	                  "CREATE TABLE aliasclient(id INTEGER);"
@@ -88,11 +88,11 @@ void test_teleporter(void)
 	                  "INSERT INTO network VALUES(1,'aa');"
 	                  "CREATE TABLE network_addresses(network_id INTEGER, ip TEXT);") == DB_OK);
 	db_close(db);
-	CHECK(create_teleporter_database(ftl, ftl_tables, ArraySize(ftl_tables), &image, &size));
-	const char *ftl_dest = db_test_path("tele-ftl-dest.db");
-	CHECK(copy_file(ftl, ftl_dest));
-	CHECK(test_and_import_database(image, size, ftl_dest, ftl_tables, ArraySize(ftl_tables), hint) == NULL);
-	CHECK(count(ftl_dest, "message") == 2 && count(ftl_dest, "network") == 1);
+	CHECK(create_teleporter_database(lorentz, lorentz_tables, ArraySize(lorentz_tables), &image, &size));
+	const char *lorentz_dest = db_test_path("tele-lorentz-dest.db");
+	CHECK(copy_file(lorentz, lorentz_dest));
+	CHECK(test_and_import_database(image, size, lorentz_dest, lorentz_tables, ArraySize(lorentz_tables), hint) == NULL);
+	CHECK(count(lorentz_dest, "message") == 2 && count(lorentz_dest, "network") == 1);
 	db_free_buffer(image);
 
 	// Rejected input, with an explanation for the user
@@ -100,17 +100,17 @@ void test_teleporter(void)
 	memset(junk, 0, sizeof(junk));
 	memcpy(junk, "SQLite format 3", 15);
 	memset(hint, 0, sizeof(hint));
-	CHECK(test_and_import_database(junk, sizeof(junk), ftl_dest, ftl_tables, ArraySize(ftl_tables), hint) != NULL);
+	CHECK(test_and_import_database(junk, sizeof(junk), lorentz_dest, lorentz_tables, ArraySize(lorentz_tables), hint) != NULL);
 	CHECK(strlen(hint) > 0);
-	CHECK(test_and_import_database(junk, 50, ftl_dest, ftl_tables, ArraySize(ftl_tables), hint) != NULL);
+	CHECK(test_and_import_database(junk, 50, lorentz_dest, lorentz_tables, ArraySize(lorentz_tables), hint) != NULL);
 	CHECK(test_and_import_database("not a database at all, just text........................................"
 	                               "........................................................................",
-	                               120, ftl_dest, ftl_tables, ArraySize(ftl_tables), hint) != NULL);
+	                               120, lorentz_dest, lorentz_tables, ArraySize(lorentz_tables), hint) != NULL);
 
 	// A table the source does not have cannot be exported
-	CHECK(!create_teleporter_database(ftl, gravity_tables, ArraySize(gravity_tables), &image, &size));
+	CHECK(!create_teleporter_database(lorentz, gravity_tables, ArraySize(gravity_tables), &image, &size));
 
-	// ---- JSON import of a Pi-hole v5 Teleporter file (api/teleporter.c) ----
+	// ---- JSON import of a Lorentz v5 Teleporter file (api/teleporter.c) ----
 	const char *gravity = db_test_make_gravity_db("tele-json.db");
 	CHECK(gravity != NULL);
 	config.files.gravity.v.s = (char*)gravity;

@@ -1,18 +1,18 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Linux capability check routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
 // Definition of LINUX_CAPABILITY_VERSION_*
-#define FTLDNS
+#define LORENTZDNS
 #include "dnsmasq/dnsmasq.h"
 #undef __USE_XOPEN
-#include "FTL.h"
+#include "lorentz.h"
 #include "capabilities.h"
 #include "config/config.h"
 #include "log.h"
@@ -101,7 +101,7 @@ static bool get_caps(cap_user_data_t *data, cap_user_header_t *hdr_out)
  *
  * Clears the capability from the effective and inheritable sets and lowers it
  * in the ambient set, so neither this thread nor anything it executes can use
- * it. It stays in the permitted set: FTL restarts itself through execvp(), and
+ * it. It stays in the permitted set: Lorentz restarts itself through execvp(), and
  * a binary without file capabilities - the systemd installation - only keeps
  * what is in the ambient set across that. restore_capability_for_exec() needs
  * the permitted copy to hand the capability to the restarted process.
@@ -116,7 +116,7 @@ bool suspend_capability(const unsigned int cap)
 	if(!get_caps(&data, &hdr))
 		return false;
 
-	// All capabilities FTL uses live in the first 32 bit block
+	// All capabilities Lorentz uses live in the first 32 bit block
 	data[0].effective &= ~(1U << cap);
 	data[0].inheritable &= ~(1U << cap);
 
@@ -137,11 +137,11 @@ bool suspend_capability(const unsigned int cap)
 }
 
 /**
- * @brief Hands a capability to the process FTL is about to become.
+ * @brief Hands a capability to the process Lorentz is about to become.
  *
  * Puts a capability that is still permitted back into the effective,
- * inheritable and ambient sets. Only to be called right before FTL replaces
- * itself through execvp(): the restarted FTL withholds it from its children
+ * inheritable and ambient sets. Only to be called right before Lorentz replaces
+ * itself through execvp(): the restarted Lorentz withholds it from its children
  * again before it starts any thread.
  *
  * @param cap The capability to restore.
@@ -174,15 +174,15 @@ bool restore_capability_for_exec(const unsigned int cap)
 }
 
 /**
- * @brief Keeps a capability for FTL itself but denies it to any child.
+ * @brief Keeps a capability for Lorentz itself but denies it to any child.
  *
- * Leaves the capability in the permitted and effective sets so FTL can still
+ * Leaves the capability in the permitted and effective sets so Lorentz can still
  * use it, but clears it from the inheritable set and lowers it in the ambient
  * set. A capability may sit in the ambient set only while it is both permitted
  * and inheritable, so clearing inheritable also bars it from the ambient set.
  * An exec()ed child - a DHCP script, a program a Lua page spawns - receives
  * capabilities through the ambient set, so this is what stops the capability
- * leaking out of the process while FTL retains it.
+ * leaking out of the process while Lorentz retains it.
  *
  * @param cap The capability to withhold from children.
  * @return true if the sets were updated, false otherwise.
@@ -344,12 +344,12 @@ bool check_capabilities(void)
 	                                      config.ntp.sync.active.v.b,
 	                                      "setting the system time from the NTP client");
 
-	// Always needed: FTL chowns the files it creates to the pihole user. It
+	// Always needed: Lorentz chowns the files it creates to the lorentz user. It
 	// takes the capability out of use once startup is done, so only the
 	// permitted set tells whether it was granted
 	if(!(data->permitted & (1u << CAP_CHOWN)))
 	{
-		log_warn("Linux capability CAP_CHOWN is not available, needed for taking ownership of the files FTL creates");
+		log_warn("Linux capability CAP_CHOWN is not available, needed for taking ownership of the files Lorentz creates");
 		capabilities_okay = false;
 	}
 

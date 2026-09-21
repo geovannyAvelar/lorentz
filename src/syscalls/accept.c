@@ -1,19 +1,19 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
-*  Pi-hole syscall implementation for accept
+*  Lorentz Engine
+*  Lorentz syscall implementation for accept
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
-//#include "syscalls.h" is implicitly done in FTL.h
+#include "lorentz.h"
+//#include "syscalls.h" is implicitly done in lorentz.h
 #include "log.h"
 
 #undef accept
-int FTLaccept(int sockfd, struct sockaddr *addr, socklen_t *addrlen, const char *file, const char *func, const int line)
+int Lorentzaccept(int sockfd, struct sockaddr *addr, socklen_t *addrlen, const char *file, const char *func, const int line)
 {
 	int ret = 0;
 	do

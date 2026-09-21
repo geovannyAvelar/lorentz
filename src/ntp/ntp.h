@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2024 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  NTP prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -11,7 +11,7 @@
 #ifndef NTP_H
 #define NTP_H
 
-#include "FTL.h"
+#include "lorentz.h"
 // TIMESTR_SIZE
 #include "log.h"
 

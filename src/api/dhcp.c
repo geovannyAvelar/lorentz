@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/dhcp
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api.h"
@@ -16,7 +16,7 @@
 // rotate_files()
 #include "files.h"
 
-int api_dhcp_leases_GET(struct ftl_conn *api)
+int api_dhcp_leases_GET(struct lorentz_conn *api)
 {
 	// Get DHCP leases
 	cJSON *leases = JSON_NEW_ARRAY();
@@ -73,10 +73,10 @@ int api_dhcp_leases_GET(struct ftl_conn *api)
 }
 
 // defined in dnsmasq_interface.c
-extern bool FTL_unlink_DHCP_lease(const char *ipaddr, const char **hint);
+extern bool Lorentz_unlink_DHCP_lease(const char *ipaddr, const char **hint);
 
 // Delete DHCP leases
-int api_dhcp_leases_DELETE(struct ftl_conn *api)
+int api_dhcp_leases_DELETE(struct lorentz_conn *api)
 {
 	// Validate input (must be a valid IP address)
 	struct sockaddr_in sa;
@@ -97,7 +97,7 @@ int api_dhcp_leases_DELETE(struct ftl_conn *api)
 	log_debug(DEBUG_API, "Deleting DHCP lease for address %s", api->item);
 
 	const char *hint = NULL;
-	const bool found = FTL_unlink_DHCP_lease(api->item, &hint);
+	const bool found = Lorentz_unlink_DHCP_lease(api->item, &hint);
 	if(!found && hint != NULL)
 	{
 		// Send error when something went wrong (hint is not NULL)

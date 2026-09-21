@@ -42,7 +42,7 @@ struct gzip_test {
 	void (*run)(void);
 };
 
-void _FTL_log(const int priority, const enum debug_flag flag, const char *format, ...)
+void _Lorentz_log(const int priority, const enum debug_flag flag, const char *format, ...)
 {
 	(void)priority;
 	(void)flag;
@@ -62,7 +62,7 @@ void format_memory_size(char prefix[2], const off_t bytes, double * const format
 	*formatted = (double)bytes;
 }
 
-bool FTLfree(void *ptr, const char *file, const char *func, const int line)
+bool Lorentzfree(void *ptr, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -71,7 +71,7 @@ bool FTLfree(void *ptr, const char *file, const char *func, const int line)
 	return true;
 }
 
-void *FTLcalloc(size_t n, size_t size, const char *file, const char *func, const int line)
+void *Lorentzcalloc(size_t n, size_t size, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -79,7 +79,7 @@ void *FTLcalloc(size_t n, size_t size, const char *file, const char *func, const
 	return calloc(n, size);
 }
 
-void *FTLrealloc(void *ptr, size_t size, const char *file, const char *func, const int line)
+void *Lorentzrealloc(void *ptr, size_t size, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -87,7 +87,7 @@ void *FTLrealloc(void *ptr, size_t size, const char *file, const char *func, con
 	return realloc(ptr, size);
 }
 
-FILE *FTLfopen(const char *pathname, const char *mode, const char *file, const char *func, const int line)
+FILE *Lorentzfopen(const char *pathname, const char *mode, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -95,7 +95,7 @@ FILE *FTLfopen(const char *pathname, const char *mode, const char *file, const c
 	return fopen(pathname, mode);
 }
 
-int FTLfprintf(FILE *stream, const char *file, const char *func, const int line, const char *format, ...)
+int Lorentzfprintf(FILE *stream, const char *file, const char *func, const int line, const char *format, ...)
 {
 	(void)file;
 	(void)func;
@@ -108,7 +108,7 @@ int FTLfprintf(FILE *stream, const char *file, const char *func, const int line,
 	return ret;
 }
 
-int FTLvfprintf(FILE *stream, const char *file, const char *func, const int line, const char *format, va_list args)
+int Lorentzvfprintf(FILE *stream, const char *file, const char *func, const int line, const char *format, va_list args)
 {
 	(void)file;
 	(void)func;
@@ -116,7 +116,7 @@ int FTLvfprintf(FILE *stream, const char *file, const char *func, const int line
 	return vfprintf(stream, format, args);
 }
 
-int FTLsnprintf(const char *file, const char *func, const int line, char *buffer, const size_t maxlen, const char *format, ...)
+int Lorentzsnprintf(const char *file, const char *func, const int line, char *buffer, const size_t maxlen, const char *format, ...)
 {
 	(void)file;
 	(void)func;
@@ -129,7 +129,7 @@ int FTLsnprintf(const char *file, const char *func, const int line, char *buffer
 	return ret;
 }
 
-int FTLvsnprintf(const char *file, const char *func, const int line, char *buffer, const size_t maxlen, const char *format, va_list args)
+int Lorentzvsnprintf(const char *file, const char *func, const int line, char *buffer, const size_t maxlen, const char *format, va_list args)
 {
 	(void)file;
 	(void)func;
@@ -137,7 +137,7 @@ int FTLvsnprintf(const char *file, const char *func, const int line, char *buffe
 	return vsnprintf(buffer, maxlen, format, args);
 }
 
-void *FTLmemset(void *s, const int c, const size_t n, const char *file, const char *func, const int line)
+void *Lorentzmemset(void *s, const int c, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -145,7 +145,7 @@ void *FTLmemset(void *s, const int c, const size_t n, const char *file, const ch
 	return memset(s, c, n);
 }
 
-void *FTLmemcpy(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
+void *Lorentzmemcpy(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -153,7 +153,7 @@ void *FTLmemcpy(void *dest, const void *src, const size_t n, const char *file, c
 	return memcpy(dest, src, n);
 }
 
-void *FTLmemmove(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
+void *Lorentzmemmove(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -161,7 +161,7 @@ void *FTLmemmove(void *dest, const void *src, const size_t n, const char *file, 
 	return memmove(dest, src, n);
 }
 
-size_t FTLstrlen(const char *s, const char *file, const char *func, const int line)
+size_t Lorentzstrlen(const char *s, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -169,7 +169,7 @@ size_t FTLstrlen(const char *s, const char *file, const char *func, const int li
 	return strlen(s);
 }
 
-int FTLmemcmp(const void *s1, const void *s2, const size_t n, const char *file, const char *func, const int line)
+int Lorentzmemcmp(const void *s1, const void *s2, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;

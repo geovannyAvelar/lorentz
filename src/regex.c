@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Regular Expressions
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "regex_r.h"
 #include "timers.h"
 #include "log.h"
@@ -21,7 +21,7 @@
 #include "database/message-table.h"
 // init_shmem()
 #include "shmem.h"
-// readFTLconf()
+// readLorentzconf()
 #include "config/config.h"
 // cli_stuff()
 #include "args.h"
@@ -137,25 +137,25 @@ unsigned int __attribute__((pure)) get_num_regex(const enum regex_type regexid)
 	return num_regex[regexid];
 }
 
-#define FTL_REGEX_SEP ";"
+#define LORENTZ_REGEX_SEP ";"
 /* Compile regular expressions into data structures that can be used with
    regexec() to match against a string */
 bool compile_regex(const char *regexin, regexData *regex, char **message)
 {
-	// Extract possible Pi-hole extensions
+	// Extract possible Lorentz extensions
 	char *rgxbuf = calloc(strlen(regexin) + 1u, sizeof(char));
-	// Parse special FTL syntax if present
-	if(strstr(regexin, FTL_REGEX_SEP) != NULL)
+	// Parse special Lorentz syntax if present
+	if(strstr(regexin, LORENTZ_REGEX_SEP) != NULL)
 	{
 		char *buf = strdup(regexin);
-		// Extract regular expression pattern in front of FTL-specific syntax
+		// Extract regular expression pattern in front of Lorentz-specific syntax
 		char *saveptr = NULL;
-		char *part = strtok_r(buf, FTL_REGEX_SEP, &saveptr);
+		char *part = strtok_r(buf, LORENTZ_REGEX_SEP, &saveptr);
 		if(part != NULL)
 			strncpy(rgxbuf, part, strlen(part));
 
-		// Analyze FTL-specific parts
-		while((part = strtok_r(NULL, FTL_REGEX_SEP, &saveptr)) != NULL)
+		// Analyze Lorentz-specific parts
+		while((part = strtok_r(NULL, LORENTZ_REGEX_SEP, &saveptr)) != NULL)
 		{
 			char extra[256] = { 0 };
 			// options like
@@ -538,7 +538,7 @@ static int match_regex(const char *input, DNSCacheData *dns_cache, const int cli
 		// Print no match message when in regex debug mode
 		if(match_idx == -1)
 		{
-			log_debug(DEBUG_REGEX, "Regex %s (FTL %u, DB %i) NO match: \"%s\" (input) vs. \"%s\" (regex)",
+			log_debug(DEBUG_REGEX, "Regex %s (Lorentz %u, DB %i) NO match: \"%s\" (input) vs. \"%s\" (regex)",
 			          regextype[regexid], index, regex->database_id, input, regex->string);
 		}
 	}
@@ -851,7 +851,7 @@ void read_regex_from_database(void)
 		reload_per_client_regex(client);
 	}
 
-	// Print message to FTL's log after reloading regex filters
+	// Print message to Lorentz's log after reloading regex filters
 	log_info("Compiled %u allow and %u deny regex for %u client%s in %.1f msec",
 	         num_regex[REGEX_ALLOW], num_regex[REGEX_DENY],
 	         counters->clients, counters->clients > 1 ? "s" : "",
@@ -865,9 +865,9 @@ int regex_test(const bool debug_mode, const bool quiet, const char *domainin, co
 	// Disable terminal output during config config file parsing
 	log_ctrl(false, false);
 
-	// Process pihole-FTL.conf to get gravity.db path
+	// Process lorentz.conf to get gravity.db path
 	// Do not overwrite the file after reading it
-	readFTLconf(&config, false);
+	readLorentzconf(&config, false);
 
 	// Disable all debugging output if not explicitly in debug mode (CLI argument "d")
 	if(!debug_mode)

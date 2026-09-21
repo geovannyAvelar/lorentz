@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API routes
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 // struct mg_connection
 #include "webserver/civetweb/civetweb.h"
 #include "webserver/http-common.h"
@@ -20,12 +20,12 @@
 // struct config
 #include "config/config.h"
 
-static int api_endpoints(struct ftl_conn *api);
+static int api_endpoints(struct lorentz_conn *api);
 
 static struct {
 	const char *uri;
 	const char *parameters;
-	int (*func)(struct ftl_conn *api);
+	int (*func)(struct lorentz_conn *api);
 	struct api_options opts;
 	bool require_auth;
 	enum http_method methods;
@@ -62,14 +62,14 @@ static struct {
 	{ "/api/info/database",                     "",                           api_info_database,                     { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
 	{ "/api/info/sensors",                      "",                           api_info_sensors,                      { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
 	{ "/api/info/host",                         "",                           api_info_host,                         { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
-	{ "/api/info/ftl",                          "",                           api_info_ftl,                          { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
+	{ "/api/info/lorentz",                          "",                           api_info_lorentz,                          { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
 	{ "/api/info/version",                      "",                           api_info_version,                      { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
 	{ "/api/info/messages/count",               "",                           api_info_messages_count,               { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
 	{ "/api/info/messages",                     "/{message_id}",              api_info_messages,                     { API_PARSE_JSON, 0                         }, true,  HTTP_DELETE },
 	{ "/api/info/messages",                     "",                           api_info_messages,                     { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
 	{ "/api/info/metrics",                      "",                           api_info_metrics,                      { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
 	{ "/api/logs/dnsmasq",                      "",                           api_logs,                              { API_PARSE_JSON, FIFO_DNSMASQ              }, true,  HTTP_GET },
-	{ "/api/logs/ftl",                          "",                           api_logs,                              { API_PARSE_JSON, FIFO_FTL                  }, true,  HTTP_GET },
+	{ "/api/logs/lorentz",                          "",                           api_logs,                              { API_PARSE_JSON, FIFO_LORENTZ                  }, true,  HTTP_GET },
 	{ "/api/logs/webserver",                    "",                           api_logs,                              { API_PARSE_JSON, FIFO_WEBSERVER            }, true,  HTTP_GET },
 	{ "/api/history/clients",                   "",                           api_history_clients,                   { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
 	{ "/api/history/database/clients",          "",                           api_history_database_clients,          { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
@@ -191,7 +191,7 @@ int api_handler(struct mg_connection *conn, void *ignored)
 	(void)ignored;
 
 	// Prepare API info struct
-	struct ftl_conn api = {
+	struct lorentz_conn api = {
 		conn,
 		mg_get_request_info(conn),
 		http_method(conn),
@@ -349,7 +349,7 @@ int api_handler(struct mg_connection *conn, void *ignored)
 			// 15.5.6 requires a 405 to name the methods that do
 			char allow[128];
 			format_allowed_methods(allow, sizeof(allow), allowed_methods);
-			snprintf(pi_hole_extra_headers, sizeof(pi_hole_extra_headers),
+			snprintf(lorentz_extra_headers, sizeof(lorentz_extra_headers),
 			         "Allow: %s", allow);
 
 			ret = send_json_error(&api, 405,
@@ -367,14 +367,14 @@ int api_handler(struct mg_connection *conn, void *ignored)
 		}
 	}
 
-	// Restart FTL if requested
-	if(api.ftl.restart)
-		restart_ftl(api.ftl.restart_reason);
+	// Restart Lorentz if requested
+	if(api.lorentz.restart)
+		restart_lorentz(api.lorentz.restart_reason);
 
 	return ret;
 }
 
-static int api_endpoints(struct ftl_conn *api)
+static int api_endpoints(struct lorentz_conn *api)
 {
 	cJSON *get = JSON_NEW_ARRAY();
 	cJSON *post = JSON_NEW_ARRAY();

@@ -3,12 +3,12 @@ components:
   paths:
     teleporter:
       get:
-        summary: Export Pi-hole settings
+        summary: Export Lorentz settings
         tags:
-          - "Pi-hole configuration"
+          - "Lorentz configuration"
         operationId: "get_teleporter"
         description: |
-          Request an archived copy of your Pi-hole's current configuration.
+          Request an archived copy of your Lorentz's current configuration.
           Authentication via header or cookie is required for the endpoint.
         responses:
           '200':
@@ -27,12 +27,12 @@ components:
                     - $ref: 'common.yaml#/components/errors/unauthorized'
                     - $ref: 'common.yaml#/components/schemas/took'
       post:
-        summary: Import Pi-hole settings
+        summary: Import Lorentz settings
         tags:
-          - "Pi-hole configuration"
+          - "Lorentz configuration"
         operationId: "post_teleporter"
         description: |
-          Upload a Pi-hole Teleporter archive to (partially) restore from it. Note that this will overwrite your current configuration.
+          Upload a Lorentz Teleporter archive to (partially) restore from it. Note that this will overwrite your current configuration.
           Authentication via header or cookie is required for the endpoint.
         requestBody:
           content:
@@ -48,42 +48,42 @@ components:
                     properties:
                       config:
                         type: boolean
-                        description: "Import Pi-hole configuration"
+                        description: "Import Lorentz configuration"
                         example: true
                       dhcp_leases:
                         type: boolean
-                        description: "Import Pi-hole DHCP leases"
+                        description: "Import Lorentz DHCP leases"
                         example: true
                       gravity:
                         type: object
                         properties:
                           group:
                             type: boolean
-                            description: "Import Pi-hole's groups table"
+                            description: "Import Lorentz's groups table"
                             example: true
                           adlist:
                             type: boolean
-                            description: "Import Pi-hole's adlist table"
+                            description: "Import Lorentz's adlist table"
                             example: true
                           adlist_by_group:
                             type: boolean
-                            description: "Import Pi-hole's table relating adlist entries to groups"
+                            description: "Import Lorentz's table relating adlist entries to groups"
                             example: true
                           domainlist:
                             type: boolean
-                            description: "Import Pi-hole's domainlist table"
+                            description: "Import Lorentz's domainlist table"
                             example: true
                           domainlist_by_group:
                             type: boolean
-                            description: "Import Pi-hole's table relating domainlist entries to groups"
+                            description: "Import Lorentz's table relating domainlist entries to groups"
                             example: true
                           client:
                             type: boolean
-                            description: "Import Pi-hole's client table"
+                            description: "Import Lorentz's client table"
                             example: true
                           client_by_group:
                             type: boolean
-                            description: "Import Pi-hole's table relating client entries to groups"
+                            description: "Import Lorentz's table relating client entries to groups"
                             example: true
                     description: "A JSON object of files to import. If omitted, all files will be imported."
         responses:
@@ -149,8 +149,8 @@ components:
     teleporter:
       value:
         processed:
-          - etc/pihole/pihole.toml
-          - etc/pihole/gravity.db->group
-          - etc/pihole/gravity.db->adlist
-          - etc/pihole/gravity.db->adlist_by_group
+          - etc/lorentz/lorentz.toml
+          - etc/lorentz/gravity.db->group
+          - etc/lorentz/gravity.db->adlist
+          - etc/lorentz/gravity.db->adlist_by_group
         took: 0.003

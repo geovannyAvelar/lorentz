@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  TOML config writer routines
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -23,17 +23,17 @@
 #include <limits.h>
 // escape_json()
 #include "webserver/http-common.h"
-// chown_pihole()
+// chown_lorentz()
 #include "files.h"
 
 // Open the TOML file for reading or writing
-FILE * __attribute((malloc)) __attribute((nonnull(1))) openFTLtoml(const char *mode, const unsigned int version, bool *locked)
+FILE * __attribute((malloc)) __attribute((nonnull(1))) openLorentztoml(const char *mode, const unsigned int version, bool *locked)
 {
 	// This should not happen, install a safeguard anyway to unveil
 	// possible future coding issues early on
 	if(mode[0] == 'w' && version != 0)
 	{
-		log_crit("Writing to version != 0 is not supported in openFTLtoml(%s,%u)",
+		log_crit("Writing to version != 0 is not supported in openLorentztoml(%s,%u)",
 		         mode, version);
 		exit(EXIT_FAILURE);
 	}
@@ -52,7 +52,7 @@ FILE * __attribute((malloc)) __attribute((nonnull(1))) openFTLtoml(const char *m
 	else
 	{
 		// Use rotated config file
-		snprintf(filename, sizeof(filename), BACKUP_DIR"/pihole.toml.%u", version);
+		snprintf(filename, sizeof(filename), BACKUP_DIR"/lorentz.toml.%u", version);
 	}
 
 	// Try to open config file. For writing this deliberately does not go
@@ -105,7 +105,7 @@ FILE * __attribute((malloc)) __attribute((nonnull(1))) openFTLtoml(const char *m
 }
 
 // Open the TOML file for reading or writing
-bool closeFTLtoml(FILE *fp, const bool locked)
+bool closeLorentztoml(FILE *fp, const bool locked)
 {
 	bool okay = true;
 
@@ -117,7 +117,7 @@ bool closeFTLtoml(FILE *fp, const bool locked)
 	const int fn = fileno(fp);
 	const int mode = fcntl(fn, F_GETFL);
 	if (mode == -1)
-		log_err("Cannot get access mode for FTL's config file: %s", strerror(errno));
+		log_err("Cannot get access mode for Lorentz's config file: %s", strerror(errno));
 
 	// A write error shows up here and nowhere else: fprintf() sets the
 	// error indicator and carries on, and the bytes are lost at the flush.
@@ -128,12 +128,12 @@ bool closeFTLtoml(FILE *fp, const bool locked)
 	{
 		if(fflush(fp) != 0 || ferror(fp))
 		{
-			log_err("Cannot write FTL's config file: %s", strerror(errno));
+			log_err("Cannot write Lorentz's config file: %s", strerror(errno));
 			okay = false;
 		}
 		else if(fsync(fn) != 0)
 		{
-			log_err("Cannot flush FTL's config file to disk: %s", strerror(errno));
+			log_err("Cannot flush Lorentz's config file to disk: %s", strerror(errno));
 			okay = false;
 		}
 	}
@@ -141,7 +141,7 @@ bool closeFTLtoml(FILE *fp, const bool locked)
 	// Close file
 	if(fclose(fp) != 0)
 	{
-		log_err("Cannot close FTL's config file: %s", strerror(errno));
+		log_err("Cannot close Lorentz's config file: %s", strerror(errno));
 		okay = false;
 	}
 
@@ -153,7 +153,7 @@ bool closeFTLtoml(FILE *fp, const bool locked)
 		// that will subsequently be moved into place. In either case, ensure that the
 		// permissions of the file we have touched here are correct.
 		const bool read_only = (mode & O_ACCMODE) == O_RDONLY;
-		chown_pihole(read_only ? GLOBALTOMLPATH : GLOBALTOMLPATH".tmp", NULL);
+		chown_lorentz(read_only ? GLOBALTOMLPATH : GLOBALTOMLPATH".tmp", NULL);
 	}
 
 	return okay;
@@ -356,7 +356,7 @@ void print_toml_allowed_values(const cJSON *allowed_values, FILE *fp, const unsi
 	}
 	else
 	{
-		print_comment(fp, "UNKNOWN, please contact Pi-hole support", "    ", 85, indent);
+		print_comment(fp, "UNKNOWN, please contact Lorentz support", "    ", 85, indent);
 	}
 }
 
@@ -498,7 +498,7 @@ void writeTOMLvalue(FILE * fp, const int indent, const enum conf_type t, union c
 
 // A key that is absent and a key holding the wrong type end up in the same
 // place below, but they are not the same thing: the second is something the
-// user wrote, and readFTLconf() rewrites pihole.toml with the compiled-in
+// user wrote, and readLorentzconf() rewrites lorentz.toml with the compiled-in
 // default afterwards, so their edit disappears from the file with nothing said.
 // The environment and CLI paths both warn about this, so this one does too
 static void log_absent_or_wrong_type(const toml_datum_t val, const struct conf_item *conf_item,
@@ -510,7 +510,7 @@ static void log_absent_or_wrong_type(const toml_datum_t val, const struct conf_i
 	}
 	else
 	{
-		log_warn("Ignoring %s in pihole.toml: not a valid %s", conf_item->k, expected);
+		log_warn("Ignoring %s in lorentz.toml: not a valid %s", conf_item->k, expected);
 	}
 }
 
@@ -548,7 +548,7 @@ void readTOMLvalue(struct conf_item *conf_item, const char* key, toml_datum_t to
 			const toml_datum_t val = toml_table_find(toml, key);
 			// Range-checked like the unsigned cases below: v.i is a
 			// 32-bit int and TOML integers are 64-bit, so without this
-			// an out-of-range value in pihole.toml is silently
+			// an out-of-range value in lorentz.toml is silently
 			// truncated into something else entirely
 			if(val.type == TOML_INT64 && val.u.int64 >= INT_MIN && val.u.int64 <= INT_MAX)
 				conf_item->v.i = val.u.int64;

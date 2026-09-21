@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  DNS Client Implementation
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "resolve.h"
 #include "shmem.h"
 // struct config
@@ -953,10 +953,10 @@ bool resolveHostname(const int sock, const bool tcp,
 	}
 
 	// Check if this is the internal client
-	// if so, return "pi.hole" as hostname
+	// if so, return "lorentz.lan" as hostname
 	if(strcmp(addr, "::") == 0)
 	{
-		strncpy(hostn, "pi.hole", MAXDOMAINLEN);
+		strncpy(hostn, "lorentz.lan", MAXDOMAINLEN);
 		log_debug(DEBUG_RESOLVER, "---> \"%s\" (special)", hostn);
 		return true;
 	}

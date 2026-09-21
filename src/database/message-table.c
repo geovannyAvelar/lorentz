@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Message table routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "database/message-table.h"
 #include "database/common.h"
 // logging routines
@@ -29,7 +29,7 @@
 #include "database/query-table.h"
 // escape_html()
 #include "webserver/http-common.h"
-// GIT_HASH, FTL_ARCH
+// GIT_HASH, LORENTZ_ARCH
 #include "version.h"
 
 // Number of arguments in a variadic macro
@@ -259,8 +259,8 @@ static unsigned char message_blob_types[MAX_MESSAGE][5] =
 			// VERIFY_MESSAGE: The message column contains the error
 			DB_TYPE_TEXT, // expected checksum
 			DB_TYPE_TEXT, // actual checksum
-			DB_TYPE_TEXT, // FTL commit hash
-			DB_TYPE_TEXT, // FTL architecture
+			DB_TYPE_TEXT, // Lorentz commit hash
+			DB_TYPE_TEXT, // Lorentz architecture
 			DB_TYPE_NULL // not used
 		},
 		{
@@ -298,7 +298,7 @@ bool create_message_table(db_conn *db)
 	                                    "blob5 BLOB );");
 
 	// Update database version to 6
-	if(!db_set_FTL_property(db, DB_VERSION, 6))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 6))
 	{
 		log_err("create_message_table(): Failed to update database version!");
 		dbquery(db, "ROLLBACK");
@@ -340,7 +340,7 @@ static int _add_message(const enum message_type type,
 
 	int rowid = -1;
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return -1;
 
 	// Check if message type is known
@@ -518,7 +518,7 @@ end_of_add_message: // Close database connection
 bool delete_message(cJSON *ids, int *deleted)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	db_conn *db;
@@ -615,7 +615,7 @@ static void format_regex_message(char *plain, const int sizeof_plain, char *html
 static void format_subnet_message(char *plain, const int sizeof_plain, char *html, const int sizeof_html, const char *ip, const int matching_count, const char *names, const char *matching_ids, const char *chosen_match_text, const int chosen_match_id)
 {
 	if(snprintf(plain, sizeof_plain, "Client %s is managed by %i groups (IDs %s), all describing the same subnet. "
-	            "FTL chose the most recent entry %s (ID %i) to obtain the group configuration for this client.",
+	            "Lorentz chose the most recent entry %s (ID %i) to obtain the group configuration for this client.",
 	            ip, matching_count, matching_ids,
 	            chosen_match_text, chosen_match_id) > sizeof_plain)
 		log_warn("format_subnet_message(): Buffer too small to hold plain message, warning truncated");
@@ -641,7 +641,7 @@ static void format_subnet_message(char *plain, const int sizeof_plain, char *htm
 	}
 
 	if(snprintf(html, sizeof_html, "Client <code>%s</code> is managed by %i groups (IDs [%s]), all describing the same subnet:<pre>%s</pre>"
-	            "FTL chose the most recent entry (ID %i) to obtain the group configuration for this client.",
+	            "Lorentz chose the most recent entry (ID %i) to obtain the group configuration for this client.",
 	            escaped_ip, matching_count, escaped_ids, escaped_names, chosen_match_id) > sizeof_html)
 		log_warn("format_subnet_message(): Buffer too small to hold HTML message, warning truncated");
 
@@ -702,7 +702,7 @@ static void format_dnsmasq_config_message(char *plain, const int sizeof_plain, c
 	if(escaped_message == NULL)
 		return;
 
-	if(snprintf(html, sizeof_html, "FTL failed to start due to %s.", escaped_message) > sizeof_html)
+	if(snprintf(html, sizeof_html, "Lorentz failed to start due to %s.", escaped_message) > sizeof_html)
 		log_warn("format_dnsmasq_config_message(): Buffer too small to hold HTML message, warning truncated");
 
 	free(escaped_message);
@@ -993,7 +993,7 @@ static void format_verify_message(char *plain, const int sizeof_plain, char *htm
                                   const char *message, const char *expected, const char *actual,
                                   const char *commit, const char *arch)
 {
-	if(snprintf(plain, sizeof_plain, "%s - expected \"%s\", but got \"%s\" - FTL commit is %s on %s",
+	if(snprintf(plain, sizeof_plain, "%s - expected \"%s\", but got \"%s\" - Lorentz commit is %s on %s",
 	            message, expected, actual, commit, arch) > sizeof_plain)
 		log_warn("format_verify_message(): Buffer too small to hold plain message, warning truncated");
 
@@ -1011,7 +1011,7 @@ static void format_verify_message(char *plain, const int sizeof_plain, char *htm
 	if(escaped_message == NULL || escaped_expected == NULL || escaped_actual == NULL || escaped_commit == NULL || escaped_arch == NULL)
 		return;
 
-	if(snprintf(html, sizeof_html, "%s<br>Expected: <pre>%s</pre><br>Actual: <pre>%s</pre><br>FTL commit is <code>%s</code> on <code>%s</code>",
+	if(snprintf(html, sizeof_html, "%s<br>Expected: <pre>%s</pre><br>Actual: <pre>%s</pre><br>Lorentz commit is <code>%s</code> on <code>%s</code>",
 	            escaped_message, escaped_expected, escaped_actual, escaped_commit, escaped_arch) > sizeof_html)
 		log_warn("format_verify_message(): Buffer too small to hold HTML message, warning truncated");
 
@@ -1041,9 +1041,9 @@ static void format_teleporter_skipped_message(char *plain, const int sizeof_plai
 
 	if(snprintf(html, sizeof_html,
 	            "The imported Teleporter archive contained a value for <code>%s</code>, which was <strong>not</strong> applied.<br><br>"
-	            "This setting can name a program Pi-hole then runs, so it cannot be changed through the web interface or the API. "
+	            "This setting can name a program Lorentz then runs, so it cannot be changed through the web interface or the API. "
 	            "Everything else in the archive was imported as usual and the value configured on this host was kept.<br><br>"
-	            "To change it, edit <code>%s</code>, set the matching environment variable, or use <code>pihole-FTL --config</code>.",
+	            "To change it, edit <code>%s</code>, set the matching environment variable, or use <code>lorentz --config</code>.",
 	            escaped_key, GLOBALTOMLPATH) > sizeof_html)
 		log_warn("format_teleporter_skipped_message(): Buffer too small to hold HTML message, warning truncated");
 
@@ -1086,7 +1086,7 @@ int count_messages(void)
 {
 	int count = 0;
 
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return count;
 
 	db_conn *db;
@@ -1140,7 +1140,7 @@ end_of_count_messages: // Close database connection
 
 bool format_messages(cJSON *array)
 {
-	if(FTLDBerror())
+	if(LorentzDBerror())
 	{
 		log_err("format_messages() - Database not available");
 		return false;
@@ -1463,7 +1463,7 @@ void logg_regex_warning(const char *type, const char *warning, const int dbindex
 	char buf[2048];
 	format_regex_message(buf, sizeof(buf), NULL, 0, type, regex, warning, dbindex);
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_warn("%s", buf);
 
 	// Add to database
@@ -1481,7 +1481,7 @@ void logg_subnet_warning(const char *ip, const int matching_count, const char *m
 	format_subnet_message(buf, sizeof(buf), NULL, 0, ip, matching_count, names, matching_ids,
 	                      chosen_match_text, chosen_match_id);
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_warn("%s", buf);
 
 	// Log to database
@@ -1501,7 +1501,7 @@ void log_hostname_warning(const char *ip, const char *name, const unsigned int p
 	if(buf[0] == '\0')
 		return;
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_warn("%s", buf);
 
 	// Log to database
@@ -1515,7 +1515,7 @@ void logg_fatal_dnsmasq_message(const char *message)
 	char buf[2048];
 	format_dnsmasq_config_message(buf, sizeof(buf), NULL, 0, message);
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_crit("%s", buf);
 
 	// Log to database
@@ -1531,7 +1531,7 @@ void logg_rate_limit_message(const char *clientIP, const unsigned int rate_limit
 	char buf[2048];
 	format_rate_limit_message(buf, sizeof(buf), NULL, 0, clientIP, config.dns.rateLimit.count.v.ui, config.dns.rateLimit.interval.v.ui, turnaround);
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_info("%s", buf);
 
 	// Log to database
@@ -1545,7 +1545,7 @@ void logg_warn_dnsmasq_message(char *message)
 	char buf[2048];
 	format_dnsmasq_warn_message(buf, sizeof(buf), NULL, 0, message);
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_warn("%s", buf);
 
 	// Log to database
@@ -1562,7 +1562,7 @@ void log_resource_shortage(const double load, const int nprocs, const int shmem,
 	{
 		format_load_message(buf, sizeof(buf), NULL, 0, load, nprocs);
 
-		// Log to FTL.log
+		// Log to lorentz.log
 		log_warn("%s", buf);
 
 		// Log to database
@@ -1574,7 +1574,7 @@ void log_resource_shortage(const double load, const int nprocs, const int shmem,
 	{
 		format_shmem_message(buf, sizeof(buf), NULL, 0, path, shmem, msg);
 
-		// Log to FTL.log
+		// Log to lorentz.log
 		log_warn("%s", buf);
 
 		// Log to database
@@ -1610,7 +1610,7 @@ void log_resource_shortage(const double load, const int nprocs, const int shmem,
 		else
 			format_disk_message(buf, sizeof(buf), NULL, 0, path, disk, msg);
 
-		// Log to FTL.log
+		// Log to lorentz.log
 		log_warn("%s", buf);
 
 		// Log to database
@@ -1628,7 +1628,7 @@ void logg_inaccessible_adlist(const int dbindex, const char *address)
 	char buf[2048];
 	format_inaccessible_adlist_message(buf, sizeof(buf), NULL, 0, address, dbindex);
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_warn("%s", buf);
 
 	// Log to database
@@ -1642,7 +1642,7 @@ void log_certificate_domain_mismatch(const char *certfile, const char *domain)
 	char buf[2048];
 	format_certificate_domain_mismatch(buf, sizeof(buf), NULL, 0, certfile, domain);
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_warn("%s", buf);
 
 	// Log to database
@@ -1656,7 +1656,7 @@ void log_connection_error(const char *server, const char *reason, const char *er
 	char buf[2048];
 	format_connection_error(buf, sizeof(buf), NULL, 0, server, reason, error);
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_warn("%s", buf);
 
 	// Log to database
@@ -1673,7 +1673,7 @@ void log_ntp_message(const bool error, const bool server, const char *message)
 	char buf[2048];
 	format_ntp_message(buf, sizeof(buf), NULL, 0, message, level, who);
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	if(error)
 		log_err("%s", buf);
 	else
@@ -1690,11 +1690,11 @@ void log_verify_message(const char *expected, const char *actual)
 	char buf[2048];
 	snprintf(buf, sizeof(buf), "Corrupt binary detected - this may lead to unexpected behaviour!");
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_crit("%s", buf);
 
 	// Log to database
-	add_message(VERIFY_MESSAGE, buf, expected, actual, git_hash(), ftl_arch());
+	add_message(VERIFY_MESSAGE, buf, expected, actual, git_hash(), lorentz_arch());
 
 }
 
@@ -1704,7 +1704,7 @@ void log_teleporter_skipped(const char *key)
 	char buf[2048];
 	format_teleporter_skipped_message(buf, sizeof(buf), NULL, 0, key);
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_warn("%s", buf);
 
 	// Log to database so it is visible from the web interface
@@ -1717,7 +1717,7 @@ void log_gravity_restored(const char *status)
 	char buf[2048];
 	format_gravity_restored_message(buf, sizeof(buf), NULL, 0, status);
 
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_warn("%s", buf);
 
 	// Log to database

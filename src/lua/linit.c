@@ -21,8 +21,8 @@
 #include "llimits.h"
 
 
-/** Pi-hole modification **/
-#include "ftl_lua.h"
+/** Lorentz modification **/
+#include "lorentz_lua.h"
 /**************************/
 
 /*
@@ -40,8 +40,8 @@ static const luaL_Reg stdlibs[] = {
   {LUA_STRLIBNAME, luaopen_string},
   {LUA_TABLIBNAME, luaopen_table},
   {LUA_UTF8LIBNAME, luaopen_utf8},
-  /****** Pi-hole modification ******/
-  {LUA_PIHOLELIBNAME, luaopen_pihole},
+  /****** Lorentz modification ******/
+  {LUA_LORENTZLIBNAME, luaopen_lorentz},
   /**********************************/
   {NULL, NULL}
 };
@@ -66,7 +66,7 @@ LUALIB_API void luaL_openselectedlibs (lua_State *L, int load, int preload) {
   }
   lua_assert((mask >> 1) == LUA_UTF8LIBK);
   lua_pop(L, 1);  /* remove PRELOAD table */
-  // Load and enable libraries bundled with Pi-hole
-  ftl_lua_init(L);
+  // Load and enable libraries bundled with Lorentz
+  lorentz_lua_init(L);
 }
 

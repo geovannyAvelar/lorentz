@@ -175,8 +175,8 @@ components:
                   example: "fe80::b0e4:1b1e:7b7d:1b1e"
         node_name:
           type: string
-          description: "Pi-hole host's name"
-          example: "pihole"
+          description: "Lorentz host's name"
+          example: "lorentz"
         host_model:
           type: string
           description: "Host model"
@@ -184,7 +184,7 @@ components:
           nullable: true
         config:
           type: object
-          description: "Pi-hole configuration (excerpt)"
+          description: "Lorentz configuration (excerpt)"
           properties:
             dhcp_active:
               type: boolean
@@ -236,7 +236,7 @@ components:
           example: 1.5
         pid:
           type: integer
-          description: "FTL's process ID"
+          description: "Lorentz's process ID"
           example: 1639
         sensors:
           type: object

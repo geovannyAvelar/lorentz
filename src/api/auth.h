@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API authentication prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -19,7 +19,7 @@
 // On 2017-08-27 (after v3.3, before v3.4), nettle changed the type of
 // destination from uint_8t* to char* in all base64 and base16 functions
 // (armor-signedness branch). This is a breaking change as this is a change in
-// signedness causing issues when compiling FTL against older versions of
+// signedness causing issues when compiling Lorentz against older versions of
 // nettle. We create this constant here to have a conversion if necessary.
 // See https://github.com/gnutls/nettle/commit/f2da403135e2b2f641cf0f8219ad5b72083b7dfd
 #if NETTLE_VERSION_MAJOR == 3 && NETTLE_VERSION_MINOR < 4
@@ -40,8 +40,8 @@
 // The trailing %s carries the "; Secure" attribute, which is only appended
 // when the session was established over TLS (see call sites). Adding Secure on
 // plain HTTP would make browsers drop the cookie, breaking non-TLS setups.
-#define FTL_SET_COOKIE "Set-Cookie: sid=%s; SameSite=Lax; Path=/; Max-Age=%u; HttpOnly%s\r\n"
-#define FTL_DELETE_COOKIE "Set-Cookie: sid=deleted; SameSite=Lax; Path=/; Max-Age=-1; Expires=Thu, 01 Jan 1970 00:00:00 GMT;%s\r\n"
+#define LORENTZ_SET_COOKIE "Set-Cookie: sid=%s; SameSite=Lax; Path=/; Max-Age=%u; HttpOnly%s\r\n"
+#define LORENTZ_DELETE_COOKIE "Set-Cookie: sid=deleted; SameSite=Lax; Path=/; Max-Age=-1; Expires=Thu, 01 Jan 1970 00:00:00 GMT;%s\r\n"
 
 struct session {
 	bool used;

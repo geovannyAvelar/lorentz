@@ -1,8 +1,8 @@
 """
-Pi-hole FTL OpenAPI specification validation tests.
+Lorentz OpenAPI specification validation tests.
 
-Verifies that FTL's API implementation matches the OpenAPI specs:
-- Endpoint coverage (OpenAPI ↔ FTL cross-check)
+Verifies that Lorentz's API implementation matches the OpenAPI specs:
+- Endpoint coverage (OpenAPI ↔ Lorentz cross-check)
 - Response schema validation (types, formats, examples)
 - Teleporter export/import round-trip
 
@@ -13,7 +13,7 @@ Usage:
 """
 
 import pytest
-from libs.FTLAPI import FTLAPI
+from libs.LORENTZAPI import LORENTZAPI
 from libs.openAPI import openApi
 from libs.responseVerifyer import ResponseVerifyer
 
@@ -28,35 +28,35 @@ from libs.responseVerifyer import ResponseVerifyer
 
 
 class TestEndpointCoverage:
-    """Cross-check that OpenAPI specs and FTL agree on available endpoints."""
+    """Cross-check that OpenAPI specs and Lorentz agree on available endpoints."""
 
-    def test_openapi_get_endpoints_exist_in_ftl(self, openapi, ftl):
-        """Every GET endpoint in the OpenAPI specs is implemented in FTL."""
+    def test_openapi_get_endpoints_exist_in_lorentz(self, openapi, lorentz):
+        """Every GET endpoint in the OpenAPI specs is implemented in Lorentz."""
         missing = []
         for path in openapi.endpoints["get"]:
-            if path not in ftl.endpoints["get"]:
+            if path not in lorentz.endpoints["get"]:
                 missing.append(path)
         assert missing == [], \
-            "GET endpoints in OpenAPI specs but not in FTL:\n" + \
+            "GET endpoints in OpenAPI specs but not in Lorentz:\n" + \
             "\n".join(f"  {p}" for p in missing)
 
-    def test_ftl_get_endpoints_exist_in_openapi(self, openapi, ftl):
-        """Every GET endpoint in FTL is documented in the OpenAPI specs."""
+    def test_lorentz_get_endpoints_exist_in_openapi(self, openapi, lorentz):
+        """Every GET endpoint in Lorentz is documented in the OpenAPI specs."""
         # /api/docs is intentionally undocumented
         skip = {"/api/docs"}
         missing = []
-        for path in ftl.endpoints["get"]:
+        for path in lorentz.endpoints["get"]:
             if path in skip:
                 continue
             if path not in openapi.endpoints["get"]:
                 missing.append(path)
         assert missing == [], \
-            "GET endpoints in FTL but not in OpenAPI specs:\n" + \
+            "GET endpoints in Lorentz but not in OpenAPI specs:\n" + \
             "\n".join(f"  {p}" for p in missing)
 
-    def test_all_endpoints_cross_check(self, openapi, ftl):
+    def test_all_endpoints_cross_check(self, openapi, lorentz):
         """Full bidirectional check across all HTTP methods."""
-        with ResponseVerifyer(ftl, openapi) as verifyer:
+        with ResponseVerifyer(lorentz, openapi) as verifyer:
             errors, checked = verifyer.verify_endpoints()
         assert errors == [], \
             f"Endpoint cross-check errors ({checked} checked):\n" + \
@@ -66,7 +66,7 @@ class TestEndpointCoverage:
 class TestEndpointResponses:
     """Validate each GET endpoint's response against its OpenAPI schema."""
 
-    def test_get_endpoint_responses(self, openapi, ftl):
+    def test_get_endpoint_responses(self, openapi, lorentz):
         """Each GET endpoint's response matches its OpenAPI spec.
 
         Skips /api/action/* endpoints (would trigger unwanted actions).
@@ -78,7 +78,7 @@ class TestEndpointResponses:
         for path in openapi.endpoints["get"]:
             if path.startswith("/api/action"):
                 continue
-            with ResponseVerifyer(ftl, openapi) as verifyer:
+            with ResponseVerifyer(lorentz, openapi) as verifyer:
                 errors = verifyer.verify_endpoint(path)
                 if verifyer.teleporter_archive is not None:
                     teleporter_archive = verifyer.teleporter_archive
@@ -103,15 +103,15 @@ class TestEndpointResponses:
 class TestTeleporter:
     """Teleporter export/import round-trip via API."""
 
-    def test_teleporter_import(self, openapi, ftl):
+    def test_teleporter_import(self, openapi, lorentz):
         """Re-import the teleporter ZIP archive exported during response tests.
 
-        Teleporter import triggers an internal FTL restart (gravity
-        database reload, exit code 22). We wait for FTL to come back
+        Teleporter import triggers an internal Lorentz restart (gravity
+        database reload, exit code 22). We wait for Lorentz to come back
         afterwards so subsequent tests (auth, rate limiting) have a
         working API.  Note: this is the only API call that causes an
-        FTL restart — password hashing (BALLOON-SHA256) and all other
-        config changes are fully synchronous and do not restart FTL.
+        Lorentz restart — password hashing (BALLOON-SHA256) and all other
+        config changes are fully synchronous and do not restart Lorentz.
         """
         import time
         import requests
@@ -120,13 +120,13 @@ class TestTeleporter:
         if archive is None:
             pytest.skip("No teleporter archive captured during response tests")
 
-        with ResponseVerifyer(ftl, openapi) as verifyer:
+        with ResponseVerifyer(lorentz, openapi) as verifyer:
             errors = verifyer.verify_teleporter_zip(archive)
         assert errors == [], \
             "Teleporter import errors:\n" + \
             "\n".join(f"  - {e}" for e in errors)
 
-        # Wait for FTL to complete its internal restart after teleporter import
+        # Wait for Lorentz to complete its internal restart after teleporter import
         for _ in range(30):
             time.sleep(0.5)
             try:
@@ -135,4 +135,4 @@ class TestTeleporter:
                     return
             except requests.ConnectionError:
                 continue
-        pytest.fail("FTL did not come back after teleporter import")
+        pytest.fail("Lorentz did not come back after teleporter import")

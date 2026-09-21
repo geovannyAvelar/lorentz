@@ -1,6 +1,6 @@
 #!/bin/bash
 # Test script to test names returned for local interfaces
-# The logic of this mechanism has been extracted from piholeDebug.sh
+# The logic of this mechanism has been extracted from lorentzDebug.sh
 
 getIPs() {
     local dig_result addr
@@ -12,9 +12,9 @@ getIPs() {
     addresses="$(ip address show | sed "/${addr_type} /!d;s/^.*${addr_type} //g;s/\/.*$//g;")"
     if [ -n "${addresses}" ]; then
         while IFS= read -r addr ; do
-            # Check if Pi-hole can use itself to block a domain
+            # Check if Lorentz can use itself to block a domain
             dig_result=$(dig +tries=1 +time=2 -x "${addr}" @127.0.0.1 +short)
-            if [[ $addr == "127.0.0.1" && $dig_result == "localhost." ]] || [[ $addr == "::1" && ( $dig_result == "localhost." || $dig_result == "ip6-localhost." ) ]] || [[ $dig_result == "pi.hole." ]]; then
+            if [[ $addr == "127.0.0.1" && $dig_result == "localhost." ]] || [[ $addr == "::1" && ( $dig_result == "localhost." || $dig_result == "ip6-localhost." ) ]] || [[ $dig_result == "lorentz.lan." ]]; then
                 echo "${addr} is \"${dig_result}\": OK"
             else
                 # Otherwise, show a failure

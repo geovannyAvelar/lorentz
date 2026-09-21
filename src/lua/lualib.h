@@ -54,9 +54,9 @@ LUAMOD_API int (luaopen_table) (lua_State *L);
 #define LUA_UTF8LIBK	(LUA_TABLIBK << 1)
 LUAMOD_API int (luaopen_utf8) (lua_State *L);
 
-/************ Pi-hole modification *************/
-#define LUA_PIHOLELIBNAME	"pihole"
-LUAMOD_API int (luaopen_pihole) (lua_State *L);
+/************ Lorentz modification *************/
+#define LUA_LORENTZLIBNAME	"lorentz"
+LUAMOD_API int (luaopen_lorentz) (lua_State *L);
 /***********************************************/
 
 /* open selected libraries */

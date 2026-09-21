@@ -1,8 +1,8 @@
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine
+# Lorentz Engine
 # /src/gen_version.cmake
 #
 # This file is copyright under the latest version of the EUPL.
@@ -70,7 +70,7 @@ endif()
 
 # If CI_ARCH is unset (local compilation), ask uname -m and add locally compiled comment
 if(DEFINED ENV{CI_ARCH})
-    set(FTL_ARCH "$ENV{CI_ARCH} (compiled on CI)")
+    set(LORENTZ_ARCH "$ENV{CI_ARCH} (compiled on CI)")
 else()
     execute_process(
             COMMAND           uname -m
@@ -78,20 +78,20 @@ else()
             ERROR_QUIET
             OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    set(FTL_ARCH "${UNAME} (compiled locally)")
+    set(LORENTZ_ARCH "${UNAME} (compiled locally)")
 endif()
 
 # Get compiler version
 execute_process(
         COMMAND           bash -c "${CMAKE_C_COMPILER} --version | head -n 1"
-        OUTPUT_VARIABLE   FTL_CC
+        OUTPUT_VARIABLE   LORENTZ_CC
         ERROR_QUIET
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-message("Building Pi-hole FTL daemon")
+message("Building Lorentz daemon")
 message("   - Branch: ${GIT_BRANCH}")
-message("   - Architecture: ${FTL_ARCH}")
+message("   - Architecture: ${LORENTZ_ARCH}")
 message("   - Version: ${GIT_VERSION}")
 message("   - Tag: ${GIT_TAG}")
 message("   - Hash: ${GIT_HASH}")

@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Daemon routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "daemon.h"
 #include "config/config.h"
 #include "log.h"
@@ -66,7 +66,7 @@ void go_daemon(void)
 	// PARENT PROCESS. Need to kill it.
 	if (process_id > 0)
 	{
-		printf("FTL started!\n");
+		printf("Lorentz started!\n");
 		// Free config to silence meaningless (but still loud) memcheck
 		// warnings about lost memory concerning the parsed config
 		free_config(&config, true);
@@ -138,7 +138,7 @@ void savePID(void)
 	const pid_t pid = getpid();
 	// Open file for writing
 	FILE *f = NULL;
-	if((f = fopen(FTL_PID_FILE, "w+")) == NULL)
+	if((f = fopen(LORENTZ_PID_FILE, "w+")) == NULL)
 	{
 		// Log error
 		log_warn("Unable to write PID to file: %s", strerror(errno));
@@ -149,7 +149,7 @@ void savePID(void)
 		fprintf(f, "%i", (int)pid);
 		fclose(f);
 	}
-	log_info("PID of FTL process: %i", (int)pid);
+	log_info("PID of Lorentz process: %i", (int)pid);
 }
 
 /**
@@ -165,7 +165,7 @@ static void removePID(void)
 
 	FILE *f = NULL;
 	// Open file for writing to overwrite/empty it
-	if((f = fopen(FTL_PID_FILE, "w")) == NULL)
+	if((f = fopen(LORENTZ_PID_FILE, "w")) == NULL)
 	{
 		log_warn("Unable to empty PID file: %s", strerror(errno));
 		return;
@@ -300,7 +300,7 @@ bool __attribute__ ((const)) is_fork(const pid_t mpid, const pid_t pid)
 	return mpid > -1 && mpid != pid;
 }
 
-pid_t FTL_gettid(void)
+pid_t Lorentz_gettid(void)
 {
 #ifdef SYS_gettid
 	return (pid_t)syscall(SYS_gettid);
@@ -427,7 +427,7 @@ void cleanup(const int ret)
 	// Log deferred SIGTERM sender info (safe here, outside signal context)
 	log_sigterm_info();
 
-	// Do proper cleanup only if FTL started successfully
+	// Do proper cleanup only if Lorentz started successfully
 	if(resolver_ready)
 	{
 		// Terminate threads
@@ -486,30 +486,30 @@ void cleanup(const int ret)
 	const char *source = get_term_source();
 	if(source != NULL)
 		log_info("Terminated by %s", source);
-	if(ret == RESTART_FTL_CODE)
-		log_info("########## FTL terminated after%s (internal restart)! ##########", buffer);
+	if(ret == RESTART_LORENTZ_CODE)
+		log_info("########## Lorentz terminated after%s (internal restart)! ##########", buffer);
 	else
-		log_info("########## FTL terminated after%s (code %i)! ##########", buffer, ret);
+		log_info("########## Lorentz terminated after%s (code %i)! ##########", buffer, ret);
 
 	// Finally, free log config memory
-	if(config.files.log.ftl.t == CONF_STRING_ALLOCATED)
-		free(config.files.log.ftl.v.s);
+	if(config.files.log.lorentz.t == CONF_STRING_ALLOCATED)
+		free(config.files.log.lorentz.v.s);
 }
 
-static float ftl_cpu_usage = 0.0f;
+static float lorentz_cpu_usage = 0.0f;
 static float total_cpu_usage = 0.0f;
 void calc_cpu_usage(const unsigned int interval)
 {
 	// Get number of cores if we are normalizing CPU usage below
 	const unsigned int norm_factor = config.misc.normalizeCPU.v.b ? get_nprocs_conf() : 1;
 
-	// Get the current FTL CPU time
-	const double ftl_cpu_time = parse_proc_self_stat();
+	// Get the current Lorentz CPU time
+	const double lorentz_cpu_time = parse_proc_self_stat();
 
 	// Calculate the CPU usage in this interval
-	static double last_ftl_cpu_time = 0.0f;
-	ftl_cpu_usage = 100.0 * (ftl_cpu_time - last_ftl_cpu_time) / interval / norm_factor;
-	last_ftl_cpu_time = ftl_cpu_time;
+	static double last_lorentz_cpu_time = 0.0f;
+	lorentz_cpu_usage = 100.0 * (lorentz_cpu_time - last_lorentz_cpu_time) / interval / norm_factor;
+	last_lorentz_cpu_time = lorentz_cpu_time;
 
 	// Calculate the total CPU usage
 	const double cpu_time = parse_proc_stat();
@@ -519,16 +519,16 @@ void calc_cpu_usage(const unsigned int interval)
 	total_cpu_usage = 100.0 * (cpu_time - last_cpu_time) / interval / norm_factor;
 	last_cpu_time = cpu_time;
 
-	log_debug(DEBUG_EXTRA, "CPU usage in the last %u seconds: FTL %.4f%%, total %.4f%% (normalized by factor %ux)",
-	          interval, ftl_cpu_usage, total_cpu_usage, norm_factor);
+	log_debug(DEBUG_EXTRA, "CPU usage in the last %u seconds: Lorentz %.4f%%, total %.4f%% (normalized by factor %ux)",
+	          interval, lorentz_cpu_usage, total_cpu_usage, norm_factor);
 }
 
-float __attribute__((pure)) get_ftl_cpu_percentage(void)
+float __attribute__((pure)) get_lorentz_cpu_percentage(void)
 {
 	// Return the smaller of the two values to avoid showing a CPU usage
 	// higher than the total CPU usage. This can happen due to rounding
 	// errors and rare interval comparison differences.
-	return ftl_cpu_usage < total_cpu_usage ? ftl_cpu_usage : total_cpu_usage;
+	return lorentz_cpu_usage < total_cpu_usage ? lorentz_cpu_usage : total_cpu_usage;
 }
 
 float __attribute__((pure)) get_total_cpu_percentage(void)

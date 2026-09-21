@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Query table database routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #define QUERY_TABLE_PRIVATE
 #include "database/query-table.h"
 #include "log.h"
@@ -190,7 +190,7 @@ bool init_memory_database(void)
 	// it is ephemeral and is not expected to survive a power outage.
 	// If database.forceDisk is set, we do not want an in-memory database but, instead,
 	// use an additional on-disk database for query storage. This database is always
-	// recreated from scratch on FTL start and deleted on FTL stop.
+	// recreated from scratch on Lorentz start and deleted on Lorentz stop.
 	const char *db_path = config.database.forceDisk.v.b ? config.files.tmp_db.v.s : ":memory:";
 	const char *open_error = NULL;
 	_memdb = db_open_ex(db_path, DB_OPEN_READWRITE | DB_OPEN_CREATE, &rc, &open_error);
@@ -201,7 +201,7 @@ bool init_memory_database(void)
 		return false;
 	}
 
-	// Explicitly set busy handler to value defined in FTL.h
+	// Explicitly set busy handler to value defined in lorentz.h
 	rc = db_set_busy_handler(_memdb, sqliteBusyCallback, NULL);
 	if(rc != DB_OK)
 	{
@@ -252,7 +252,7 @@ bool init_memory_database(void)
 	// Attach disk database. This may fail if the database is unavailable
 	const bool attached = attach_database(_memdb, NULL, config.files.database.v.s, "disk");
 
-	// Enable WAL mode for the on-disk database (pihole-FTL.db) if
+	// Enable WAL mode for the on-disk database (lorentz.db) if
 	// configured (default is yes). User may not want to enable WAL
 	// mode if the database is on a network share as all processes
 	// accessing the database must be on the same host in WAL mode.
@@ -333,7 +333,7 @@ bool init_memory_database(void)
 	// back entirely on systems where mmap is unavailable.
 	//
 	// No posix_fadvise() pre-warming here (unlike gravity.db) because
-	// pihole-FTL.db can grow to multiple GB on busy networks. Pre-
+	// lorentz.db can grow to multiple GB on busy networks. Pre-
 	// warming the entire file would evict useful cached pages (gravity
 	// B-tree, DNS cache) on memory-constrained systems. The mmap alone
 	// is sufficient: pages fault in on demand during import.
@@ -469,7 +469,7 @@ db_conn *__attribute__((pure)) _get_memdb(const int line, const char *func, cons
 }
 
 // Abort a statement currently running on the in-memory database. Used when
-// FTL terminates while the initial query import is still running.
+// Lorentz terminates while the initial query import is still running.
 void interrupt_memdb(void)
 {
 	if(_memdb != NULL)
@@ -543,7 +543,7 @@ static void log_in_memory_usage(void)
 bool attach_database(db_conn *db, const char **message, const char *path, const char *alias)
 {
 	// Only try to attach database if it is not known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	log_debug(DEBUG_DATABASE, "ATTACH %s AS %s", path, alias);
@@ -733,7 +733,7 @@ bool import_queries_from_disk(void)
 	}
 
 	// sqlite3_interrupt() has no effect on a statement that is not running
-	// yet, so do not start the import when FTL is already terminating
+	// yet, so do not start the import when Lorentz is already terminating
 	if(killed)
 	{
 		db_finalize(stmt);
@@ -834,7 +834,7 @@ bool export_queries_to_disk(const bool final)
 	const double time = double_time() - (final ? 0.0 : REPLY_TIMEOUT);
 
 	// Only try to export to database if it is known to not be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Start database timer
@@ -879,7 +879,7 @@ bool export_queries_to_disk(const bool final)
 
 		/*
 		 * If there are any insertions, we:
-		 * 1. Insert (or replace) the last timestamp into the `disk.ftl` table.
+		 * 1. Insert (or replace) the last timestamp into the `disk.lorentz` table.
 		 * 2. Update the total queries counter in the `disk.counters` table.
 		 * 3. Update the blocked queries counter in the `disk.counters` table.
 		 *
@@ -887,14 +887,14 @@ bool export_queries_to_disk(const bool final)
 		 * of insertions (stored in <insertions>) here as storing
 		 * queries to the database happens time-delayed. In the end, the
 		 * total number of queries will be correct (after final
-		 * synchronization during FTL shutdown).
+		 * synchronization during Lorentz shutdown).
 		 */
 		if(insertions > 0)
 		{
 			// Update number of queries in the disk database (actual number of insertions)
 			diskdb_queries_count += insertions;
 
-			if((rc = dbquery(memdb, "INSERT OR REPLACE INTO disk.ftl (id, value) VALUES ( %i, %f );", DB_LASTTIMESTAMP, new_last_timestamp)) != DB_OK)
+			if((rc = dbquery(memdb, "INSERT OR REPLACE INTO disk.lorentz (id, value) VALUES ( %i, %f );", DB_LASTTIMESTAMP, new_last_timestamp)) != DB_OK)
 				log_err("export_queries_to_disk(): Cannot update timestamp: %s", DB_LAST_ERR(memdb));
 
 			// Use <new_total> and <new_blocked> counters to update
@@ -1028,7 +1028,7 @@ bool delete_old_queries_from_db(const bool use_memdb, const double mintime)
 	{
 		// Get size of on-disk database
 		struct stat st;
-		get_FTL_db_stats(&st);
+		get_Lorentz_db_stats(&st);
 
 		// Log size of database and number of deleted rows
 		log_info("Size of %s is %.2f MB, deleted %"PRId64" of %"PRIu64" rows",
@@ -1051,7 +1051,7 @@ bool add_additional_info_column(db_conn *db)
 	SQL_bool(db, "ALTER TABLE queries ADD COLUMN additional_info TEXT;");
 
 	// Update the database version to 7
-	if(!db_set_FTL_property(db, DB_VERSION, 7))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 7))
 	{
 		log_err("add_additional_info_column(): Failed to update database version!");
 		return false;
@@ -1085,7 +1085,7 @@ bool add_query_storage_columns(db_conn *db)
 	                       "FROM query_storage q");
 
 	// Update database version to 12
-	if(!db_set_FTL_property(db, DB_VERSION, 12))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 12))
 	{
 		log_err("add_query_storage_columns(): Failed to update database version!");
 		return false;
@@ -1117,7 +1117,7 @@ bool add_query_storage_column_regex_id(db_conn *db)
 	                       "FROM query_storage q");
 
 	// Update database version to 13
-	if(!db_set_FTL_property(db, DB_VERSION, 13))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 13))
 	{
 		log_err("add_query_storage_column_regex_id(): Failed to update database version!");
 		return false;
@@ -1129,21 +1129,21 @@ bool add_query_storage_column_regex_id(db_conn *db)
 	return true;
 }
 
-bool add_ftl_table_description(db_conn *db)
+bool add_lorentz_table_description(db_conn *db)
 {
 	// Start transaction of database update
 	SQL_bool(db, "BEGIN");
 
-	// Add additional column to the ftl table
-	SQL_bool(db, "ALTER TABLE ftl ADD COLUMN description TEXT");
+	// Add additional column to the lorentz table
+	SQL_bool(db, "ALTER TABLE lorentz ADD COLUMN description TEXT");
 
-	// Update ftl table
-	SQL_bool(db, "UPDATE ftl SET description = 'Database version' WHERE id = %d", DB_VERSION);
-	SQL_bool(db, "UPDATE ftl SET description = 'Unix timestamp of the latest stored query' WHERE id = %d", DB_LASTTIMESTAMP);
-	SQL_bool(db, "UPDATE ftl SET description = 'Unix timestamp of the database creation' WHERE id = %d", DB_FIRSTCOUNTERTIMESTAMP);
+	// Update lorentz table
+	SQL_bool(db, "UPDATE lorentz SET description = 'Database version' WHERE id = %d", DB_VERSION);
+	SQL_bool(db, "UPDATE lorentz SET description = 'Unix timestamp of the latest stored query' WHERE id = %d", DB_LASTTIMESTAMP);
+	SQL_bool(db, "UPDATE lorentz SET description = 'Unix timestamp of the database creation' WHERE id = %d", DB_FIRSTCOUNTERTIMESTAMP);
 
 	// Update database version to 14
-	if(!db_set_FTL_property(db, DB_VERSION, 14))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 14))
 	{
 		log_err("add_query_storage_column_regex_id(): Failed to update database version!");
 		return false;
@@ -1166,7 +1166,7 @@ bool rename_query_storage_column_regex_id(db_conn *db)
 	// The VIEW queries is automatically updated by SQLite3
 
 	// Update database version to 17
-	if(!db_set_FTL_property(db, DB_VERSION, 17))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 17))
 	{
 		log_err("rename_query_storage_column_regex_id(): Failed to update database version!");
 		return false;
@@ -1198,7 +1198,7 @@ bool add_query_storage_column_ede(db_conn *db)
 	                       "FROM query_storage q");
 
 	// Update database version to 21
-	if(!db_set_FTL_property(db, DB_VERSION, 21))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 21))
 	{
 		log_err("add_query_storage_column_ede(): Failed to update database version!");
 		return false;
@@ -1235,7 +1235,7 @@ bool replace_queries_view_with_joins(db_conn *db)
 	             "LEFT JOIN addinfo_by_id a ON q.additional_info = a.id");
 
 	// Update database version to 22
-	if(!db_set_FTL_property(db, DB_VERSION, 22))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 22))
 	{
 		log_err("replace_queries_view_with_joins(): Failed to update database version!");
 		dbquery(db, "ROLLBACK");
@@ -1286,7 +1286,7 @@ bool optimize_queries_table(db_conn *db)
 	                       "additional_info FROM query_storage q;");
 
 	// Update database version to 10
-	if(!db_set_FTL_property(db, DB_VERSION, 10))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 10))
 	{
 		log_err("optimize_queries_table(): Failed to update database version!");
 		return false;
@@ -1331,7 +1331,7 @@ bool create_addinfo_table(db_conn *db)
 	                       "FROM query_storage q;");
 
 	// Update database version to 11
-	if(!db_set_FTL_property(db, DB_VERSION, 11))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 11))
 	{
 		log_err("create_addinfo_table(): Failed to update database version!");
 		return false;
@@ -1366,8 +1366,8 @@ void DB_read_queries(void)
 	                       "FROM queries";
 
 	// Only try to import from database if it is known to not be broken and
-	// FTL has not been asked to terminate in the meantime
-	if(FTLDBerror() || killed)
+	// Lorentz has not been asked to terminate in the meantime
+	if(LorentzDBerror() || killed)
 		return;
 
 	log_info("Parsing queries in database");
@@ -1581,7 +1581,7 @@ void DB_read_queries(void)
 			const char *CNAMEdomain = (const char *)db_column_text(stmt, 7);
 			if(CNAMEdomain != NULL && strlen(CNAMEdomain) > 0)
 			{
-				// Add domain to FTL's memory but do not count it. Seeing a
+				// Add domain to Lorentz's memory but do not count it. Seeing a
 				// domain in the middle of a CNAME trajectory does not mean
 				// it was queried intentionally.
 				const int CNAMEdomainID = findDomainID(CNAMEdomain, false);
@@ -1685,7 +1685,7 @@ void DB_read_queries(void)
 	}
 
 	if(killed)
-		log_info("Aborted import after %zu queries, FTL is shutting down", imported_queries);
+		log_info("Aborted import after %zu queries, Lorentz is shutting down", imported_queries);
 	else if(rc == DB_DONE)
 		log_info("Imported %zu queries from the long-term database", imported_queries);
 	else
@@ -1708,7 +1708,7 @@ static void init_disk_db_idx(db_conn *memdb)
 	// If the disk database is broken, we cannot import queries from it,
 	// however, as we will also never export any queries, we can safely
 	// assume any index
-	if(FTLDBerror())
+	if(LorentzDBerror())
 	{
 		memdb_queries_maxid = -1;
 		return;
@@ -1810,7 +1810,7 @@ bool queries_to_database(void)
 	unsigned int added = 0, updated = 0;
 
 	// Only try to export to database if it is known to not be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Skip, we never store nor count queries recorded while have been in

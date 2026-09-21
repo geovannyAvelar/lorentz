@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Super client table routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "aliasclients.h"
 #include "common.h"
 // global counters variable
@@ -34,7 +34,7 @@ bool create_aliasclients_table(db_conn *db)
 	SQL_bool(db, "ALTER TABLE network ADD COLUMN aliasclient_id INTEGER;");
 
 	// Update database version to 9
-	if(!db_set_FTL_property(db, DB_VERSION, 9))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 9))
 	{
 		log_err("create_aliasclients_table(): Failed to update database version!");
 		dbquery(db, "ROLLBACK");
@@ -96,7 +96,7 @@ static void recompute_aliasclient(const int aliasclientID)
 bool import_aliasclients(db_conn *db)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	db_stmt *stmt = NULL;
@@ -162,7 +162,7 @@ bool import_aliasclients(db_conn *db)
 		client->aliasclient_id = aliasclient_id;
 
 		// Debug logging
-		log_debug(DEBUG_ALIASCLIENTS, "Added alias-client \"%s\" (%s) with FTL ID %i", name, aliasclient_str, clientID);
+		log_debug(DEBUG_ALIASCLIENTS, "Added alias-client \"%s\" (%s) with Lorentz ID %i", name, aliasclient_str, clientID);
 
 		free(aliasclient_str);
 		imported++;
@@ -188,7 +188,7 @@ static int get_aliasclient_ID(db_conn *db, const clientsData *client)
 	// Get aliasclient ID from database (DB index)
 	const int aliasclient_DBid = getAliasclientIDfromIP(db, clientIP);
 
-	// Compare DB index for all alias-clients stored in FTL
+	// Compare DB index for all alias-clients stored in Lorentz
 	unsigned int aliasclientID = 0;
 	for(; aliasclientID < counters->clients; aliasclientID++)
 	{
@@ -223,10 +223,10 @@ static int get_aliasclient_ID(db_conn *db, const clientsData *client)
 void reset_aliasclient(db_conn *db, clientsData *client)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return;
 
-	// Open pihole-FTL.db database file if needed
+	// Open lorentz.db database file if needed
 	bool db_opened = false;
 	if(db == NULL)
 	{
@@ -267,10 +267,10 @@ void reset_aliasclient(db_conn *db, clientsData *client)
 void reimport_aliasclients(db_conn *db)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return;
 
-	// Open pihole-FTL.db database file if needed
+	// Open lorentz.db database file if needed
 	bool db_opened = false;
 	if(db == NULL)
 	{

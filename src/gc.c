@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Garbage collection routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "gc.h"
 // Access to lookup table arrays (clients_lookup, etc.)
 #define LOOKUP_TABLE_PRIVATE
@@ -421,7 +421,7 @@ void runGC(const time_t now, time_t *lastGCrun, const bool flush)
 		return;
 	}
 
-	// Lock FTL's data structure, since it is likely that it will be changed here
+	// Lock Lorentz's data structure, since it is likely that it will be changed here
 	// Requests should not be processed/answered when data is about to change
 	if(!flush)
 		lock_shm();
@@ -601,7 +601,7 @@ static bool check_files_on_same_device(const char *path1, const char *path2)
  * run at the top of the hour, which is a common time for other tasks to run on
  * the host.
  *
- * This function is called during the initialization of the FTL engine by
+ * This function is called during the initialization of the Lorentz engine by
  * initOverTime()
  *
  * @return The current, possibly altered, GC interval in seconds.
@@ -638,9 +638,9 @@ void *GC_thread(void *val)
 	bool is_debugged = false;
 
 	bool db_and_log_on_same_dev = false;
-	db_and_log_on_same_dev = check_files_on_same_device(config.files.database.v.s, config.files.log.ftl.v.s);
+	db_and_log_on_same_dev = check_files_on_same_device(config.files.database.v.s, config.files.log.lorentz.v.s);
 
-	// Create inotify watcher for pihole.toml config file
+	// Create inotify watcher for lorentz.toml config file
 	watch_config(true);
 
 	// The watcher above reports only what follows it, so compare the file
@@ -686,7 +686,7 @@ void *GC_thread(void *val)
 			// Check disk space of log file only if they are not on
 			// the same file system
 			if(!db_and_log_on_same_dev)
-				LastLogStorageUsage = check_space(config.files.log.ftl.v.s, LastLogStorageUsage);
+				LastLogStorageUsage = check_space(config.files.log.lorentz.v.s, LastLogStorageUsage);
 
 			lastResourceCheck = now;
 		}
@@ -702,7 +702,7 @@ void *GC_thread(void *val)
 		if(killed)
 			break;
 
-		// Check if pihole.toml has been modified
+		// Check if lorentz.toml has been modified
 		if(check_inotify_event())
 		{
 			// Reload config
@@ -735,7 +735,7 @@ void *GC_thread(void *val)
 		if(killed)
 			break;
 
-		// Check if FTL is being debugged and set dnsmasq's debug mode
+		// Check if Lorentz is being debugged and set dnsmasq's debug mode
 		// accordingly
 		const pid_t dpid = debugger();
 		if((dpid > 0) != is_debugged)
@@ -748,7 +748,7 @@ void *GC_thread(void *val)
 		if(killed)
 			break;
 
-		// Check if we need to terminate/restart FTL but this has been
+		// Check if we need to terminate/restart Lorentz but this has been
 		// postponed because of an ongoing gravity run
 		check_if_want_terminate();
 

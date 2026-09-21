@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
-*  Pi-hole password hashing
+*  Lorentz Engine
+*  Lorentz password hashing
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "log.h"
 #include "config/config.h"
 #include "password.h"
@@ -20,7 +20,7 @@
 // Randomness generator
 #include "webserver/x509.h"
 
-// writeFTLtoml()
+// writeLorentztoml()
 #include "config/toml_writer.h"
 
 // crypto library
@@ -46,11 +46,11 @@
 
 // CLI password file and memory
 // We store the password in plain memory. This is not a security issue as the
-// memory is only accessible to the user running the FTL process. Anyone with
+// memory is only accessible to the user running the Lorentz process. Anyone with
 // sufficient access to the memory (ptrace, swapfile) would also have access to
 // the password file. Leaking the password after exit is not a concern as a new
 // password is generated on every start.
-#define CLI_PW_FILE "/etc/pihole/cli_pw"
+#define CLI_PW_FILE "/etc/lorentz/cli_pw"
 static char *cli_password = NULL;
 
 // Convert RAW data into hex representation
@@ -517,7 +517,7 @@ enum password_result verify_password(const char *password, const char *pwhash, c
 					free(config.webserver.api.pwhash.v.s);
 				config.webserver.api.pwhash.v.s = new_hash;
 				config.webserver.api.pwhash.t = CONF_STRING_ALLOCATED;
-				writeFTLtoml(true, NULL);
+				writeLorentztoml(true, NULL);
 			}
 
 			// Successful logins do not count against rate-limiting

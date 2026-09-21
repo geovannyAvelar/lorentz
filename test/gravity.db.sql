@@ -210,14 +210,14 @@ CREATE INDEX idx_antigravity ON antigravity (domain, adlist_id);
 
 /* ^^^ basic gravity table definition, taken from /advanced/Templates/gravity.db.sql ^^^ */
 /* vvv Test content following vvv */
-INSERT INTO domainlist VALUES(1,0,'allowed.ftl',1,1559928803,1559928803,'Migrated from /etc/pihole/whitelist.txt');
-INSERT INTO domainlist VALUES(2,0,'regex1.ftl',1,1559928803,1559928803,'');
+INSERT INTO domainlist VALUES(1,0,'allowed.lorentz',1,1559928803,1559928803,'Migrated from /etc/lorentz/whitelist.txt');
+INSERT INTO domainlist VALUES(2,0,'regex1.lorentz',1,1559928803,1559928803,'');
 INSERT INTO domainlist VALUES(3,2,'regex2',1,1559928803,1559928803,'');
 INSERT INTO domainlist VALUES(4,2,'^gravity-allowed',1,1559928803,1559928803,'');
 
 /* Regular regex */
-INSERT INTO domainlist VALUES(5,1,'denied.ftl',1,1559928803,1559928803,'Migrated from /etc/pihole/blacklist.txt');
-INSERT INTO domainlist VALUES(6,3,'regex[0-9].ftl',1,1559928803,1559928803,'Migrated from /etc/pihole/regex.list');
+INSERT INTO domainlist VALUES(5,1,'denied.lorentz',1,1559928803,1559928803,'Migrated from /etc/lorentz/blacklist.txt');
+INSERT INTO domainlist VALUES(6,3,'regex[0-9].lorentz',1,1559928803,1559928803,'Migrated from /etc/lorentz/regex.list');
 
 /* Regex option testing */
 INSERT INTO domainlist VALUES(7,3,'^regex-NXDOMAIN$;reply=NXDOMAIN',1,1559928803,1559928803,'');
@@ -228,8 +228,8 @@ INSERT INTO domainlist VALUES(11,3,'^regex-REPLYv6$;reply=fe80::1234',1,15599288
 INSERT INTO domainlist VALUES(12,3,'^regex-REPLYv46$;reply=1.2.3.4;reply=fe80::1234',1,1559928803,1559928803,'');
 INSERT INTO domainlist VALUES(13,3,'^regex-A$;querytype=A',1,1559928803,1559928803,'');
 INSERT INTO domainlist VALUES(14,3,'^regex-notA$;querytype=!A',1,1559928803,1559928803,'');
-INSERT INTO domainlist VALUES(15,3,'^regex-multiple.ftl$;querytype=ANY,HTTPS,SVCB;reply=refused',1,1559928803,1559928803,'');
-INSERT INTO domainlist VALUES(16,3,'^regex-notMultiple.ftl$;querytype=!ANY,HTTPS,SVCB;reply=refused',1,1559928803,1559928803,'');
+INSERT INTO domainlist VALUES(15,3,'^regex-multiple.lorentz$;querytype=ANY,HTTPS,SVCB;reply=refused',1,1559928803,1559928803,'');
+INSERT INTO domainlist VALUES(16,3,'^regex-notMultiple.lorentz$;querytype=!ANY,HTTPS,SVCB;reply=refused',1,1559928803,1559928803,'');
 
 /* Other special domains */
 INSERT INTO domainlist VALUES(17,1,'blacklisted-group-disabled.com',1,1559928803,1559928803,'Entry disabled by a group');
@@ -239,17 +239,17 @@ DELETE FROM domainlist_by_group WHERE domainlist_id = 18 AND group_id = 0;
 INSERT INTO adlist VALUES(1,'https://pi-hole.net/block.txt',1,1559928803,1559928803,'Fake block-list',1559928803,2000,2,1,0,0);
 INSERT INTO adlist VALUES(2,'https://pi-hole.net/allow.txt',1,1559928803,1559928803,'Fake allow-list',1559928803,2000,2,1,0,1);
 
-INSERT INTO gravity VALUES('allowed.ftl',1);
-INSERT INTO gravity VALUES('gravity.ftl',1);
-INSERT INTO gravity VALUES('gravity-aaaa.ftl',1);
-INSERT INTO gravity VALUES('gravity-allowed.ftl',1);
-INSERT INTO gravity VALUES('||special.gravity.ftl^',1);
+INSERT INTO gravity VALUES('allowed.lorentz',1);
+INSERT INTO gravity VALUES('gravity.lorentz',1);
+INSERT INTO gravity VALUES('gravity-aaaa.lorentz',1);
+INSERT INTO gravity VALUES('gravity-allowed.lorentz',1);
+INSERT INTO gravity VALUES('||special.gravity.lorentz^',1);
 
-INSERT INTO gravity VALUES('gravity.ftl',1);
-INSERT INTO gravity VALUES('antigravity.ftl',1);
+INSERT INTO gravity VALUES('gravity.lorentz',1);
+INSERT INTO gravity VALUES('antigravity.lorentz',1);
 INSERT INTO gravity VALUES('x.y.z.abp.antigravity',1);
-INSERT INTO antigravity VALUES('antigravity.ftl',2);
-INSERT INTO antigravity VALUES('@@||antigravity.ftl^',2);
+INSERT INTO antigravity VALUES('antigravity.lorentz',2);
+INSERT INTO antigravity VALUES('@@||antigravity.lorentz^',2);
 
 INSERT INTO info VALUES('gravity_count',8);
 INSERT INTO info VALUES('antigravity_count',2);

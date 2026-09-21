@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Signal processing routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 // Universal unwind backtrace via GCC's libgcc - works on glibc AND musl, static AND dynamic
 #if defined(USE_UNWIND)
 #  include <unwind.h>
@@ -36,11 +36,11 @@
 // struct config
 #include "config/config.h"
 
-#define BINARY_NAME "pihole-FTL"
+#define BINARY_NAME "lorentz"
 
 volatile sig_atomic_t killed = 0;
 static volatile pid_t mpid = 0;
-static time_t FTLstarttime = 0;
+static time_t Lorentzstarttime = 0;
 volatile int exit_code = EXIT_SUCCESS;
 
 // Saved by the SIGTERM handler for deferred logging in the main loop.
@@ -50,7 +50,7 @@ static volatile pid_t term_sender_pid = 0;
 static volatile uid_t term_sender_uid = 0;
 
 // Store the SIGTERM source for re-logging during cleanup so the termination
-// reason is always visible near the final "FTL terminated" message, even if
+// reason is always visible near the final "Lorentz terminated" message, even if
 // earlier log lines have been lost (see #2818)
 static char term_source[256] = { 0 };
 
@@ -143,7 +143,7 @@ static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context *ctx, void *ar
 
 #if defined(USE_UNWIND)
 // A single snapshot of all process memory mappings, taken once per unwind
-// attempt.  FTL's /proc/self/maps has well under 100 entries; 512 is a
+// attempt.  Lorentz's /proc/self/maps has well under 100 entries; 512 is a
 // generous ceiling that keeps the snapshot a fixed, allocation-free size.
 #define MAPS_MAX_ENTRIES 512
 struct map_entry {
@@ -796,7 +796,7 @@ static enum a2l_status resolve_frames_addr2line(struct frame_info *fi, const int
 // Log one resolved/unresolved backtrace frame as a single line.  Mirrors gdb's
 // coloring: function names in yellow, source locations / object names in green.
 // cli_color() yields the codes only on an interactive terminal, so the daemon's
-// crash log in FTL.log stays plain text.
+// crash log in lorentz.log stays plain text.
 // Resolved:   "  #N  func_name                    src/file.c:line"
 // Symbol:     "  #N  0xADDR in func (+0xoff) from libc.so.6"
 // Raw:        "  #N  0xADDR in ?? () from <mapping>"
@@ -809,7 +809,7 @@ static void log_frame(const int idx, const struct frame_info *fi)
 	if(fi->resolved)
 	{
 		// Strip the compile-time source root to show project-relative paths
-		// (e.g. "src/signals.c:42" not "/home/user/FTL/src/signals.c:42").
+		// (e.g. "src/signals.c:42" not "/home/user/Lorentz/src/signals.c:42").
 		const char *display_loc = fi->loc;
 #if defined(SOURCE_ROOT)
 		if(strncmp(fi->loc, SOURCE_ROOT, sizeof(SOURCE_ROOT) - 1u) == 0)
@@ -931,7 +931,7 @@ static void symbolize_and_render_frames(void **frames, const int frame_count)
 }
 #endif // USE_UNWIND
 
-// Log backtrace to the FTL log.
+// Log backtrace to the Lorentz log.
 // Prefers walking the interrupted signal context (frame pointers) and falls
 // back to _Unwind_Backtrace (GCC libgcc) when no context is available or the
 // walk yields nothing.  Both paths work on all targets - glibc AND musl,
@@ -985,7 +985,7 @@ static void generate_backtrace_internal(void *context)
 
 	log_info("  --- end of backtrace ---");
 #else
-	log_info("!!! INFO: pihole-FTL has not been compiled with unwinding support, cannot generate backtrace !!!");
+	log_info("!!! INFO: lorentz has not been compiled with unwinding support, cannot generate backtrace !!!");
 #endif
 }
 
@@ -1010,16 +1010,16 @@ static void terminate_error(void)
 static void __attribute__((noreturn)) signal_handler(int sig, siginfo_t *si, void *context)
 {
 	log_info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-	log_info("---------------------------->  FTL crashed!  <----------------------------");
+	log_info("---------------------------->  Lorentz crashed!  <----------------------------");
 	log_info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 	log_info("Please report a bug at https://github.com/pi-hole/FTL/issues");
 	log_info("and include in your report already the following details:");
 
-	if(FTLstarttime != 0)
+	if(Lorentzstarttime != 0)
 	{
-		log_info("FTL has been running for %lli seconds", (long long)time(NULL) - FTLstarttime);
+		log_info("Lorentz has been running for %lli seconds", (long long)time(NULL) - Lorentzstarttime);
 	}
-	log_FTL_version(true);
+	log_Lorentz_version(true);
 	char namebuf[16];
 	log_info("Process details: MID: %i", mpid);
 	log_info("                 PID: %i", getpid());
@@ -1128,15 +1128,15 @@ static void __attribute__((noreturn)) signal_handler(int sig, siginfo_t *si, voi
 	ls_dir("/dev/shm");
 
 	log_info("Please also include some lines from above the !!!!!!!!! header.");
-	log_info("Thank you for helping us to improve our FTL engine!");
+	log_info("Thank you for helping us to improve our Lorentz engine!");
 
 	// Terminate main process if crash happened in a TCP worker
 	if(main_pid() != getpid())
 	{
 		// This is a forked process
-		log_info("Asking parent pihole-FTL (PID %i) to shut down", (int)mpid);
+		log_info("Asking parent lorentz (PID %i) to shut down", (int)mpid);
 		kill(mpid, SIGRTMIN+2);
-		log_info("FTL fork terminated!");
+		log_info("Lorentz fork terminated!");
 
 		// Terminate fork indicating failure
 		exit(EXIT_FAILURE);
@@ -1192,7 +1192,7 @@ static void SIGRT_handler(int signum, siginfo_t *si, void *context)
 	}
 	else if(rtsig == 2)
 	{
-		// Terminate FTL indicating failure
+		// Terminate Lorentz indicating failure
 		terminate_error();
 	}
 	else if(rtsig == 3)
@@ -1365,8 +1365,8 @@ static void terminate(void)
 // on glibc >= 2.34, so use a fixed 16 KiB buffer (the minimum required
 // by POSIX is MINSIGSTKSZ which is typically 2-8 KiB; 16 KiB gives
 // ample room for the backtrace/logging calls in our crash handler).
-#define FTL_ALT_STACK_SIZE 16384
-static uint8_t alt_stack_mem[FTL_ALT_STACK_SIZE];
+#define LORENTZ_ALT_STACK_SIZE 16384
+static uint8_t alt_stack_mem[LORENTZ_ALT_STACK_SIZE];
 
 void handle_signals(void)
 {
@@ -1375,7 +1375,7 @@ void handle_signals(void)
 	// handler itself would overflow the same stack.
 	stack_t ss = {
 		.ss_sp = alt_stack_mem,
-		.ss_size = FTL_ALT_STACK_SIZE,
+		.ss_size = LORENTZ_ALT_STACK_SIZE,
 		.ss_flags = 0
 	};
 	sigaltstack(&ss, NULL);
@@ -1413,8 +1413,8 @@ void handle_signals(void)
 		sigaction(SIGTERM, &SIGaction, NULL);
 	}
 
-	// Log start time of FTL
-	FTLstarttime = time(NULL);
+	// Log start time of Lorentz
+	Lorentzstarttime = time(NULL);
 }
 
 // Register real-time signal handler
@@ -1444,7 +1444,7 @@ void handle_realtime_signals(void)
 	}
 }
 
-// Return PID of the main FTL process
+// Return PID of the main Lorentz process
 pid_t main_pid(void)
 {
 	if(mpid > 0)
@@ -1520,11 +1520,11 @@ int sigrtmin(void)
 	return EXIT_SUCCESS;
 }
 
-void restart_ftl(const char *reason)
+void restart_lorentz(const char *reason)
 {
-	log_info("Restarting FTL: %s", reason);
-	exit_code = RESTART_FTL_CODE;
-	// Send SIGTERM to FTL
+	log_info("Restarting Lorentz: %s", reason);
+	exit_code = RESTART_LORENTZ_CODE;
+	// Send SIGTERM to Lorentz
 	kill(main_pid(), SIGTERM);
 }
 

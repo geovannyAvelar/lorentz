@@ -29,7 +29,7 @@ components:
         description: |
           Change the current blocking mode by setting `blocking` to the desired value.
           The optional `timer` object may used to set a timer. Once this timer elapsed, the opposite blocking mode is automatically set.
-          For instance, you can request `{blocking: false, timer: 60}` to disable Pi-hole for one minute.
+          For instance, you can request `{blocking: false, timer: 60}` to disable Lorentz for one minute.
           Blocking will be automatically resumed afterwards.
 
           You can terminate a possibly running timer by setting `timer` to `null` (the set mode becomes permanent).

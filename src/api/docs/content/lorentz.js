@@ -1,4 +1,4 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
  *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
  *  Network-wide ad blocking via your own hardware.
  *
@@ -13,7 +13,7 @@ async function getData(url = '') {
 	const sid = docEl.attributes['api-key-value'].value;
 	const response = await fetch(url, {
 		method: 'GET',
-		headers: {'Content-Type': 'application/json', 'X-FTL-SID': sid}
+		headers: {'Content-Type': 'application/json', 'X-Lorentz-SID': sid}
 	});
 	return response.json();
 }
@@ -24,7 +24,7 @@ async function deleteData(url = '') {
 	const sid = docEl.attributes['api-key-value'].value;
 	const response = await fetch(url, {
 		method: 'DELETE',
-		headers: {'X-FTL-SID': sid}
+		headers: {'X-Lorentz-SID': sid}
 	});
 	return response;
 }
@@ -35,7 +35,7 @@ async function postData(url = '', data = {}) {
 	const sid = docEl.attributes['api-key-value'].value;
 	const response = await fetch(url, {
 		method: 'POST',
-		headers: {'Content-Type': 'application/json', 'X-FTL-SID': sid},
+		headers: {'Content-Type': 'application/json', 'X-Lorentz-SID': sid},
 		body: JSON.stringify(data)
 	});
 	return response.json();

@@ -2633,7 +2633,7 @@ prepare_lua_request_info_inner(const struct mg_connection *conn, lua_State *L)
 		lua_rawset(L, -3);
 	}
 
-	/* Pi-hole addition */
+	/* Lorentz addition */
 	reg_string(L, "csrf_token", conn->request_info.csrf_token);
 	reg_boolean(L, "is_authenticated", conn->request_info.is_authenticated != 0);
 }
@@ -3284,7 +3284,7 @@ handle_lsp_request(struct mg_connection *conn,
 	 *
 	 */
 	run_lsp = run_lsp_civetweb;
-	if ((addr[0] != 'H')) { // Pi-hole change: Check if file starts with "H" for HTTP
+	if ((addr[0] != 'H')) { // Lorentz change: Check if file starts with "H" for HTTP
 		run_lsp = run_lsp_kepler;
 	}
 

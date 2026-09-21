@@ -2,7 +2,7 @@ openapi: 3.0.2
 components:
   paths:
     docs:
-      summary: Pi-hole's API documentation
+      summary: Lorentz's API documentation
       get:
         summary: Get the embedded API documentation rendered as HTML
         tags:

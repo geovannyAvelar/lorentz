@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/action
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api/api.h"
@@ -25,7 +25,7 @@
 // gravity_running
 #include "daemon.h"
 
-static int run_and_stream_command(struct ftl_conn *api, const char *path, const char *const args[], const char *extra_env)
+static int run_and_stream_command(struct lorentz_conn *api, const char *path, const char *const args[], const char *extra_env)
 {
 	// Create a pipe for communication with our child
 	int pipefd[2];
@@ -95,7 +95,7 @@ static int run_and_stream_command(struct ftl_conn *api, const char *path, const 
 		// custom handlers which are reset to SIG_DFL.
 		signal(SIGTERM, SIG_IGN);
 
-		// Run pihole -g
+		// Run lorentz -g
 		execv(path, (char *const *)args);
 
 		// execv() only returns if it failed, so the command never ran.
@@ -173,7 +173,7 @@ static int run_and_stream_command(struct ftl_conn *api, const char *path, const 
 		                       NULL);
 }
 
-int api_action_gravity(struct ftl_conn *api)
+int api_action_gravity(struct lorentz_conn *api)
 {
 	// Only set FORCE_COLOR if the client explicitly requests it via "color=true" query parameter
 	// This prevents ANSI escape codes from being included in the output for API consumers that don't need them
@@ -185,7 +185,7 @@ int api_action_gravity(struct ftl_conn *api)
 	const char *extra_env = color ? "FORCE_COLOR" : NULL;
 
 	gravity_running = 1;
-	const int ret = run_and_stream_command(api, "/usr/local/bin/pihole", (const char *const []){ "pihole", "-g", NULL }, extra_env);
+	const int ret = run_and_stream_command(api, "/usr/local/bin/lorentz", (const char *const []){ "lorentz", "-g", NULL }, extra_env);
 	gravity_running = 0;
 
 	// If a termination/restart was requested while gravity was running,
@@ -195,7 +195,7 @@ int api_action_gravity(struct ftl_conn *api)
 	return ret;
 }
 
-int api_action_restartDNS(struct ftl_conn *api)
+int api_action_restartDNS(struct lorentz_conn *api)
 {
 	if(!config.webserver.api.allow_destructive.v.b)
 		return send_json_error(api, 403,
@@ -203,12 +203,12 @@ int api_action_restartDNS(struct ftl_conn *api)
 		                       "Restarting DNS is not allowed",
 		                       "Check setting webserver.api.allow_destructive");
 
-	restart_ftl("API action request");
+	restart_lorentz("API action request");
 
 	return send_json_success(api);
 }
 
-int api_action_flush_logs(struct ftl_conn *api)
+int api_action_flush_logs(struct lorentz_conn *api)
 {
 	if(!config.webserver.api.allow_destructive.v.b)
 		return send_json_error(api, 403,
@@ -228,7 +228,7 @@ int api_action_flush_logs(struct ftl_conn *api)
 		                       NULL);
 }
 
-int api_action_flush_network(struct ftl_conn *api)
+int api_action_flush_network(struct lorentz_conn *api)
 {
 	if(!config.webserver.api.allow_destructive.v.b)
 		return send_json_error(api, 403,

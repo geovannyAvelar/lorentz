@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/dns
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api.h"
@@ -26,7 +26,7 @@
 #define DOMAIN_VALIDATION_REGEX "^((-|_)*[a-z0-9]((-|_)*[a-z0-9])*(-|_)*)(\\.(-|_)*([a-z0-9]((-|_)*[a-z0-9])*))*$"
 #define LABEL_VALIDATION_REGEX "^[^\\.]{1,63}(\\.[^\\.]{1,63})*$"
 
-static int get_blocking(struct ftl_conn *api)
+static int get_blocking(struct lorentz_conn *api)
 {
 	// Return current status
 	cJSON *json = JSON_NEW_OBJECT();
@@ -51,7 +51,7 @@ static int get_blocking(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-static int set_blocking(struct ftl_conn *api)
+static int set_blocking(struct lorentz_conn *api)
 {
 	if(get_blockingstatus() == DNS_FAILED)
 	{
@@ -99,7 +99,7 @@ static int set_blocking(struct ftl_conn *api)
 		// Start timer (-1 disables all running timers)
 		set_blockingmode_timer(time, !target_status);
 
-		log_debug(DEBUG_API, "%sd Pi-hole, timer set to %f seconds", target_status ? "Enable" : "Disable", time);
+		log_debug(DEBUG_API, "%sd Lorentz, timer set to %f seconds", target_status ? "Enable" : "Disable", time);
 	}
 
 	// Return GET property as result of POST/PUT/PATCH action
@@ -107,7 +107,7 @@ static int set_blocking(struct ftl_conn *api)
 	return get_blocking(api);
 }
 
-int api_dns_blocking(struct ftl_conn *api)
+int api_dns_blocking(struct lorentz_conn *api)
 {
 	if(api->method == HTTP_GET)
 	{

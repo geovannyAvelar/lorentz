@@ -1,15 +1,15 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2026 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  SQLite3 database driver
 *  /src/database/db-sqlite.c
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "sqlite3.h"
 #include "db-driver.h"
 #include "log.h"
@@ -607,7 +607,7 @@ static bool sqlite_column_exists(db_conn *conn, const char *table, const char *c
 	return has_row(conn, "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2", table, column);
 }
 
-// Uses PRAGMA user_version. This is independent of the FTL properties table
+// Uses PRAGMA user_version. This is independent of the Lorentz properties table
 static int sqlite_get_schema_version(db_conn *conn)
 {
 	sqlite3_stmt *stmt = NULL;

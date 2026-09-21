@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2026 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Shared declarations of the database layer regression harness
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -26,8 +26,8 @@ extern int db_test_failures;
 // Temporary directory of this run and a path inside it
 const char *db_test_path(const char *name);
 
-// Point FTL at a freshly created long-term database (runs db_init())
-void db_test_fresh_ftl_db(const char *name);
+// Point Lorentz at a freshly created long-term database (runs db_init())
+void db_test_fresh_lorentz_db(const char *name);
 
 // Create a gravity database from test/gravity.db.sql, returns its path or NULL
 const char *db_test_make_gravity_db(const char *name);

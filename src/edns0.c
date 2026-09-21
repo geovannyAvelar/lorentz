@@ -1,17 +1,17 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  EDNS parsing routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#define FTLDNS
+#define LORENTZDNS
 #include "dnsmasq/dnsmasq.h"
 #undef __USE_XOPEN
-#include "FTL.h"
+#include "lorentz.h"
 #include "log.h"
 #include "edns0.h"
 #include "config/config.h"
@@ -57,7 +57,7 @@ ednsData *getEDNS(void)
 	return NULL;
 }
 
-void FTL_parse_pseudoheaders(unsigned char *pheader, const size_t plen)
+void Lorentz_parse_pseudoheaders(unsigned char *pheader, const size_t plen)
 {
 	// Return early if we have no pseudoheader (a.k.a. additional records)
 	if (!pheader)

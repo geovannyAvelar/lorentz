@@ -1,9 +1,9 @@
 #!/bin/python3
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine - auxiliary files
+# Lorentz Engine - auxiliary files
 # API test script
 #
 # This file is copyright under the latest version of the EUPL.
@@ -13,11 +13,11 @@ import os
 import sys
 import trace
 from libs.openAPI import openApi
-from libs.FTLAPI import FTLAPI
+from libs.LORENTZAPI import LORENTZAPI
 from libs.responseVerifyer import ResponseVerifyer
 
 TRACE = False
-CLI_PW_FILE = "/etc/pihole/cli_pw"
+CLI_PW_FILE = "/etc/lorentz/cli_pw"
 
 def main():
 	# OpenAPI specs are split into multiple files, this script extracts the endpoints from them
@@ -25,23 +25,23 @@ def main():
 	if not openapi.parse("main.yaml"):
 		exit(1)
 
-	# Get endpoints from FTL
-	ftl = FTLAPI("http://127.0.0.1", "ABC")
-	ftl.get_endpoints()
+	# Get endpoints from Lorentz
+	lorentz = LORENTZAPI("http://127.0.0.1", "ABC")
+	lorentz.get_endpoints()
 
 	errs = [0, 0, 0]
-	print("Endpoints in OpenAPI specs but not in FTL:")
-	# Check for endpoints in OpenAPI specs that are not defined in FTL
+	print("Endpoints in OpenAPI specs but not in Lorentz:")
+	# Check for endpoints in OpenAPI specs that are not defined in Lorentz
 	for path in openapi.endpoints["get"]:
-		if path not in ftl.endpoints["get"]:
-			print("  Missing GET endpoint in FTL: " + path)
+		if path not in lorentz.endpoints["get"]:
+			print("  Missing GET endpoint in Lorentz: " + path)
 			errs[0] += 1
 	if errs[0] == 0:
 		print("  No missing endpoints\n")
 
-	# Check for endpoints in FTL that are not in the OpenAPI specs
-	print("Endpoints in FTL but not in OpenAPI specs:")
-	for path in ftl.endpoints["get"]:
+	# Check for endpoints in Lorentz that are not in the OpenAPI specs
+	print("Endpoints in Lorentz but not in OpenAPI specs:")
+	for path in lorentz.endpoints["get"]:
 		if path not in openapi.endpoints["get"]:
 			# Ignore the docs endpoint
 			if path in ["/api/docs"]:
@@ -51,18 +51,18 @@ def main():
 	if errs[1] == 0:
 		print("  No missing endpoints\n")
 
-	# Check if endpoints that are in both FTL and OpenAPI specs match
+	# Check if endpoints that are in both Lorentz and OpenAPI specs match
 	# and have the same response format. Also verify that the examples
 	# matches the OpenAPI specs.
 	print("Verifying the individual OpenAPI endpoint properties...")
 	teleporter = None
 	for path in openapi.endpoints["get"]:
 		# We do not check the action endpoints as they'd trigger
-		# possibly unwanted action such as restarting FTL, running
+		# possibly unwanted action such as restarting Lorentz, running
 		# gravity, stutting down the system, etc.
 		if path.startswith("/api/action"):
 			continue
-		with ResponseVerifyer(ftl, openapi) as verifyer:
+		with ResponseVerifyer(lorentz, openapi) as verifyer:
 			errors = verifyer.verify_endpoint(path)
 			if verifyer.teleporter_archive is not None:
 				teleporter = verifyer.teleporter_archive
@@ -77,8 +77,8 @@ def main():
 
 	# Verify that all the endpoint defined by /api/endpoints are documented
 	# and that there are no undocumented endpoints
-	print("Comparing all endpoints defined in FTL against the OpenAPI specs...")
-	with ResponseVerifyer(ftl, openapi) as verifyer:
+	print("Comparing all endpoints defined in Lorentz against the OpenAPI specs...")
+	with ResponseVerifyer(lorentz, openapi) as verifyer:
 		errors, checked = verifyer.verify_endpoints()
 		if len(errors) == 0:
 			print("  OK (" + str(checked) + " endpoints checked)")
@@ -89,9 +89,9 @@ def main():
 			errs[2] += len(errors)
 	print("")
 
-	# Verify FTL Teleporter import
-	print("Verifying FTL Teleporter import...")
-	with ResponseVerifyer(ftl, openapi) as verifyer:
+	# Verify Lorentz Teleporter import
+	print("Verifying Lorentz Teleporter import...")
+	with ResponseVerifyer(lorentz, openapi) as verifyer:
 		errors = verifyer.verify_teleporter_zip(teleporter)
 		if len(errors) == 0:
 			print("  POST /api/teleporter: OK")
@@ -103,7 +103,7 @@ def main():
 		print("")
 
 	# Verify that Teleporter import is blocked for CLI sessions
-	print("Verifying FTL Teleporter import is blocked for CLI sessions...")
+	print("Verifying Lorentz Teleporter import is blocked for CLI sessions...")
 	try:
 		with open(CLI_PW_FILE, "r", encoding="utf-8") as file:
 			cli_password = file.read().strip()
@@ -114,10 +114,10 @@ def main():
 		print("  Skipping (no CLI password available)")
 	else:
 		try:
-			ftl_cli = FTLAPI("http://127.0.0.1", cli_password)
-			response = ftl_cli.POST("/api/teleporter", json_data=None, files={"file": ('teleporter.zip', teleporter, 'application/zip')})
+			lorentz_cli = LORENTZAPI("http://127.0.0.1", cli_password)
+			response = lorentz_cli.POST("/api/teleporter", json_data=None, files={"file": ('teleporter.zip', teleporter, 'application/zip')})
 			if response is None:
-				print("  Error: no response from FTL API")
+				print("  Error: no response from Lorentz API")
 				errs[2] += 1
 			elif "error" not in response or response["error"].get("key") != "forbidden":
 				print("  Error: expected forbidden error, got: " + str(response))

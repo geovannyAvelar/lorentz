@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Database prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -17,8 +17,8 @@
 // int64_t
 #include <inttypes.h>
 
-// Database table "ftl"
-enum ftl_table_props {
+// Database table "lorentz"
+enum lorentz_table_props {
 	DB_VERSION,
 	DB_LASTTIMESTAMP,
 	DB_FIRSTCOUNTERTIMESTAMP
@@ -32,9 +32,9 @@ enum counters_table_props {
 
 void db_init(void);
 
-int db_get_int(db_conn *db, const enum ftl_table_props ID);
-int db_get_FTL_property(db_conn *db, const enum ftl_table_props ID);
-bool db_set_FTL_property(db_conn *db, const enum ftl_table_props ID, const int value);
+int db_get_int(db_conn *db, const enum lorentz_table_props ID);
+int db_get_Lorentz_property(db_conn *db, const enum lorentz_table_props ID);
+bool db_set_Lorentz_property(db_conn *db, const enum lorentz_table_props ID, const int value);
 
 /// Execute a formatted SQL query and get the return code. The format string
 /// uses the syntax of the database driver (e.g. %q and %Q for SQLite)
@@ -46,7 +46,7 @@ db_conn *_dbopen(const bool readonly, const bool create, const char *func, const
 #define dbclose(db) _dbclose(db, __FUNCTION__, __LINE__, __FILE__)
 void _dbclose(db_conn **db, const char *func, const int line, const char *file);
 
-void piholeFTLDB_reopen(void);
+void lorentzLorentzDB_reopen(void);
 int db_query_int(db_conn *db, const char *querystr);
 int db_query_int_int(db_conn *db, const char *querystr, const int arg);
 int db_query_int_str(db_conn *db, const char *querystr, const char *arg);
@@ -62,9 +62,9 @@ int64_t get_row_count(const char *table_name, const bool memory);
 
 extern bool DBdeleteoldqueries;
 
-// Return if FTL's database is known to be broken
+// Return if Lorentz's database is known to be broken
 // We abort execution of all database-related activities in this case
-bool FTLDBerror(void) __attribute__ ((pure));
+bool LorentzDBerror(void) __attribute__ ((pure));
 
 // Check non-success return codes for possible database corruption
 bool check_db_rc(const db_rc rc);

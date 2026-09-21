@@ -1,6 +1,6 @@
-refused_ede15 = newDN("refused.ede15.ftl")
-nxdomain_ede15 = newDN("nxdomain.ede15.ftl")
-null_ede15 = newDN("null.ede15.ftl")
+refused_ede15 = newDN("refused.ede15.lorentz")
+nxdomain_ede15 = newDN("nxdomain.ede15.lorentz")
+null_ede15 = newDN("null.ede15.lorentz")
 
 
 -- this hook is called before doing any resolving

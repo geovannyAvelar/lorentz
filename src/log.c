@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Logging routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "version.h"
 // is_fork()
 #include "daemon.h"
@@ -30,7 +30,7 @@
 #include "gc.h"
 
 static bool print_log = true, print_stdout = true;
-static bool ftl_log_available = true;
+static bool lorentz_log_available = true;
 static const char *process = "";
 bool debug_flags[DEBUG_MAX] = { false };
 
@@ -46,21 +46,21 @@ void log_ctrl(bool plog, bool pstdout)
 	print_stdout = pstdout;
 }
 
-void init_FTL_log(const char *name)
+void init_Lorentz_log(const char *name)
 {
 	// Open the log file in append/create mode
-	if(config.files.log.ftl.v.s != NULL)
+	if(config.files.log.lorentz.v.s != NULL)
 	{
 		FILE *logfile = NULL;
-		if((logfile = fopen(config.files.log.ftl.v.s, "a+")) == NULL)
+		if((logfile = fopen(config.files.log.lorentz.v.s, "a+")) == NULL)
 		{
-			printf("ERROR: Opening of FTL log (%s) failed: %s\nUsing syslog instead!\n",
-			       config.files.log.ftl.v.s, strerror(errno));
-			syslog(LOG_ERR, "Opening of FTL\'s log file failed, using syslog instead!");
-			ftl_log_available = false;
+			printf("ERROR: Opening of Lorentz log (%s) failed: %s\nUsing syslog instead!\n",
+			       config.files.log.lorentz.v.s, strerror(errno));
+			syslog(LOG_ERR, "Opening of Lorentz\'s log file failed, using syslog instead!");
+			lorentz_log_available = false;
 		}
 		else
-			ftl_log_available = true;
+			lorentz_log_available = true;
 
 		// Close log file
 		if(logfile != NULL)
@@ -239,7 +239,7 @@ const char *debugstr(const enum debug_flag flag)
 	}
 }
 
-void __attribute__ ((format (printf, 3, 4))) _FTL_log(const int priority, const enum debug_flag flag, const char *format, ...)
+void __attribute__ ((format (printf, 3, 4))) _Lorentz_log(const int priority, const enum debug_flag flag, const char *format, ...)
 {
 	char timestring[TIMESTR_SIZE];
 	va_list args;
@@ -252,10 +252,10 @@ void __attribute__ ((format (printf, 3, 4))) _FTL_log(const int priority, const 
 	get_timestr(timestring, time(NULL), true, false);
 
 	// Get and log PID of current process to avoid ambiguities when more than one
-	// pihole-FTL instance is logging into the same file
+	// lorentz instance is logging into the same file
 	char idstr[42];
 	const int pid = getpid(); // Get the process ID of the calling process
-	const int mpid = main_pid(); // Get the process ID of the main FTL process
+	const int mpid = main_pid(); // Get the process ID of the main Lorentz process
 	const int tid = gettid(); // Get the thread ID of the calling process
 
 	const char *prio = priostr(priority, flag);
@@ -296,13 +296,13 @@ void __attribute__ ((format (printf, 3, 4))) _FTL_log(const int priority, const 
 		va_start(args, format);
 		const size_t len = vsnprintf(buffer, MAX_MSG_FIFO, format, args) + 1u; /* include zero-terminator */
 		va_end(args);
-		add_to_fifo_buffer(FIFO_FTL, buffer, prio, len > MAX_MSG_FIFO ? MAX_MSG_FIFO : len);
+		add_to_fifo_buffer(FIFO_LORENTZ, buffer, prio, len > MAX_MSG_FIFO ? MAX_MSG_FIFO : len);
 
 		bool logged = false;
-		if(ftl_log_available && config.files.log.ftl.v.s != NULL)
+		if(lorentz_log_available && config.files.log.lorentz.v.s != NULL)
 		{
 			// Open log file
-			FILE *logfile = fopen(config.files.log.ftl.v.s, "a+");
+			FILE *logfile = fopen(config.files.log.lorentz.v.s, "a+");
 
 			// Write to log file
 			if(logfile != NULL)
@@ -325,8 +325,8 @@ void __attribute__ ((format (printf, 3, 4))) _FTL_log(const int priority, const 
 			}
 			else if(!daemonmode)
 			{
-				printf("!!! WARNING: Writing to FTL\'s log file failed!\n");
-				syslog(LOG_ERR, "Writing to FTL\'s log file failed!");
+				printf("!!! WARNING: Writing to Lorentz\'s log file failed!\n");
+				syslog(LOG_ERR, "Writing to Lorentz\'s log file failed!");
 			}
 		}
 		if(!logged)
@@ -356,7 +356,7 @@ void __attribute__ ((format (printf, 1, 2))) log_web(const char *format, ...)
 	get_timestr(timestring, now, true, false);
 
 	// Get and log PID of current process to avoid ambiguities when more than one
-	// pihole-FTL instance is logging into the same file
+	// lorentz instance is logging into the same file
 	const long pid = (long)getpid();
 
 	// Open web log file
@@ -380,7 +380,7 @@ void __attribute__ ((format (printf, 1, 2))) log_web(const char *format, ...)
 }
 
 // Log helper activity (may be script or lua)
-void FTL_log_helper(const unsigned int n, ...)
+void Lorentz_log_helper(const unsigned int n, ...)
 {
 	// Only log helper debug messages if enabled
 	if(!(config.debug.helper.v.b))
@@ -413,7 +413,7 @@ void FTL_log_helper(const unsigned int n, ...)
 			          arg[0], arg[1], arg[2], arg[3], arg[4]);
 			break;
 		default:
-			log_debug(DEBUG_HELPER, "ERROR: Unsupported number of arguments passed to FTL_log_helper(): %u", n);
+			log_debug(DEBUG_HELPER, "ERROR: Unsupported number of arguments passed to Lorentz_log_helper(): %u", n);
 			break;
 	}
 	va_end(args);
@@ -469,7 +469,7 @@ void format_time(char buffer[42], unsigned long seconds, double milliseconds)
 		sprintf(buffer + strlen(buffer), "%lums ", umilliseconds);
 }
 
-void FTL_log_dnsmasq_fatal(const char *format, ...)
+void Lorentz_log_dnsmasq_fatal(const char *format, ...)
 {
 	if(!print_log)
 		return;
@@ -481,7 +481,7 @@ void FTL_log_dnsmasq_fatal(const char *format, ...)
 	va_end(args);
 	message[255] = '\0';
 
-	// Log error into FTL's log + message table
+	// Log error into Lorentz's log + message table
 	logg_fatal_dnsmasq_message(message);
 }
 
@@ -498,53 +498,53 @@ void log_counter_info(void)
 	log_info(" -> Known forward destinations: %u", counters->upstreams);
 }
 
-void log_FTL_version(const bool crashreport)
+void log_Lorentz_version(const bool crashreport)
 {
-	log_info("FTL branch: %s", git_branch());
-	log_info("FTL version: %s", get_FTL_version());
-	log_info("FTL commit: %s", git_hash());
-	log_info("FTL date: %s", git_date());
+	log_info("Lorentz branch: %s", git_branch());
+	log_info("Lorentz version: %s", get_Lorentz_version());
+	log_info("Lorentz commit: %s", git_hash());
+	log_info("Lorentz date: %s", git_date());
 	if(crashreport)
 	{
 		char *username_now = getUserName();
-		log_info("FTL user: started as %s, ended as %s", username, username_now);
+		log_info("Lorentz user: started as %s, ended as %s", username, username_now);
 		free(username_now);
 	}
 	else
-		log_info("FTL user: %s", username);
-	log_info("Compiled for %s using %s", ftl_arch(), ftl_cc());
+		log_info("Lorentz user: %s", username);
+	log_info("Compiled for %s using %s", lorentz_arch(), lorentz_cc());
 }
 
-static char *FTLversion = NULL;
-const char __attribute__ ((malloc)) *get_FTL_version(void)
+static char *Lorentzversion = NULL;
+const char __attribute__ ((malloc)) *get_Lorentz_version(void)
 {
-	// Obtain FTL version if not already determined
-	if(FTLversion == NULL)
+	// Obtain Lorentz version if not already determined
+	if(Lorentzversion == NULL)
 	{
 		if(strlen(git_tag()) > 1 )
 		{
 			if (strlen(git_version()) > 1)
 			{
 				// Copy version string if this is a tagged release
-				FTLversion = strdup(git_version());
+				Lorentzversion = strdup(git_version());
 			}
 
 		}
 		else if(strlen(git_hash()) > 0)
 		{
 			// Build special version string when there is a hash
-			FTLversion = calloc(13, sizeof(char));
+			Lorentzversion = calloc(13, sizeof(char));
 			// Build version by appending 7 characters of the hash to "vDev-"
-			snprintf(FTLversion, 13, "vDev-%.7s", git_hash());
+			snprintf(Lorentzversion, 13, "vDev-%.7s", git_hash());
 		}
 		else
 		{
 			// Fallback for tarball build, etc. without any GIT subsystem
-			FTLversion = strdup("UNKNOWN (not a GIT build)");
+			Lorentzversion = strdup("UNKNOWN (not a GIT build)");
 		}
 	}
 
-	return FTLversion;
+	return Lorentzversion;
 }
 
 const char __attribute__ ((const)) *get_ordinal_suffix(unsigned int number)
@@ -701,9 +701,9 @@ const char * __attribute__ ((pure)) short_path(const char *full_path)
 	return shorter != NULL ? shorter : full_path;
 }
 
-void print_FTL_version(void)
+void print_Lorentz_version(void)
 {
-    printf("Pi-hole FTL %s\n", get_FTL_version());
+    printf("Lorentz %s\n", get_Lorentz_version());
 }
 
 // Skip leading string if found

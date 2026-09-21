@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2018 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Shared memory subroutines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #define SHMEM_PRIVATE
 #include "shmem.h"
 #include "overTime.h"
@@ -20,7 +20,7 @@
 #include "regex_r.h"
 // sleepms()
 #include "timers.h"
-// FTL_gettid
+// Lorentz_gettid
 #include "daemon.h"
 // NAME_MAX
 #include <limits.h>
@@ -94,7 +94,7 @@ ASSERT_SHM_SIZE(countersStruct,        356,    356,    356);
 #define SHARED_RECYCLER_NAME "recycler"
 #define SHARED_INTARRAYS_NAME "intarrays"
 
-// Allocation step for FTL-strings bucket. This is somewhat special as we use
+// Allocation step for Lorentz-strings bucket. This is somewhat special as we use
 // this as a general-purpose storage which should always be large enough. If,
 // for some reason, more data than this step has to be stored (highly unlikely,
 // close to impossible), the data will be properly truncated and we try again in
@@ -355,7 +355,7 @@ static void *enlarge_shmem_struct(const char type, const size_t alloc_step);
 static void shm_ensure_size(void);
 
 // Calculate and format the memory usage of the shared memory segment used by
-// FTL
+// Lorentz
 // The function returns the percentage of used memory. A human-readable string
 // is stored in the buffer passed to this function.
 static int get_dev_shm_usage(char buffer[64])
@@ -363,14 +363,14 @@ static int get_dev_shm_usage(char buffer[64])
 	char buffer2[64] = { 0 };
 	const int percentage = get_path_usage(SHMEM_PATH, buffer2);
 
-	// Generate human-readable "used by FTL" size
-	char prefix_FTL[2] = { 0 };
-	double formatted_FTL = 0.0;
-	format_memory_size(prefix_FTL, used_shmem, &formatted_FTL);
+	// Generate human-readable "used by Lorentz" size
+	char prefix_Lorentz[2] = { 0 };
+	double formatted_Lorentz = 0.0;
+	format_memory_size(prefix_Lorentz, used_shmem, &formatted_Lorentz);
 
 	// Print result into buffer passed to this subroutine
-	snprintf(buffer, 64, "%s, FTL uses %.1f%sB",
-	         buffer2, formatted_FTL, prefix_FTL);
+	snprintf(buffer, 64, "%s, Lorentz uses %.1f%sB",
+	         buffer2, formatted_Lorentz, prefix_Lorentz);
 
 	// Return percentage
 	return percentage;
@@ -714,7 +714,7 @@ static void remap_shm(void)
 void _lock_shm(const char *func, const int line, const char *file)
 {
 	// There is no need to lock if we are the only thread
-	// (e.g., when running pihole-FTL --config a.b.c def)
+	// (e.g., when running lorentz --config a.b.c def)
 	if(shmLock == NULL)
 		return;
 
@@ -786,7 +786,7 @@ void _lock_shm(const char *func, const int line, const char *file)
 void _unlock_shm(const char *func, const int line, const char * file)
 {
 	// There is no need to unlock if we are the only thread
-	// (e.g., when running pihole-FTL --config a.b.c def)
+	// (e.g., when running lorentz --config a.b.c def)
 	if(shmLock == NULL)
 		return;
 
@@ -1052,7 +1052,7 @@ static bool create_shm(const char *suffix, SharedMemory *sharedMemory, const siz
 		log_err("create_shm(): Failed to allocate memory for shared memory name");
 		exit(EXIT_FAILURE);
 	}
-	snprintf(name, namelen, "/FTL-%d-%s", getpid(), suffix);
+	snprintf(name, namelen, "/Lorentz-%d-%s", getpid(), suffix);
 
 	char df[64] = { 0 };
 	const unsigned int percentage = get_dev_shm_usage(df);
@@ -1103,7 +1103,7 @@ static bool create_shm(const char *suffix, SharedMemory *sharedMemory, const siz
 	// Using f[tl]allocate() will ensure that there's actually space for
 	// this file. Otherwise we end up with a sparse file that can give
 	// SIGBUS if we run out of space while writing to it.
-	const int ret = ftlallocate(sharedMemory->fd, 0U, size);
+	const int ret = lorentzallocate(sharedMemory->fd, 0U, size);
 	if(ret != 0)
 	{
 		log_err("create_shm(): Failed to resize \"%s\" (%i) to %zu: %s (%i)",
@@ -1111,7 +1111,7 @@ static bool create_shm(const char *suffix, SharedMemory *sharedMemory, const siz
 		exit(EXIT_FAILURE);
 	}
 
-	// Update how much memory FTL uses
+	// Update how much memory Lorentz uses
 	// We only add here as this is a new file
 	used_shmem += size;
 
@@ -1256,7 +1256,7 @@ static bool realloc_shm(SharedMemory *sharedMemory, const size_t size1, const si
 
 	// Resize shard memory object if requested
 	// If not, we only remap a shared memory object which might have changed
-	// in another process. This happens when pihole-FTL forks due to incoming
+	// in another process. This happens when lorentz forks due to incoming
 	// TCP requests.
 	if(resize)
 	{
@@ -1264,7 +1264,7 @@ static bool realloc_shm(SharedMemory *sharedMemory, const size_t size1, const si
 		// Using f[tl]allocate() will ensure that there's actually space for
 		// this file. Otherwise we end up with a sparse file that can give
 		// SIGBUS if we run out of space while writing to it.
-		const int ret = ftlallocate(sharedMemory->fd, 0U, new_size);
+		const int ret = lorentzallocate(sharedMemory->fd, 0U, new_size);
 		if(ret != 0)
 		{
 			log_crit("realloc_shm(): Failed to resize \"%s\" (%i) to %zu: %s (%i)",
@@ -1285,7 +1285,7 @@ static bool realloc_shm(SharedMemory *sharedMemory, const size_t size1, const si
 		exit(EXIT_FAILURE);
 	}
 
-	// Update how much memory FTL uses
+	// Update how much memory Lorentz uses
 	// We add the difference between updated and previous size
 	used_shmem += (new_size - sharedMemory->size);
 

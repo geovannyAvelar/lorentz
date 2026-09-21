@@ -581,7 +581,7 @@ static int iface_allowed(struct iface_param *param, int if_index, char *label,
       iface->done = iface->multicast_done = iface->warned = 0;
       iface->index = if_index;
       iface->label = is_label;
-      /************** Pi-hole modification **************/
+      /************** Lorentz modification **************/
       if ((iface->slabel = whine_malloc(strlen(label)+1)))
 	  strcpy(iface->slabel, label);
       /**************************************************/
@@ -712,7 +712,7 @@ static int release_listener(struct listener *l)
 		l->iface->name, l->iface->index, daemon->addrbuff, port);
       /* In case it ever returns */
       l->iface->done = 0;
-      // Pi-hole modification
+      // Lorentz modification
       log_info("stopped listening on %s(#%d): %s port %d",
 	   l->iface->name, l->iface->index, daemon->addrbuff, port);
     }
@@ -1139,7 +1139,7 @@ static struct listener *create_listeners(union mysockaddr *addr, int do_tftp, in
       l->iface = NULL;
     }
 
-    // Pi-hole modification
+    // Lorentz modification
     const int port = prettyprint_addr(addr, daemon->addrbuff);
     log_info("listening on %s port %d", daemon->addrbuff, port);
 
@@ -1219,7 +1219,7 @@ void create_bound_listeners(int dienow)
 		my_syslog(LOG_DEBUG|MS_DEBUG, _("listening on %s(#%d): %s port %d"),
 			  iface->name, iface->index, daemon->addrbuff, port);
 	      }
-	    // Pi-hole modification
+	    // Lorentz modification
 	    const int port = prettyprint_addr(&iface->addr, daemon->addrbuff);
 	    log_info("listening on %s(#%d): %s port %d",
 		     iface->name, iface->index, daemon->addrbuff, port);
@@ -1249,7 +1249,7 @@ void create_bound_listeners(int dienow)
 	    int port = prettyprint_addr(&if_tmp->addr, daemon->addrbuff);
 	    my_syslog(LOG_DEBUG|MS_DEBUG, _("listening on %s port %d"), daemon->addrbuff, port);
 	  }
-	// Pi-hole modification
+	// Lorentz modification
 	const int port = prettyprint_addr(&if_tmp->addr, daemon->addrbuff);
 	log_info("listening on %s port %d", daemon->addrbuff, port);
       }

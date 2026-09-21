@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/{allow,deny}list
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api.h"
@@ -23,7 +23,7 @@
 #include "webserver/http-common.h"
 #include <idn2.h>
 
-static int api_list_read(struct ftl_conn *api,
+static int api_list_read(struct lorentz_conn *api,
                          const int code,
                          const enum gravity_list_type listtype,
                          const char *item,
@@ -174,7 +174,7 @@ static int api_list_read(struct ftl_conn *api,
 	}
 }
 
-static int api_list_write(struct ftl_conn *api,
+static int api_list_write(struct lorentz_conn *api,
                           const enum gravity_list_type listtype,
                           const char *item)
 {
@@ -616,17 +616,17 @@ static int api_list_write(struct ftl_conn *api,
 		response_code = 200; // 200 - OK
 
 	// Add "Location" header to response
-	if(snprintf(pi_hole_extra_headers, sizeof(pi_hole_extra_headers), "Location: %s/%s", api->action_path, row.item) >= (int)sizeof(pi_hole_extra_headers))
+	if(snprintf(lorentz_extra_headers, sizeof(lorentz_extra_headers), "Location: %s/%s", api->action_path, row.item) >= (int)sizeof(lorentz_extra_headers))
 	{
 		// This may happen for *extremely* long URLs but is not issue in
 		// itself. Merely add a warning to the log file
 		log_warn("Could not add Location header to response: URL too long");
 
 		// Truncate location by replacing the last characters with "...\0"
-		pi_hole_extra_headers[sizeof(pi_hole_extra_headers)-4] = '.';
-		pi_hole_extra_headers[sizeof(pi_hole_extra_headers)-3] = '.';
-		pi_hole_extra_headers[sizeof(pi_hole_extra_headers)-2] = '.';
-		pi_hole_extra_headers[sizeof(pi_hole_extra_headers)-1] = '\0';
+		lorentz_extra_headers[sizeof(lorentz_extra_headers)-4] = '.';
+		lorentz_extra_headers[sizeof(lorentz_extra_headers)-3] = '.';
+		lorentz_extra_headers[sizeof(lorentz_extra_headers)-2] = '.';
+		lorentz_extra_headers[sizeof(lorentz_extra_headers)-1] = '\0';
 	}
 
 	// Send GET style reply
@@ -639,7 +639,7 @@ static int api_list_write(struct ftl_conn *api,
 	return ret;
 }
 
-static int api_list_remove(struct ftl_conn *api,
+static int api_list_remove(struct lorentz_conn *api,
                            const enum gravity_list_type listtype,
                            const char *item)
 {
@@ -847,7 +847,7 @@ static int api_list_remove(struct ftl_conn *api,
 	}
 }
 
-int api_list(struct ftl_conn *api)
+int api_list(struct lorentz_conn *api)
 {
 	enum gravity_list_type listtype;
 	bool can_modify = false;

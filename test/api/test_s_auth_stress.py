@@ -1,9 +1,9 @@
 """
-Pi-hole FTL API stress tests -- thread-safety of the auth subsystem.
+Lorentz API stress tests -- thread-safety of the auth subsystem.
 
 Targets two race conditions fixed by PR #2835:
 
-1. pi_hole_extra_headers: a global char[1024] written by every authenticated
+1. lorentz_extra_headers: a global char[1024] written by every authenticated
    request handler (check_client_auth, send_api_auth_status) and read by
    civetweb's send_additional_header(). Without _Thread_local, concurrent
    requests overwrite each other's Set-Cookie SID.
@@ -37,7 +37,7 @@ import time
 
 import requests
 
-FTL_URL = "http://127.0.0.1"
+LORENTZ_URL = "http://127.0.0.1"
 PASSWORD = "stress-test-pw"
 NUM_SESSIONS = 14          # close to max_sessions default (16)
 BURST_ROUNDS = 50          # barrier bursts per test
@@ -49,9 +49,9 @@ TOTP_BURSTS = 2            # keep runtime short while still hitting concurrency
 # ── helpers ───────────────────────────────────────────────────────────────
 
 def _set_password(pw, sid=None):
-    headers = {"X-FTL-SID": sid} if sid else {}
+    headers = {"X-Lorentz-SID": sid} if sid else {}
     r = requests.patch(
-        f"{FTL_URL}/api/config/webserver/api/password",
+        f"{LORENTZ_URL}/api/config/webserver/api/password",
         json={"config": {"webserver": {"api": {"password": pw}}}},
         headers=headers, timeout=20,
     )
@@ -60,12 +60,12 @@ def _set_password(pw, sid=None):
 
 def _login(pw, timeout=10):
     return requests.post(
-        f"{FTL_URL}/api/auth", json={"password": pw}, timeout=timeout)
+        f"{LORENTZ_URL}/api/auth", json={"password": pw}, timeout=timeout)
 
 
 def _login_with_totp(pw, code, timeout=10):
     return requests.post(
-        f"{FTL_URL}/api/auth",
+        f"{LORENTZ_URL}/api/auth",
         json={"password": pw, "totp": code}, timeout=timeout)
 
 
@@ -83,15 +83,15 @@ def _login_rate_limited(pw, timeout=10):
 
 def _check(sid, timeout=5):
     return requests.get(
-        f"{FTL_URL}/api/auth",
-        headers={"X-FTL-SID": sid}, timeout=timeout)
+        f"{LORENTZ_URL}/api/auth",
+        headers={"X-Lorentz-SID": sid}, timeout=timeout)
 
 
 def _set_totp_secret(secret, sid, timeout=20):
     r = requests.patch(
-        f"{FTL_URL}/api/config/webserver/api/totp_secret",
+        f"{LORENTZ_URL}/api/config/webserver/api/totp_secret",
         json={"config": {"webserver": {"api": {"totp_secret": secret}}}},
-        headers={"X-FTL-SID": sid}, timeout=timeout,
+        headers={"X-Lorentz-SID": sid}, timeout=timeout,
     )
     assert r.status_code == 200, f"set TOTP secret: {r.status_code} {r.text}"
 
@@ -131,22 +131,22 @@ def _wait_for_next_totp_window():
 
 def _logout(sid, timeout=5):
     return requests.delete(
-        f"{FTL_URL}/api/auth",
-        headers={"X-FTL-SID": sid}, timeout=timeout)
+        f"{LORENTZ_URL}/api/auth",
+        headers={"X-Lorentz-SID": sid}, timeout=timeout)
 
 
 def _sessions(sid, timeout=5):
     """GET /api/auth/sessions -- lists every session slot."""
     return requests.get(
-        f"{FTL_URL}/api/auth/sessions",
-        headers={"X-FTL-SID": sid}, timeout=timeout)
+        f"{LORENTZ_URL}/api/auth/sessions",
+        headers={"X-Lorentz-SID": sid}, timeout=timeout)
 
 
 def _delete_slot(sid, slot_id, timeout=5):
     """DELETE /api/auth/session/{id} -- delete session by slot index."""
     return requests.delete(
-        f"{FTL_URL}/api/auth/session/{slot_id}",
-        headers={"X-FTL-SID": sid}, timeout=timeout)
+        f"{LORENTZ_URL}/api/auth/session/{slot_id}",
+        headers={"X-Lorentz-SID": sid}, timeout=timeout)
 
 
 def _logout_all(sids):
@@ -175,12 +175,12 @@ def _cookie_sid(resp):
 
 
 def _assert_alive(ctx=""):
-    """Verify FTL has not crashed."""
+    """Verify Lorentz has not crashed."""
     try:
-        r = requests.get(f"{FTL_URL}/api/auth", timeout=5)
-        assert r.status_code in (200, 401), f"FTL unhealthy: {r.status_code}"
+        r = requests.get(f"{LORENTZ_URL}/api/auth", timeout=5)
+        assert r.status_code in (200, 401), f"Lorentz unhealthy: {r.status_code}"
     except requests.ConnectionError:
-        msg = "FTL crashed (connection refused)"
+        msg = "Lorentz crashed (connection refused)"
         if ctx:
             msg += f" -- {ctx}"
         raise AssertionError(msg)
@@ -188,18 +188,18 @@ def _assert_alive(ctx=""):
 
 # ── module fixtures ───────────────────────────────────────────────────────
 
-def _wait_for_ftl_restart(timeout=10):
-    """Wait for FTL to complete a restart triggered by the teleporter test.
+def _wait_for_lorentz_restart(timeout=10):
+    """Wait for Lorentz to complete a restart triggered by the teleporter test.
 
-    The preceding teleporter-import test triggers restart_ftl() which
+    The preceding teleporter-import test triggers restart_lorentz() which
     sends SIGTERM.  With deferred signal processing the old process may
     still be listening briefly before it shuts down.  Rather than
     probing the API (which can succeed against the dying process), we
-    watch /var/log/pihole/FTL.log for the CLI-password marker that
+    watch /var/log/lorentz/lorentz.log for the CLI-password marker that
     confirms the new process has fully initialised and applied the test
     configuration.
     """
-    log_path = "/var/log/pihole/FTL.log"
+    log_path = "/var/log/lorentz/lorentz.log"
     marker = "CLI password set and stored in file"
 
     # Record current end-of-file so we only scan new output
@@ -224,7 +224,7 @@ def _wait_for_ftl_restart(timeout=10):
 
 
 def setup_module(_mod):
-    _wait_for_ftl_restart()
+    _wait_for_lorentz_restart()
     _set_password(PASSWORD)
 
 
@@ -235,13 +235,13 @@ def teardown_module(_mod):
         sid = r.json().get("session", {}).get("sid")
         _set_password("", sid=sid)
     except Exception:
-        pass  # FTL may have crashed during the tests
+        pass  # Lorentz may have crashed during the tests
 
 
 # ── tests ─────────────────────────────────────────────────────────────────
 
 class TestParallelTOTP:
-    """Concurrent TOTP logins should stay stable and never crash FTL.
+    """Concurrent TOTP logins should stay stable and never crash Lorentz.
 
     This exercises the same code path that validates TOTP under request
     parallelism to guard against races around shared TOTP state.
@@ -310,7 +310,7 @@ class TestParallelTOTP:
                 )
 
 class TestSetCookieRace:
-    """pi_hole_extra_headers is a global char[1024] written by
+    """lorentz_extra_headers is a global char[1024] written by
     check_client_auth() (auth.c:247) and send_api_auth_status() (auth.c:382)
     on every authenticated request, then consumed by civetweb's
     send_additional_header().
@@ -364,7 +364,7 @@ class TestSetCookieRace:
             _assert_alive("Set-Cookie race test")
             assert not mismatches, (
                 f"Set-Cookie SID mismatch ({len(mismatches)}x) -- "
-                f"pi_hole_extra_headers race: {mismatches[0]}"
+                f"lorentz_extra_headers race: {mismatches[0]}"
             )
         finally:
             _logout_all(sids)
@@ -468,7 +468,7 @@ class TestValidateDeleteRace:
 
     A concurrent delete_session() can memset the slot between these steps:
     - Wrong SID in the JSON body (slot reused by another session)
-    - Wrong SID in Set-Cookie (pi_hole_extra_headers overwritten)
+    - Wrong SID in Set-Cookie (lorentz_extra_headers overwritten)
     - SIGSEGV on weakly-ordered architectures (ARM)
 
     Fixed by copying the session to a local struct under a mutex.
@@ -513,7 +513,7 @@ class TestValidateDeleteRace:
                 ret = s.get("sid")
                 if ret and ret != sid:
                     return f"{sid[:12]}: body SID={ret[:12]}"
-                # Wrong SID in Set-Cookie (pi_hole_extra_headers race)
+                # Wrong SID in Set-Cookie (lorentz_extra_headers race)
                 csid = _cookie_sid(r)
                 if csid and csid != "deleted" and csid != sid:
                     return f"{sid[:12]}: cookie SID={csid[:12]}"

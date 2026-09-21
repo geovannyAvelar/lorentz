@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
-*  API Implementation /api/ftl
+*  Lorentz Engine
+*  API Implementation /api/lorentz
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api/api.h"
@@ -20,7 +20,7 @@
 #include "datastructure.h"
 // INT_MIN, INT_MAX, ...
 #include <limits.h>
-// writeFTLtoml()
+// writeLorentztoml()
 #include "config/toml_writer.h"
 // write_dnsmasq_config()
 #include "config/dnsmasq_config.h"
@@ -470,7 +470,7 @@ static const char *getJSONvalue(struct conf_item *conf_item, cJSON *elem, struct
 	return NULL;
 }
 
-int get_json_config(struct ftl_conn *api, cJSON *json, const bool detailed)
+int get_json_config(struct lorentz_conn *api, cJSON *json, const bool detailed)
 {
 	// Create root config object
 	cJSON *config_j = JSON_NEW_OBJECT();
@@ -574,7 +574,7 @@ int get_json_config(struct ftl_conn *api, cJSON *json, const bool detailed)
 
 			// Add config item flags
 			cJSON *flags = JSON_NEW_OBJECT();
-			JSON_ADD_BOOL_TO_OBJECT(flags, "restart_dnsmasq", conf_item->f & FLAG_RESTART_FTL);
+			JSON_ADD_BOOL_TO_OBJECT(flags, "restart_dnsmasq", conf_item->f & FLAG_RESTART_LORENTZ);
 			JSON_ADD_BOOL_TO_OBJECT(flags, "session_reset", conf_item->f & FLAG_INVALIDATE_SESSIONS);
 			JSON_ADD_BOOL_TO_OBJECT(flags, "env_var", conf_item->f & FLAG_ENV_VAR);
 			JSON_ADD_ITEM_TO_OBJECT(leaf, "flags", flags);
@@ -650,7 +650,7 @@ int get_json_config(struct ftl_conn *api, cJSON *json, const bool detailed)
 	return 0;
 }
 
-static int api_config_get(struct ftl_conn *api)
+static int api_config_get(struct lorentz_conn *api)
 {
 	// Parse query string parameters
 	bool detailed = false;
@@ -667,7 +667,7 @@ static int api_config_get(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-static int api_config_patch(struct ftl_conn *api)
+static int api_config_patch(struct lorentz_conn *api)
 {
 	// Is there a payload with valid JSON data?
 	const int ret = check_json_payload(api);
@@ -735,7 +735,7 @@ static int api_config_patch(struct ftl_conn *api)
 			free_config(&newconf, false);
 			return send_json_error_free(api, 400,
 			                            "bad_request",
-			                            "This config option can only be set in pihole.toml, not via the API",
+			                            "This config option can only be set in lorentz.toml, not via the API",
 			                            key, true, true);
 		}
 
@@ -773,7 +773,7 @@ static int api_config_patch(struct ftl_conn *api)
 		// Get pointer to memory location of this conf_item (global)
 		struct conf_item *conf_item = get_conf_item(&config, i);
 
-		// Options that hand code to something Pi-hole then runs are not
+		// Options that hand code to something Lorentz then runs are not
 		// settable from a web session, see FLAG_API_READ_ONLY.
 		//
 		// Only an actual change is refused. A client sending the whole
@@ -786,7 +786,7 @@ static int api_config_patch(struct ftl_conn *api)
 			free_config(&newconf, false);
 			return send_json_error_free(api, 400,
 			                            "bad_request",
-			                            "This config option can only be set in pihole.toml, through an environment variable or using pihole-FTL --config, not via the API",
+			                            "This config option can only be set in lorentz.toml, through an environment variable or using lorentz --config, not via the API",
 			                            key, true, true);
 		}
 
@@ -828,7 +828,7 @@ static int api_config_patch(struct ftl_conn *api)
 		}
 
 		// Check if this item requires a config-rewrite + restart of dnsmasq
-		if(conf_item->f & FLAG_RESTART_FTL)
+		if(conf_item->f & FLAG_RESTART_LORENTZ)
 			dnsmasq_changed = true;
 
 		// Check if this item requires rewriting the HOSTS file
@@ -870,14 +870,14 @@ static int api_config_patch(struct ftl_conn *api)
 			}
 		}
 
-		// Request restart of FTL
+		// Request restart of Lorentz
 		if(dnsmasq_changed)
 		{
 			char errbuf[ERRBUF_SIZE] = { 0 };
 			if(write_dnsmasq_config(&newconf, DNSMASQ_TEST_INSTALL, errbuf))
 			{
-				api->ftl.restart_reason = "dnsmasq config changed";
-				api->ftl.restart = restart;
+				api->lorentz.restart_reason = "dnsmasq config changed";
+				api->lorentz.restart = restart;
 			}
 			else
 			{
@@ -896,12 +896,12 @@ static int api_config_patch(struct ftl_conn *api)
 		// while walking the items can be applied. Doing either earlier
 		// meant a request rejected further down - by a later item, or by
 		// the dnsmasq test above - still logged every session out, or
-		// still left api->ftl.restart set for api.c to act on although
+		// still left api->lorentz.restart set for api.c to act on although
 		// free_config() had thrown the candidate away
 		if(privacy_level_decreased)
 		{
-			api->ftl.restart_reason = "Privacy level decreased";
-			api->ftl.restart = true;
+			api->lorentz.restart_reason = "Privacy level decreased";
+			api->lorentz.restart = true;
 		}
 
 		if(invalidate_sessions)
@@ -911,7 +911,7 @@ static int api_config_patch(struct ftl_conn *api)
 		set_debug_flags(&config);
 
 		// Store changed configuration to disk
-		writeFTLtoml(true, NULL);
+		writeLorentztoml(true, NULL);
 
 		// Rewrite HOSTS file if required
 		if(rewrite_hosts)
@@ -939,15 +939,15 @@ static int api_config_patch(struct ftl_conn *api)
 // answered rather than silently truncated
 #define MAX_CONFIG_VALUE_LEN 1024
 
-static int api_config_put_delete(struct ftl_conn *api)
+static int api_config_put_delete(struct lorentz_conn *api)
 {
 	if(api->item == NULL || strlen(api->item) == 0)
 		return 0;
 
 	// Return early if the config is in read-only mode, as api_config_patch()
 	// already does. Without this, PUT and DELETE changed the live config,
-	// 01-pihole.conf and the HOSTS file and restarted FTL, while
-	// writeFTLtoml() deliberately wrote none of it to disk
+	// 01-lorentz.conf and the HOSTS file and restarted Lorentz, while
+	// writeLorentztoml() deliberately wrote none of it to disk
 	if(config.misc.readOnly.v.b)
 	{
 		return send_json_error(api, 403,
@@ -1074,7 +1074,7 @@ static int api_config_put_delete(struct ftl_conn *api)
 			                            key, true, true);
 		}
 
-		// Options that hand code to something Pi-hole then runs are not
+		// Options that hand code to something Lorentz then runs are not
 		// settable from a web session, see FLAG_API_READ_ONLY
 		if(new_item->f & FLAG_API_READ_ONLY)
 		{
@@ -1083,7 +1083,7 @@ static int api_config_put_delete(struct ftl_conn *api)
 			free_config_path(requested_path);
 			return send_json_error_free(api, 400,
 			                            "bad_request",
-			                            "This config option can only be set in pihole.toml, through an environment variable or using pihole-FTL --config, not via the API",
+			                            "This config option can only be set in lorentz.toml, through an environment variable or using lorentz --config, not via the API",
 			                            key, true, true);
 		}
 
@@ -1149,7 +1149,7 @@ static int api_config_put_delete(struct ftl_conn *api)
 		}
 
 		// Check if this item requires a config-rewrite + restart of dnsmasq
-		if(new_item->f & FLAG_RESTART_FTL)
+		if(new_item->f & FLAG_RESTART_LORENTZ)
 			dnsmasq_changed = true;
 
 		// Check if this item requires rewriting the HOSTS file
@@ -1200,12 +1200,12 @@ static int api_config_put_delete(struct ftl_conn *api)
 	if(dnsmasq_changed)
 	{
 		char errbuf[ERRBUF_SIZE] = { 0 };
-		// Request restart of FTL
+		// Request restart of Lorentz
 		if(write_dnsmasq_config(&newconf, DNSMASQ_TEST_INSTALL, errbuf))
 		{
-			api->ftl.restart_reason = "dnsmasq config changed";
+			api->lorentz.restart_reason = "dnsmasq config changed";
 			// Only restart if the user didn't request otherwise
-			api->ftl.restart = restart;
+			api->lorentz.restart = restart;
 		}
 		else
 		{
@@ -1225,7 +1225,7 @@ static int api_config_put_delete(struct ftl_conn *api)
 	set_debug_flags(&config);
 
 	// Store changed configuration to disk
-	writeFTLtoml(true, NULL);
+	writeLorentztoml(true, NULL);
 
 	// Rewrite HOSTS file if required
 	if(rewrite_hosts)
@@ -1247,7 +1247,7 @@ static int api_config_put_delete(struct ftl_conn *api)
 }
 
 // Endpoint /api/config router
-int api_config(struct ftl_conn *api)
+int api_config(struct lorentz_conn *api)
 {
 	if(api->method == HTTP_GET)
 		return api_config_get(api);
@@ -1259,7 +1259,7 @@ int api_config(struct ftl_conn *api)
 		return send_json_error(api, 403,
 		                       "forbidden",
 		                       "Unable to change configuration (read-only)",
-		                       "The current app session is not allowed to modify Pi-hole config settings (webserver.api.app_sudo is false)");
+		                       "The current app session is not allowed to modify Lorentz config settings (webserver.api.app_sudo is false)");
 	}
 
 	// Check if this is a CLI session and reject the request
@@ -1268,7 +1268,7 @@ int api_config(struct ftl_conn *api)
 		return send_json_error(api, 403,
 		                       "forbidden",
 		                       "Unable to change configuration (read-only)",
-		                       "The current CLI session is not allowed to modify Pi-hole config settings");
+		                       "The current CLI session is not allowed to modify Lorentz config settings");
 	}
 
 	// POST: Create a new config (not supported)
@@ -1283,7 +1283,7 @@ int api_config(struct ftl_conn *api)
 	return 0;
 }
 
-int api_config_properties(struct ftl_conn *api)
+int api_config_properties(struct lorentz_conn *api)
 {
 	cJSON *read_only = JSON_NEW_ARRAY();
 
@@ -1308,12 +1308,12 @@ int api_config_properties(struct ftl_conn *api)
 		else if(conf_item->f & FLAG_API_CLI_READ_ONLY)
 		{
 			reason = "read_only";
-			description = "Variable can only be set in pihole.toml, not via API";
+			description = "Variable can only be set in lorentz.toml, not via API";
 		}
 		else if(conf_item->f & FLAG_API_READ_ONLY)
 		{
 			reason = "read_only";
-			description = "Variable can only be set in pihole.toml, through an environment variable or using pihole-FTL --config, not via API";
+			description = "Variable can only be set in lorentz.toml, through an environment variable or using lorentz --config, not via API";
 		}
 		else
 			continue;

@@ -6,7 +6,7 @@ components:
         get:
           summary: Get DNS log content
           tags:
-            - "FTL information"
+            - "Lorentz information"
           operationId: "get_dns_log"
           description: |
             This API hook returns content from the log of the embedded DNS resolver `dnsmasq`.
@@ -35,14 +35,14 @@ components:
                     allOf:
                       - $ref: 'common.yaml#/components/errors/unauthorized'
                       - $ref: 'common.yaml#/components/schemas/took'
-      ftl:
+      lorentz:
         get:
           summary: Get DNS log content
           tags:
-            - "FTL information"
-          operationId: "get_ftl_log"
+            - "Lorentz information"
+          operationId: "get_lorentz_log"
           description: |
-            This API hook returns content from the log of FTL.
+            This API hook returns content from the log of Lorentz.
 
             Every successful request will return a `nextID`.
             This ID can be used on the next request to only get lines which were added *after* the last request.
@@ -72,7 +72,7 @@ components:
         get:
           summary: Get DNS log content
           tags:
-            - "FTL information"
+            - "Lorentz information"
           operationId: "get_webserver_log"
           description: |
             This API hook returns content from the log of the embedded CivetWeb HTTP server.
@@ -125,7 +125,7 @@ components:
                     description: Log line priority (if available)
               example:
                 - timestamp: 1611729969.0
-                  message: "started, version pi-hole-2.84 cachesize 10000"
+                  message: "started, version lorentz-2.84 cachesize 10000"
                 - timestamp: 1611729969.0
                   message: "reading /etc/resolv.conf"
                 - timestamp: 1611729969.0
@@ -138,12 +138,12 @@ components:
               example: 229
             pid:
               type: integer
-              description: Process ID of FTL. When this changes, FTL was restarted and nextID should be reset to 0.
+              description: Process ID of Lorentz. When this changes, Lorentz was restarted and nextID should be reset to 0.
               example: 2258
             file:
               type: string
               description: Path to respective log file on disk
-              example: /var/log/pihole/pihole.log
+              example: /var/log/lorentz/lorentz.log
 
   parameters:
     logs:

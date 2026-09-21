@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Network table routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "network-table.h"
 #include "common.h"
 #include "shmem.h"
@@ -35,7 +35,7 @@ enum arp_status { CLIENT_NOT_HANDLED, CLIENT_ARP_COMPLETE, CLIENT_ARP_INCOMPLETE
 bool create_network_table(db_conn *db)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Start transaction
@@ -53,7 +53,7 @@ bool create_network_table(db_conn *db)
 	                                    "macVendor TEXT);");
 
 	// Update database version to 3
-	if(!db_set_FTL_property(db, DB_VERSION, 3))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 3))
 	{
 		log_warn("create_network_table(): Failed to update database version!");
 		return false;
@@ -68,7 +68,7 @@ bool create_network_table(db_conn *db)
 bool create_network_addresses_table(db_conn *db)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Disable foreign key enforcement for this transaction
@@ -116,7 +116,7 @@ bool create_network_addresses_table(db_conn *db)
 	SQL_bool(db, "ALTER TABLE network_bck RENAME TO network;");
 
 	// Update database version to 5
-	if(!db_set_FTL_property(db, DB_VERSION, 5))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 5))
 	{
 		log_warn("create_network_addresses_table(): Failed to update database version!");
 		return false;
@@ -134,7 +134,7 @@ bool create_network_addresses_table(db_conn *db)
 bool create_network_addresses_with_names_table(db_conn *db)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Disable foreign key enforcement for this transaction
@@ -192,7 +192,7 @@ bool create_network_addresses_with_names_table(db_conn *db)
 	SQL_bool(db, "ALTER TABLE network_bck RENAME TO network;");
 
 	// Update database version to 8
-	if(!db_set_FTL_property(db, DB_VERSION, 8))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 8))
 	{
 		log_warn("create_network_addresses_with_names_table(): Failed to update database version!");
 		return false;
@@ -210,14 +210,14 @@ bool create_network_addresses_with_names_table(db_conn *db)
 bool create_network_addresses_network_id_index(db_conn *db)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Create index on network_id column in network_addresses table
 	SQL_bool(db, "CREATE INDEX IF NOT EXISTS network_addresses_network_id_index ON network_addresses (network_id);");
 
 	// Update database version to 20
-	if(!db_set_FTL_property(db, DB_VERSION, 20))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 20))
 	{
 		log_warn("create_network_addresses_with_names_table(): Failed to update database version!");
 		return false;
@@ -230,7 +230,7 @@ bool create_network_addresses_network_id_index(db_conn *db)
 static int find_device_by_recent_ip(db_conn *db, const char *ipaddr)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return -1;
 
 	const char *querystr = "SELECT network_id FROM network_addresses "
@@ -264,7 +264,7 @@ static int find_device_by_recent_ip(db_conn *db, const char *ipaddr)
 static int find_device_by_mock_hwaddr(db_conn *db, const char *ipaddr)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return DB_FAILED;
 
 	const char *querystr = "SELECT id FROM network WHERE hwaddr = concat('ip-',?1)";
@@ -277,7 +277,7 @@ static int find_device_by_mock_hwaddr(db_conn *db, const char *ipaddr)
 static int find_device_by_hwaddr(db_conn *db, const char hwaddr[])
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return DB_FAILED;
 
 	log_debug(DEBUG_ARP, "find_device_by_hwaddr(%s)", hwaddr);
@@ -292,7 +292,7 @@ static int find_device_by_hwaddr(db_conn *db, const char hwaddr[])
 static int find_recent_device_by_mock_hwaddr(db_conn *db, const char *ipaddr)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return DB_FAILED;
 
 	log_debug(DEBUG_ARP, "find_recent_device_by_mock_hwaddr(%s)", ipaddr);
@@ -318,7 +318,7 @@ static int find_recent_device_by_mock_hwaddr(db_conn *db, const char *ipaddr)
 static bool update_netDB_name(db_conn *db, const char *ip, const char *name)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Skip if hostname is NULL or an empty string (= no result)
@@ -398,7 +398,7 @@ update_netDB_name_end:
 static bool update_netDB_lastQuery(db_conn *db, const int network_id, const time_t lastQuery)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Check for invalid network ID
@@ -430,7 +430,7 @@ static bool update_netDB_lastQuery(db_conn *db, const int network_id, const time
 static bool update_netDB_numQueries(db_conn *db, const int dbID, const int numQueries)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Return early if there is nothing to update
@@ -458,7 +458,7 @@ static bool update_netDB_numQueries(db_conn *db, const int dbID, const int numQu
 static bool add_netDB_network_address(db_conn *db, const int network_id, const char *ip)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Check for invalid network ID
@@ -544,7 +544,7 @@ static bool insert_netDB_device(db_conn *db, const char *hwaddr, const time_t fi
                                const unsigned int numQueriesARP, const char *macVendor, int *new_id)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	log_debug(DEBUG_ARP, "insert_netDB_device(\"%s\", %lu, %lu, %u, \"%s\")",
@@ -643,7 +643,7 @@ insert_netDB_device_end:
 static bool unmock_netDB_device(db_conn *db, const char *hwaddr, const char *macVendor, const int dbID)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Check for invalid network ID
@@ -724,7 +724,7 @@ unmock_netDB_device_end:
 static bool update_netDB_interface(db_conn *db, const int network_id, const char *iface)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Check for invalid network ID
@@ -788,15 +788,15 @@ update_netDB_interface_end:
 	return success;
 }
 
-// Loop over all clients known to FTL and ensure we add them all to the database
-static bool add_FTL_clients_to_network_table(db_conn *db, const enum arp_status *client_status,
+// Loop over all clients known to Lorentz and ensure we add them all to the database
+static bool add_Lorentz_clients_to_network_table(db_conn *db, const enum arp_status *client_status,
                                              const unsigned int clients, const time_t now, unsigned int *additional_entries)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
-	log_debug(DEBUG_ARP, "Network table: Adding up to %u FTL clients to network table", clients);
+	log_debug(DEBUG_ARP, "Network table: Adding up to %u Lorentz clients to network table", clients);
 
 	int rc = DB_OK;
 	char hwaddr[128];
@@ -833,7 +833,7 @@ static bool add_FTL_clients_to_network_table(db_conn *db, const enum arp_status 
 		interface[sizeof(interface) - 1] = '\0';
 
 		// Skip if already handled above (first check against clients_array_size as we might have added
-		// more clients to FTL's memory herein (those known only from the database))
+		// more clients to Lorentz's memory herein (those known only from the database))
 		if(client_status[clientID] != CLIENT_NOT_HANDLED)
 		{
 			log_debug(DEBUG_ARP, "Network table: Client %s known through ARP/neigh cache",
@@ -1005,7 +1005,7 @@ static bool add_FTL_clients_to_network_table(db_conn *db, const enum arp_status 
 				lock_shm();
 			}
 
-			log_debug(DEBUG_ARP, "Network table: Creating new FTL device MAC = %s, IP = %s, hostname = \"%s\", vendor = \"%s\", interface = \"%s\"",
+			log_debug(DEBUG_ARP, "Network table: Creating new Lorentz device MAC = %s, IP = %s, hostname = \"%s\", vendor = \"%s\", interface = \"%s\"",
 			          hwaddr, ipaddr, hostname, macVendor, interface);
 
 			// Add new device to database (from the snapshot taken above)
@@ -1023,7 +1023,7 @@ static bool add_FTL_clients_to_network_table(db_conn *db, const enum arp_status 
 		}
 		else	// Device already in database
 		{
-			log_debug(DEBUG_ARP, "Network table: Updating existing FTL device MAC = %s, IP = %s, hostname = \"%s\", interface = \"%s\"",
+			log_debug(DEBUG_ARP, "Network table: Updating existing Lorentz device MAC = %s, IP = %s, hostname = \"%s\", interface = \"%s\"",
 			          hwaddr, ipaddr, hostname, interface);
 
 			// Update timestamp and query count from the snapshot taken above
@@ -1089,7 +1089,7 @@ static bool add_FTL_clients_to_network_table(db_conn *db, const enum arp_status 
 static bool add_local_interfaces_to_network_table(db_conn *db, time_t now, unsigned int *additional_entries)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	log_debug(DEBUG_ARP, "Network table: Adding local interfaces to network table");
@@ -1416,7 +1416,7 @@ void parse_neighbor_cache(db_conn *db)
 			}
 
 			// If we reach this point, we can check if this client
-			// is known to pihole-FTL
+			// is known to lorentz
 			// both false = do not create a new record if the client
 			//              is unknown (only DNS requesting clients
 			//              do this), the now value is ignored
@@ -1424,14 +1424,14 @@ void parse_neighbor_cache(db_conn *db)
 			const int clientID = findClientID(ip, false, false, 0.0);
 
 			// Set default values for a new device, may be updated
-			// below if the client is known to pihole-FTL
+			// below if the client is known to lorentz
 			char hostname[MAXHOSTNAMELEN] = { 0 };
 			bool client_valid = false;
 			time_t lastQuery = 0;
 			time_t firstSeen = now;
 			unsigned int numQueries = 0, totalQueries = 0;
 
-			// This client is known (by its IP address) to pihole-FTL if
+			// This client is known (by its IP address) to lorentz if
 			// findClientID() returned a non-negative index
 			if(clientID >= 0 && clientID < clients)
 			{
@@ -1442,7 +1442,7 @@ void parse_neighbor_cache(db_conn *db)
 					continue;
 				}
 
-				// Client is known to Pi-hole, update properties
+				// Client is known to Lorentz, update properties
 				// with their real values
 				client_valid = true;
 				strncpy(hostname, getstr(client->namepos), sizeof(hostname) - 1);
@@ -1457,7 +1457,7 @@ void parse_neighbor_cache(db_conn *db)
 				// just appeared or changed since we last
 				// resolved this client's group membership, the
 				// client may be stuck in the wrong (often
-				// default) group. FTL keys clients by IP, so an
+				// default) group. Lorentz keys clients by IP, so an
 				// external DHCP server handing the same device a
 				// new IP creates a fresh client whose MAC is
 				// only learned here - after the client's first
@@ -1495,7 +1495,7 @@ void parse_neighbor_cache(db_conn *db)
 			}
 			// else
 			// {
-				// Client is not known to Pi-hole, create a
+				// Client is not known to Lorentz, create a
 				// mock-device with the default values set above
 				// and an empty hostname
 			// }
@@ -1561,7 +1561,7 @@ void parse_neighbor_cache(db_conn *db)
 					// loop iteration for the sake of simplicity
 				}
 			}
-			// Device in database AND client known to Pi-hole
+			// Device in database AND client known to Lorentz
 			else if(client_valid)
 			{
 				log_debug(DEBUG_ARP, "Network table: Updating existing ARP device MAC = %s, IP = %s, hostname = \"%s\"",
@@ -1589,7 +1589,7 @@ void parse_neighbor_cache(db_conn *db)
 				if(!update_netDB_name(db, ip, hostname))
 					break;
 			}
-			// else: Device in database but not known to Pi-hole
+			// else: Device in database but not known to Lorentz
 
 			// Store interface if available
 			if(dbID > DB_NODATA && !update_netDB_interface(db, dbID, iface))
@@ -1625,9 +1625,9 @@ void parse_neighbor_cache(db_conn *db)
 		return;
 	}
 
-	// Loop over all clients known to FTL and ensure we add them all to the
+	// Loop over all clients known to Lorentz and ensure we add them all to the
 	// database
-	if(!add_FTL_clients_to_network_table(db, client_status, clients, now, &additional_entries))
+	if(!add_Lorentz_clients_to_network_table(db, client_status, clients, now, &additional_entries))
 	{
 		free(client_status);
 		dbquery(db, "ROLLBACK");
@@ -1689,7 +1689,7 @@ void parse_neighbor_cache(db_conn *db)
 	}
 
 	// Debug logging
-	log_debug(DEBUG_ARP, "ARP table processing (%u entries from ARP, %u from FTL's cache) took %.1f ms",
+	log_debug(DEBUG_ARP, "ARP table processing (%u entries from ARP, %u from Lorentz's cache) took %.1f ms",
 	          entries, additional_entries, timer_elapsed_msec(ARP_TIMER));
 }
 
@@ -1700,7 +1700,7 @@ void parse_neighbor_cache(db_conn *db)
 bool unify_hwaddr(db_conn *db)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// We request sets of (id,hwaddr). They are GROUPed BY hwaddr to make
@@ -1765,7 +1765,7 @@ bool unify_hwaddr(db_conn *db)
 	}
 
 	// Update database version to 4
-	if(!db_set_FTL_property(db, DB_VERSION, 4))
+	if(!db_set_Lorentz_property(db, DB_VERSION, 4))
 		goto unify_hwaddr_end;
 
 	success = true;
@@ -1885,7 +1885,7 @@ static bool getMACVendor(const char *hwaddr, char vendor[MAXVENDORLEN])
 getMACVendor_end:
 
 	// No check_db_rc() here: this is macvendor.db, a broken one says
-	// nothing about the FTL database and must not take it out of service
+	// nothing about the Lorentz database and must not take it out of service
 
 	// Finalize statement and close database
 	if(stmt != NULL)
@@ -1905,7 +1905,7 @@ getMACVendor_end:
 bool updateMACVendorRecords(db_conn *db)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	log_debug(DEBUG_DATABASE, "Updating MAC vendor records");
@@ -1997,10 +1997,10 @@ bool getMACfromIP(db_conn *db, char hwaddr[MAXMACLEN], const char *ipaddr)
 	bool got_hwaddr = false;
 
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
-	// Open pihole-FTL.db database file if needed
+	// Open lorentz.db database file if needed
 	bool db_opened = false;
 	if(db == NULL)
 	{
@@ -2075,10 +2075,10 @@ getMACfromIP_end:
 int getAliasclientIDfromIP(db_conn *db, const char *ipaddr)
 {
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return DB_FAILED;
 
-	// Open pihole-FTL.db database file if needed
+	// Open lorentz.db database file if needed
 	bool db_opened = false;
 	if(db == NULL)
 	{
@@ -2162,7 +2162,7 @@ bool getNameFromIP(db_conn *db, char hostn[MAXDOMAINLEN], const char *ipaddr)
 	bool got_name = false;
 
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 	log_debug(DEBUG_RESOLVER, "Trying to obtain host name of \"%s\" from network_addresses table", ipaddr);
 
@@ -2173,7 +2173,7 @@ bool getNameFromIP(db_conn *db, char hostn[MAXDOMAINLEN], const char *ipaddr)
 		return false;
 	}
 
-	// Open pihole-FTL.db database file if needed
+	// Open lorentz.db database file if needed
 	bool db_opened = false;
 	if(db == NULL)
 	{
@@ -2333,7 +2333,7 @@ bool getNameFromMAC(const char *client, char hostn[MAXDOMAINLEN])
 	bool got_name = false;
 
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
 	// Check if we want to obtain names from MAC addresses at all
@@ -2343,7 +2343,7 @@ bool getNameFromMAC(const char *client, char hostn[MAXDOMAINLEN])
 		return false;
 	}
 
-	// Open pihole-FTL.db database file
+	// Open lorentz.db database file
 	db_conn *db = NULL;
 	if((db = dbopen(false, false)) == NULL)
 	{
@@ -2421,10 +2421,10 @@ bool getIfaceFromIP(db_conn *db, char iface[MAXIFACESTRLEN], const char *ipaddr)
 	bool got_iface = false;
 
 	// Return early if database is known to be broken
-	if(FTLDBerror())
+	if(LorentzDBerror())
 		return false;
 
-	// Open pihole-FTL.db database file if needed
+	// Open lorentz.db database file if needed
 	bool db_opened = false;
 	if(db == NULL)
 	{

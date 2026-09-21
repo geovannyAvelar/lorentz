@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
-*  API Implementation /api/ftl
+*  Lorentz Engine
+*  API Implementation /api/lorentz
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api/api.h"
@@ -18,7 +18,7 @@
 #include "config/setupVars.h"
 // counters
 #include "shmem.h"
-// get_FTL_db_stats()
+// get_Lorentz_db_stats()
 #include "files.h"
 // get_sqlite3_version()
 #include "database/common.h"
@@ -32,12 +32,12 @@
 #include "datastructure.h"
 // uname()
 #include <sys/utsname.h>
-// get_ftl_cpu_percentage()
+// get_lorentz_cpu_percentage()
 #include "daemon.h"
 // getProcessMemory()
 #include "procps.h"
 
-// get_FTL_version()
+// get_Lorentz_version()
 #include "log.h"
 #include "version.h"
 // prase_line()
@@ -58,9 +58,9 @@
 // timer_elapsed_msec()
 #include "timers.h"
 
-#define VERSIONS_FILE "/etc/pihole/versions"
+#define VERSIONS_FILE "/etc/lorentz/versions"
 
-int api_info_client(struct ftl_conn *api)
+int api_info_client(struct lorentz_conn *api)
 {
 	cJSON *json = JSON_NEW_OBJECT();
 	// Add client's IP address
@@ -87,13 +87,13 @@ int api_info_client(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int api_info_database(struct ftl_conn *api)
+int api_info_database(struct lorentz_conn *api)
 {
 	cJSON *json = JSON_NEW_OBJECT();
 
 	// Add database stat details
 	struct stat st;
-	off_t size = get_FTL_db_stats(&st);
+	off_t size = get_Lorentz_db_stats(&st);
 	JSON_ADD_NUMBER_TO_OBJECT(json, "size", size); // Total size, in bytes
 
 	// File type
@@ -167,7 +167,7 @@ int api_info_database(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int get_system_obj(struct ftl_conn *api, cJSON *system)
+int get_system_obj(struct lorentz_conn *api, cJSON *system)
 {
 	// Use total number of processors
 	// This difference is important for virtualized systems where the number
@@ -252,18 +252,18 @@ int get_system_obj(struct ftl_conn *api, cJSON *system)
 	JSON_ADD_ITEM_TO_OBJECT(cpu, "load", load);
 	JSON_ADD_ITEM_TO_OBJECT(system, "cpu", cpu);
 
-	cJSON *ftl = JSON_NEW_OBJECT();
+	cJSON *lorentz = JSON_NEW_OBJECT();
 	struct proc_mem pmem = { 0 };
 	getProcessMemory(&pmem, mem.total);
-	JSON_ADD_NUMBER_TO_OBJECT(ftl, "%mem", pmem.VmRSS_percent);
-	JSON_ADD_NUMBER_TO_OBJECT(ftl, "%cpu", get_ftl_cpu_percentage());
-	JSON_ADD_ITEM_TO_OBJECT(system, "ftl", ftl);
+	JSON_ADD_NUMBER_TO_OBJECT(lorentz, "%mem", pmem.VmRSS_percent);
+	JSON_ADD_NUMBER_TO_OBJECT(lorentz, "%cpu", get_lorentz_cpu_percentage());
+	JSON_ADD_ITEM_TO_OBJECT(system, "lorentz", lorentz);
 
 	// All okay
 	return 0;
 }
 
-static int read_hwmon_sensors(struct ftl_conn *api,
+static int read_hwmon_sensors(struct lorentz_conn *api,
                               cJSON *array,
                               const char *path,
                               const char *value_path,
@@ -374,7 +374,7 @@ static int read_hwmon_sensors(struct ftl_conn *api,
 	return 0;
 }
 
-static int get_hwmon_sensors(struct ftl_conn *api, cJSON *sensors)
+static int get_hwmon_sensors(struct lorentz_conn *api, cJSON *sensors)
 {
 	int ret;
 	// Source available temperatures, we try to read temperature sensors from
@@ -515,7 +515,7 @@ cJSON *read_sys_property(const char *path)
 	return cJSON_CreateString(buf);
 }
 
-static int get_host_obj(struct ftl_conn *api, cJSON *host)
+static int get_host_obj(struct lorentz_conn *api, cJSON *host)
 {
 	cJSON *uname_ = JSON_NEW_OBJECT();
 	struct utsname un = { 0 };
@@ -557,7 +557,7 @@ static int get_host_obj(struct ftl_conn *api, cJSON *host)
 	return 0;
 }
 
-static int get_ftl_obj(struct ftl_conn *api, cJSON *ftl)
+static int get_lorentz_obj(struct lorentz_conn *api, cJSON *lorentz)
 {
 	cJSON *database = JSON_NEW_OBJECT();
 
@@ -621,39 +621,39 @@ static int get_ftl_obj(struct ftl_conn *api, cJSON *ftl)
 	JSON_ADD_ITEM_TO_OBJECT(regex, "allowed", regex_allowed);
 	JSON_ADD_ITEM_TO_OBJECT(regex, "denied", regex_denied);
 	JSON_ADD_ITEM_TO_OBJECT(database, "regex", regex);
-	JSON_ADD_ITEM_TO_OBJECT(ftl, "database", database);
+	JSON_ADD_ITEM_TO_OBJECT(lorentz, "database", database);
 
-	JSON_ADD_NUMBER_TO_OBJECT(ftl, "privacy_level", privacylevel);
-	JSON_ADD_NUMBER_TO_OBJECT(ftl, "query_frequency", qps);
+	JSON_ADD_NUMBER_TO_OBJECT(lorentz, "privacy_level", privacylevel);
+	JSON_ADD_NUMBER_TO_OBJECT(lorentz, "query_frequency", qps);
 
 	cJSON *clients = JSON_NEW_OBJECT();
 	JSON_ADD_NUMBER_TO_OBJECT(clients, "total",clients_total);
 	JSON_ADD_NUMBER_TO_OBJECT(clients, "active", activeclients);
-	JSON_ADD_ITEM_TO_OBJECT(ftl, "clients", clients);
+	JSON_ADD_ITEM_TO_OBJECT(lorentz, "clients", clients);
 
-	JSON_ADD_NUMBER_TO_OBJECT(ftl, "pid", getpid());
+	JSON_ADD_NUMBER_TO_OBJECT(lorentz, "pid", getpid());
 
-	JSON_ADD_NUMBER_TO_OBJECT(ftl, "uptime", timer_elapsed_msec(EXIT_TIMER));
+	JSON_ADD_NUMBER_TO_OBJECT(lorentz, "uptime", timer_elapsed_msec(EXIT_TIMER));
 
 	struct proc_mem pmem = { 0 };
 	struct proc_meminfo mem = { 0 };
 	parse_proc_meminfo(&mem);
 	getProcessMemory(&pmem, mem.total);
-	JSON_ADD_NUMBER_TO_OBJECT(ftl, "%mem", pmem.VmRSS_percent);
-	JSON_ADD_NUMBER_TO_OBJECT(ftl, "%cpu", get_ftl_cpu_percentage());
+	JSON_ADD_NUMBER_TO_OBJECT(lorentz, "%mem", pmem.VmRSS_percent);
+	JSON_ADD_NUMBER_TO_OBJECT(lorentz, "%cpu", get_lorentz_cpu_percentage());
 
-	JSON_ADD_BOOL_TO_OBJECT(ftl, "allow_destructive", config.webserver.api.allow_destructive.v.b);
+	JSON_ADD_BOOL_TO_OBJECT(lorentz, "allow_destructive", config.webserver.api.allow_destructive.v.b);
 
 	// dnsmasq struct
 	cJSON *dnsmasq = JSON_NEW_OBJECT();
 	get_dnsmasq_metrics_obj(dnsmasq);
-	JSON_ADD_ITEM_TO_OBJECT(ftl, "dnsmasq", dnsmasq);
+	JSON_ADD_ITEM_TO_OBJECT(lorentz, "dnsmasq", dnsmasq);
 
 	// All okay
 	return 0;
 }
 
-int api_info_system(struct ftl_conn *api)
+int api_info_system(struct lorentz_conn *api)
 {
 	cJSON *json = JSON_NEW_OBJECT();
 
@@ -667,21 +667,21 @@ int api_info_system(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int api_info_ftl(struct ftl_conn *api)
+int api_info_lorentz(struct lorentz_conn *api)
 {
 	cJSON *json = JSON_NEW_OBJECT();
 
-	// Get ftl object
-	cJSON *ftl = JSON_NEW_OBJECT();
-	int ret = get_ftl_obj(api, ftl);
+	// Get lorentz object
+	cJSON *lorentz = JSON_NEW_OBJECT();
+	int ret = get_lorentz_obj(api, lorentz);
 	if (ret != 0)
 		return ret;
 
-	JSON_ADD_ITEM_TO_OBJECT(json, "ftl", ftl);
+	JSON_ADD_ITEM_TO_OBJECT(json, "lorentz", lorentz);
 	JSON_SEND_OBJECT(json);
 }
 
-int api_info_host(struct ftl_conn *api)
+int api_info_host(struct lorentz_conn *api)
 {
 	cJSON *json = JSON_NEW_OBJECT();
 
@@ -695,7 +695,7 @@ int api_info_host(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int get_sensors_obj(struct ftl_conn *api, cJSON *sensors, const bool add_list)
+int get_sensors_obj(struct lorentz_conn *api, cJSON *sensors, const bool add_list)
 {
 	// Get sensors array
 	cJSON *list = JSON_NEW_ARRAY();
@@ -767,7 +767,7 @@ int get_sensors_obj(struct ftl_conn *api, cJSON *sensors, const bool add_list)
 	return 0;
 }
 
-int api_info_sensors(struct ftl_conn *api)
+int api_info_sensors(struct lorentz_conn *api)
 {
 	cJSON *sensors = JSON_NEW_OBJECT();
 	int ret = get_sensors_obj(api, sensors, true);
@@ -779,7 +779,7 @@ int api_info_sensors(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int get_version_obj(struct ftl_conn *api, cJSON *version)
+int get_version_obj(struct lorentz_conn *api, cJSON *version)
 {
 	char *line = NULL;
 	size_t len = 0;
@@ -787,10 +787,10 @@ int get_version_obj(struct ftl_conn *api, cJSON *version)
 	char *key, *value;
 	cJSON *core_local = JSON_NEW_OBJECT();
 	cJSON *web_local = JSON_NEW_OBJECT();
-	cJSON *ftl_local = JSON_NEW_OBJECT();
+	cJSON *lorentz_local = JSON_NEW_OBJECT();
 	cJSON *core_remote = JSON_NEW_OBJECT();
 	cJSON *web_remote = JSON_NEW_OBJECT();
-	cJSON *ftl_remote = JSON_NEW_OBJECT();
+	cJSON *lorentz_remote = JSON_NEW_OBJECT();
 	cJSON *docker = JSON_NEW_OBJECT();
 
 	FILE *fp = fopen(VERSIONS_FILE, "r");
@@ -800,10 +800,10 @@ int get_version_obj(struct ftl_conn *api, cJSON *version)
 		// the version object at the end of this function
 		JSON_DELETE(core_local);
 		JSON_DELETE(web_local);
-		JSON_DELETE(ftl_local);
+		JSON_DELETE(lorentz_local);
 		JSON_DELETE(core_remote);
 		JSON_DELETE(web_remote);
-		JSON_DELETE(ftl_remote);
+		JSON_DELETE(lorentz_remote);
 		JSON_DELETE(docker);
 
 		return send_json_error(api, 500,
@@ -827,16 +827,16 @@ int get_version_obj(struct ftl_conn *api, cJSON *version)
 			JSON_COPY_STR_TO_OBJECT(core_local, "branch", value);
 		else if(strcmp(key, "WEB_BRANCH") == 0)
 			JSON_COPY_STR_TO_OBJECT(web_local, "branch", value);
-		// Added below from the running FTL binary itself
-		//else if(strcmp(key, "FTL_BRANCH") == 0)
-		//	JSON_COPY_STR_TO_OBJECT(ftl_local, "branch", value);
+		// Added below from the running Lorentz binary itself
+		//else if(strcmp(key, "LORENTZ_BRANCH") == 0)
+		//	JSON_COPY_STR_TO_OBJECT(lorentz_local, "branch", value);
 		else if(strcmp(key, "CORE_VERSION") == 0)
 			JSON_COPY_STR_TO_OBJECT(core_local, "version", value);
 		else if(strcmp(key, "WEB_VERSION") == 0)
 			JSON_COPY_STR_TO_OBJECT(web_local, "version", value);
-		// Added below from the running FTL binary itself
-		//else if(strcmp(key, "FTL_VERSION") == 0)
-		//	JSON_COPY_STR_TO_OBJECT(ftl_local, "version", value);
+		// Added below from the running Lorentz binary itself
+		//else if(strcmp(key, "LORENTZ_VERSION") == 0)
+		//	JSON_COPY_STR_TO_OBJECT(lorentz_local, "version", value);
 		else if(strcmp(key, "GITHUB_CORE_VERSION") == 0)
 		{
 			if(strcmp(value, "null") == 0)
@@ -851,25 +851,25 @@ int get_version_obj(struct ftl_conn *api, cJSON *version)
 			else
 				JSON_COPY_STR_TO_OBJECT(web_remote, "version", value);
 		}
-		else if(strcmp(key, "GITHUB_FTL_VERSION") == 0)
+		else if(strcmp(key, "GITHUB_LORENTZ_VERSION") == 0)
 		{
 			if(strcmp(value, "null") == 0)
-				JSON_ADD_NULL_TO_OBJECT(ftl_remote, "version");
+				JSON_ADD_NULL_TO_OBJECT(lorentz_remote, "version");
 			else
-				JSON_COPY_STR_TO_OBJECT(ftl_remote, "version", value);
+				JSON_COPY_STR_TO_OBJECT(lorentz_remote, "version", value);
 		}
 		else if(strcmp(key, "CORE_HASH") == 0)
 			JSON_COPY_STR_TO_OBJECT(core_local, "hash", value);
 		else if(strcmp(key, "WEB_HASH") == 0)
 			JSON_COPY_STR_TO_OBJECT(web_local, "hash", value);
-		else if(strcmp(key, "FTL_HASH") == 0)
-			JSON_COPY_STR_TO_OBJECT(ftl_local, "hash", value);
+		else if(strcmp(key, "LORENTZ_HASH") == 0)
+			JSON_COPY_STR_TO_OBJECT(lorentz_local, "hash", value);
 		else if(strcmp(key, "GITHUB_CORE_HASH") == 0)
 			JSON_COPY_STR_TO_OBJECT(core_remote, "hash", value);
 		else if(strcmp(key, "GITHUB_WEB_HASH") == 0)
 			JSON_COPY_STR_TO_OBJECT(web_remote, "hash", value);
-		else if(strcmp(key, "GITHUB_FTL_HASH") == 0)
-			JSON_COPY_STR_TO_OBJECT(ftl_remote, "hash", value);
+		else if(strcmp(key, "GITHUB_LORENTZ_HASH") == 0)
+			JSON_COPY_STR_TO_OBJECT(lorentz_remote, "hash", value);
 		else if(strcmp(key, "DOCKER_VERSION") == 0)
 			JSON_COPY_STR_TO_OBJECT(docker, "local", value);
 		else if(strcmp(key, "GITHUB_DOCKER_VERSION") == 0)
@@ -880,10 +880,10 @@ int get_version_obj(struct ftl_conn *api, cJSON *version)
 	free(line);
 	fclose(fp);
 
-	// Add remaining properties to ftl object
-	JSON_REF_STR_IN_OBJECT(ftl_local, "branch", git_branch());
-	JSON_REF_STR_IN_OBJECT(ftl_local, "version", get_FTL_version());
-	JSON_REF_STR_IN_OBJECT(ftl_local, "date", git_date());
+	// Add remaining properties to lorentz object
+	JSON_REF_STR_IN_OBJECT(lorentz_local, "branch", git_branch());
+	JSON_REF_STR_IN_OBJECT(lorentz_local, "version", get_Lorentz_version());
+	JSON_REF_STR_IN_OBJECT(lorentz_local, "date", git_date());
 
 	cJSON *core = JSON_NEW_OBJECT();
 	JSON_ADD_NULL_IF_NOT_EXISTS(core_local, "branch");
@@ -905,15 +905,15 @@ int get_version_obj(struct ftl_conn *api, cJSON *version)
 	JSON_ADD_ITEM_TO_OBJECT(web, "remote", web_remote);
 	JSON_ADD_ITEM_TO_OBJECT(version, "web", web);
 
-	cJSON *ftl = JSON_NEW_OBJECT();
-	JSON_ADD_ITEM_TO_OBJECT(ftl, "local", ftl_local);
-	JSON_ADD_NULL_IF_NOT_EXISTS(ftl_local, "branch");
-	JSON_ADD_NULL_IF_NOT_EXISTS(ftl_local, "version");
-	JSON_ADD_NULL_IF_NOT_EXISTS(ftl_local, "hash");
-	JSON_ADD_ITEM_TO_OBJECT(ftl, "remote", ftl_remote);
-	JSON_ADD_NULL_IF_NOT_EXISTS(ftl_remote, "version");
-	JSON_ADD_NULL_IF_NOT_EXISTS(ftl_remote, "hash");
-	JSON_ADD_ITEM_TO_OBJECT(version, "ftl", ftl);
+	cJSON *lorentz = JSON_NEW_OBJECT();
+	JSON_ADD_ITEM_TO_OBJECT(lorentz, "local", lorentz_local);
+	JSON_ADD_NULL_IF_NOT_EXISTS(lorentz_local, "branch");
+	JSON_ADD_NULL_IF_NOT_EXISTS(lorentz_local, "version");
+	JSON_ADD_NULL_IF_NOT_EXISTS(lorentz_local, "hash");
+	JSON_ADD_ITEM_TO_OBJECT(lorentz, "remote", lorentz_remote);
+	JSON_ADD_NULL_IF_NOT_EXISTS(lorentz_remote, "version");
+	JSON_ADD_NULL_IF_NOT_EXISTS(lorentz_remote, "hash");
+	JSON_ADD_ITEM_TO_OBJECT(version, "lorentz", lorentz);
 
 	// Add nulls to docker if we didn't find any version
 	JSON_ADD_NULL_IF_NOT_EXISTS(docker, "local");
@@ -923,7 +923,7 @@ int get_version_obj(struct ftl_conn *api, cJSON *version)
 	return 0;
 }
 
-int api_info_version(struct ftl_conn *api)
+int api_info_version(struct lorentz_conn *api)
 {
 	// Send reply
 	cJSON *version = JSON_NEW_OBJECT();
@@ -942,7 +942,7 @@ int api_info_version(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int api_info_messages_count(struct ftl_conn *api)
+int api_info_messages_count(struct lorentz_conn *api)
 {
 	// Send reply
 	cJSON *json = JSON_NEW_OBJECT();
@@ -951,7 +951,7 @@ int api_info_messages_count(struct ftl_conn *api)
 	return 0;
 }
 
-static int api_info_messages_GET(struct ftl_conn *api)
+static int api_info_messages_GET(struct lorentz_conn *api)
 {
 	// Create messages array
 	cJSON *messages = cJSON_CreateArray();
@@ -1007,7 +1007,7 @@ static int api_info_messages_GET(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-static int api_info_messages_DELETE(struct ftl_conn *api)
+static int api_info_messages_DELETE(struct lorentz_conn *api)
 {
 	// Check if we have an ID
 	errno = 0;
@@ -1062,7 +1062,7 @@ static int api_info_messages_DELETE(struct ftl_conn *api)
 	JSON_SEND_OBJECT_CODE(json, deleted > 0 ? 204 : 404);
 }
 
-int api_info_messages(struct ftl_conn *api)
+int api_info_messages(struct lorentz_conn *api)
 {
 	if(api->method == HTTP_GET)
 		return api_info_messages_GET(api);
@@ -1072,7 +1072,7 @@ int api_info_messages(struct ftl_conn *api)
 		return send_json_error(api, 405, "method_not_allowed", "Method not allowed", NULL);
 }
 
-int api_info_metrics(struct ftl_conn *api)
+int api_info_metrics(struct lorentz_conn *api)
 {
 	struct metrics metrics = { 0 };
 	get_dnsmasq_metrics(&metrics);
@@ -1149,7 +1149,7 @@ int api_info_metrics(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json2);
 }
 
-int api_info_login(struct ftl_conn *api)
+int api_info_login(struct lorentz_conn *api)
 {
 	cJSON *json = JSON_NEW_OBJECT();
 

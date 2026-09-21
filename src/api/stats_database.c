@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API database statistics implementation
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api.h"
@@ -23,7 +23,7 @@
 #define FILTER_STATUS_NOT_BLOCKED "status IN (0,2,3,12,13,14,17)"
 #define FILTER_STATUS_BLOCKED "status NOT IN (0,2,3,12,13,14,17)"
 
-int api_history_database(struct ftl_conn *api)
+int api_history_database(struct lorentz_conn *api)
 {
 	double from = 0, until = 0;
 	const int interval = 600;
@@ -180,7 +180,7 @@ int api_history_database(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int api_stats_database_top_items(struct ftl_conn *api)
+int api_stats_database_top_items(struct lorentz_conn *api)
 {
 	unsigned int count = 10;
 	double from = 0.0, until = 0.0;
@@ -380,7 +380,7 @@ int api_stats_database_top_items(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int api_stats_database_summary(struct ftl_conn *api)
+int api_stats_database_summary(struct lorentz_conn *api)
 {
 	double from = 0, until = 0;
 	if(api->request->query_string != NULL)
@@ -453,7 +453,7 @@ int api_stats_database_summary(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int api_history_database_clients(struct ftl_conn *api)
+int api_history_database_clients(struct lorentz_conn *api)
 {
 	double from = 0, until = 0;
 	const int interval = 600;
@@ -643,7 +643,7 @@ int api_history_database_clients(struct ftl_conn *api)
 	JSON_SEND_OBJECT(json);
 }
 
-int api_stats_database_query_types(struct ftl_conn *api)
+int api_stats_database_query_types(struct lorentz_conn *api)
 {
 	double from = 0, until = 0;
 	if(api->request->query_string != NULL)
@@ -730,7 +730,7 @@ int api_stats_database_query_types(struct ftl_conn *api)
 }
 
 
-int api_stats_database_upstreams(struct ftl_conn *api)
+int api_stats_database_upstreams(struct lorentz_conn *api)
 {
 	double from = 0, until = 0;
 	if(api->request->query_string != NULL)

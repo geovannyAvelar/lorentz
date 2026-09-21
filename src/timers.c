@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Timing routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "timers.h"
 #include "log.h"
 // killed
@@ -107,7 +107,7 @@ void *timer(void *val)
 	{
 		if(timer_delay > 0)
 		{
-			log_debug(DEBUG_EXTRA, "Pi-hole will be %s in %.1f seconds...",
+			log_debug(DEBUG_EXTRA, "Lorentz will be %s in %.1f seconds...",
 			          timer_target_status ? "enabled" : "disabled", timer_delay);
 
 			timer_delay -= SLEEPING_TIME;

@@ -131,7 +131,7 @@ components:
           - "Group management"
         operationId: "list_groups"
         description: |
-          Returns the full list of groups configured on your Pi-hole.
+          Returns the full list of groups configured on your Lorentz.
 
           This is the collection form of `GET /api/groups/{name}` (see `get_groups`)
           and returns the same array schema without requiring a `{name}` path parameter.

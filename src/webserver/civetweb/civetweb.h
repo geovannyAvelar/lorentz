@@ -23,7 +23,7 @@
 #ifndef CIVETWEB_HEADER_INCLUDED
 #define CIVETWEB_HEADER_INCLUDED
 
-#include <netinet/in.h> /* Pi-hole extension */
+#include <netinet/in.h> /* Lorentz extension */
 
 #define CIVETWEB_VERSION "1.17"
 #define CIVETWEB_VERSION_MAJOR (1)
@@ -185,7 +185,7 @@ struct mg_request_info {
 
 	const char *acceptedWebSocketSubprotocol; /* websocket subprotocol,
 	                                           * accepted during handshake */
-	/* Pi-hole modification */
+	/* Lorentz modification */
 	char csrf_token[32];
 	int is_authenticated;
 };
@@ -724,8 +724,8 @@ struct mg_server_port {
 	int _reserved3;
 	int _reserved4;
    union {
-     struct sockaddr_in sa4; /* Pi-hole extension */
-     struct sockaddr_in6 sa6; /* Pi-hole extension */
+     struct sockaddr_in sa4; /* Lorentz extension */
+     struct sockaddr_in6 sa6; /* Lorentz extension */
    } addr;
 };
 
@@ -937,20 +937,20 @@ CIVETWEB_API int mg_send_http_error(struct mg_connection *conn,
                                     PRINTF_FORMAT_STRING(const char *fmt),
                                     ...) PRINTF_ARGS(3, 4);
 
-/************************************** Pi-hole method **************************************/
+/************************************** Lorentz method **************************************/
 int my_send_http_error_headers(struct mg_connection *conn,
                                int status, const char* mime_type,
                                long long content_length);
 
-void FTL_rewrite_pattern(char *filename, unsigned long filename_buf_len);
+void Lorentz_rewrite_pattern(char *filename, unsigned long filename_buf_len);
 
 
-void FTL_mbed_debug(void *user_param, int level, const char *file,
+void Lorentz_mbed_debug(void *user_param, int level, const char *file,
                     int line, const char *message);
 
 // Buffer used for additional "Set-Cookie" headers
-#define PIHOLE_HEADERS_MAXLEN 1024
-extern _Thread_local char pi_hole_extra_headers[PIHOLE_HEADERS_MAXLEN];
+#define LORENTZ_HEADERS_MAXLEN 1024
+extern _Thread_local char lorentz_extra_headers[LORENTZ_HEADERS_MAXLEN];
 /********************************************************************************************/
 
 

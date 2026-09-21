@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2024 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Real Time Clock (RTC) functions
 *  The routines in this file have been inspired by man pages
 *  and the source of the hwclock which is part of the util-linux
@@ -43,7 +43,7 @@ static void print_tm_time(const char *label, const struct tm *tm)
 
 // Open one RTC device, momentarily taking ownership if the current permissions
 // do not allow it. On some embedded systems the RTC device is owned by root
-// exclusively and the FTL user cannot even open it; without access to the RTC,
+// exclusively and the Lorentz user cannot even open it; without access to the RTC,
 // the capability to set the time (CAP_SYS_TIME) is useless.
 //
 // The path can come from configuration (ntp.sync.rtc.device), so the escalation
@@ -74,7 +74,7 @@ static int open_rtc_device(const char *path)
 	}
 
 	// It has to be the RTC character device - not, e.g., a regular file whose
-	// ownership someone wants handed to the FTL user.
+	// ownership someone wants handed to the Lorentz user.
 	struct stat st = { 0 };
 	if(fstat(path_fd, &st) == -1 || !S_ISCHR(st.st_mode))
 	{

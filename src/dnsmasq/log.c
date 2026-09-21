@@ -15,7 +15,7 @@
 */
 
 #include "dnsmasq.h"
-/******* Pi-hole modification *******/
+/******* Lorentz modification *******/
 #include "log.h"
 #include "dnsmasq_interface.h"
 #include "main.h"
@@ -90,7 +90,7 @@ int log_start(struct passwd *ent_pw, int errfd)
   if (!log_reopen(daemon->log_file))
     {
       send_event(errfd, EVENT_LOG_ERR, errno, daemon->log_file ? daemon->log_file : "");
-      die(_("failed to open log file: %s"), strerror(errno), 1); // Pi-hole modification
+      die(_("failed to open log file: %s"), strerror(errno), 1); // Lorentz modification
     }
 
   /* if queuing is inhibited, make sure we allocate
@@ -322,12 +322,12 @@ void my_syslog(int priority, const char *format, ...)
   priority &= LOG_PRIMASK;
 #endif
 
-  /*************************** Pi-hole specific logging **************************/
+  /*************************** Lorentz specific logging **************************/
   char buffer[MAX_MESSAGE + 1u];
   va_start(ap, format);
   len = vsnprintf(buffer, MAX_MESSAGE, format, ap) + 1u; /* include zero-terminator */
   va_end(ap);
-  FTL_dnsmasq_log(buffer, len > MAX_MESSAGE ? MAX_MESSAGE : len);
+  Lorentz_dnsmasq_log(buffer, len > MAX_MESSAGE ? MAX_MESSAGE : len);
   /*******************************************************************************/
 
   if (echo_stderr) 
@@ -339,7 +339,7 @@ void my_syslog(int priority, const char *format, ...)
       fputc('\n', stderr);
     }
 
-  /* Pi-hole diagnosis system */
+  /* Lorentz diagnosis system */
   if(priority == LOG_WARNING)
     {
       char *message;
@@ -516,11 +516,11 @@ void die(char *message, char *arg1, int exit_code)
   my_syslog(LOG_CRIT, _("FAILED to start up"));
   flush_log();
 
-  /********** Pi-hole modification *************/
+  /********** Lorentz modification *************/
   if(only_testing)
     exit(exit_code);
 
-  FTL_log_dnsmasq_fatal(message, arg1, errmess);
+  Lorentz_log_dnsmasq_fatal(message, arg1, errmess);
 
   // Jump back into main() to exit gracefully
   longjmp(exit_jmp, exit_code);

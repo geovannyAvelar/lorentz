@@ -1,19 +1,19 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
-*  Pi-hole syscall implementation for write
+*  Lorentz Engine
+*  Lorentz syscall implementation for write
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
-//#include "syscalls.h" is implicitly done in FTL.h
+#include "lorentz.h"
+//#include "syscalls.h" is implicitly done in lorentz.h
 #include "log.h"
 
 #undef write
-ssize_t FTLwrite(int fd, const void *buf, size_t total, const char *file, const char *func, const int line)
+ssize_t Lorentzwrite(int fd, const void *buf, size_t total, const char *file, const char *func, const int line)
 {
 	if(buf == NULL)
 	{

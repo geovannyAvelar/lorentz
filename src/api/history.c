@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api.h"
@@ -21,7 +21,7 @@
 // get_max_overtime_slot()
 #include "gc.h"
 
-int api_history(struct ftl_conn *api)
+int api_history(struct lorentz_conn *api)
 {
 	lock_shm();
 
@@ -100,7 +100,7 @@ static unsigned int build_client_temparray(int *temparray, const int slot)
 	return num_clients;
 }
 
-int api_history_clients(struct ftl_conn *api)
+int api_history_clients(struct lorentz_conn *api)
 {
 	// Exit before processing any data if requested via config setting
 	if(config.misc.privacylevel.v.privacy_level >= PRIVACY_HIDE_DOMAINS_CLIENTS)

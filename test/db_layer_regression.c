@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2026 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Regression harness for the modules built on the database driver layer
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-// Unlike db_driver_regression, this harness is linked with the complete FTL
+// Unlike db_driver_regression, this harness is linked with the complete Lorentz
 // object set (see src/CMakeLists.txt) and drives the real modules: the common
 // helpers, the in-memory query database, the gravity database, the message,
 // session and network tables, gravity_parseList() and, in the other
@@ -18,7 +18,7 @@
 // Shared memory is not initialized, so code that needs the DNS engine's
 // shared-memory structures is out of scope here.
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "config/config.h"
 #include "database/common.h"
 #include "database/query-table.h"
@@ -67,7 +67,7 @@ static void configure(void)
 
 static char db_path[512];
 
-void db_test_fresh_ftl_db(const char *name)
+void db_test_fresh_lorentz_db(const char *name)
 {
 	snprintf(db_path, sizeof(db_path), "%s", db_test_path(name));
 	remove(db_path);
@@ -118,8 +118,8 @@ const char *db_test_make_gravity_db(const char *name)
 
 void test_common_helpers(void)
 {
-	db_test_fresh_ftl_db("common.db");
-	CHECK(!FTLDBerror());
+	db_test_fresh_lorentz_db("common.db");
+	CHECK(!LorentzDBerror());
 
 	db_conn *c = dbopen(false, false);
 	CHECK(c != NULL);
@@ -137,10 +137,10 @@ void test_common_helpers(void)
 	CHECK(db_table_exists(c, "aliasclient"));
 	CHECK(strlen(get_sqlite3_version()) > 0);
 
-	// FTL properties and counters
-	CHECK(db_set_FTL_property(c, DB_LASTTIMESTAMP, 1234));
+	// Lorentz properties and counters
+	CHECK(db_set_Lorentz_property(c, DB_LASTTIMESTAMP, 1234));
 	CHECK(db_get_int(c, DB_LASTTIMESTAMP) == 1234);
-	CHECK(db_set_FTL_property(c, DB_LASTTIMESTAMP, 5678)); // upsert
+	CHECK(db_set_Lorentz_property(c, DB_LASTTIMESTAMP, 5678)); // upsert
 	CHECK(db_get_int(c, DB_LASTTIMESTAMP) == 5678);
 	CHECK(db_set_counter(c, DB_TOTALQUERIES, 41));
 	CHECK(db_update_disk_counter(c, DB_TOTALQUERIES, 1));
@@ -184,7 +184,7 @@ void test_common_helpers(void)
 
 void test_memory_database(void)
 {
-	db_test_fresh_ftl_db("memdb.db");
+	db_test_fresh_lorentz_db("memdb.db");
 	CHECK(init_memory_database());
 
 	db_conn *m = get_memdb();
@@ -293,11 +293,11 @@ void test_gravity_database(void)
 	gravityDB_readTableFinalize(stmt);
 
 	// Searching by item and by id list
-	CHECK(gravityDB_readTable(NULL, GRAVITY_DOMAINLIST_ALL_EXACT, "denied.ftl", &msg, true, NULL, &stmt));
+	CHECK(gravityDB_readTable(NULL, GRAVITY_DOMAINLIST_ALL_EXACT, "denied.lorentz", &msg, true, NULL, &stmt));
 	rows = 0;
 	while(gravityDB_readTableGetRow(GRAVITY_DOMAINLIST_ALL_EXACT, &row, &msg, stmt))
 	{
-		CHECK(strcmp(row.domain, "denied.ftl") == 0);
+		CHECK(strcmp(row.domain, "denied.lorentz") == 0);
 		rows++;
 	}
 	CHECK(rows == 1);
@@ -340,7 +340,7 @@ void test_gravity_database(void)
 
 void test_message_session_network(void)
 {
-	db_test_fresh_ftl_db("tables.db");
+	db_test_fresh_lorentz_db("tables.db");
 	CHECK(init_memory_database());
 
 	// Messages

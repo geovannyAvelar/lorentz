@@ -1,15 +1,15 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Argument parsing routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
 // DNSMASQ COPYRIGHT
-#define FTLDNS
+#define LORENTZDNS
 #include "dnsmasq/dnsmasq.h"
 #undef __USE_XOPEN
 
@@ -23,7 +23,7 @@
 #include <mbedtls/version.h>
 #endif
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "args.h"
 #include "version.h"
 #include "main.h"
@@ -35,7 +35,7 @@
 // init_shmem()
 #include "shmem.h"
 // LUA dependencies
-#include "lua/ftl_lua.h"
+#include "lua/lorentz_lua.h"
 // gravity_parseList()
 #include "tools/gravity-parseList.h"
 // sqlite3_libversion(), sqlite3_compileoption_get()
@@ -232,19 +232,19 @@ void parse_args(int argc, char *argv[])
 	argv_dnsmasq[2] = "";
 
 	bool consume_for_dnsmasq = false;
-	// If the binary name is "dnsmasq" (e.g., symlink /usr/bin/dnsmasq -> /usr/bin/pihole-FTL),
+	// If the binary name is "dnsmasq" (e.g., symlink /usr/bin/dnsmasq -> /usr/bin/lorentz),
 	// we operate in drop-in mode and consume all arguments for the embedded dnsmasq core
 	if(strEndsWith(argv[0], "dnsmasq"))
 		consume_for_dnsmasq = true;
 
-	// If the binary name is "lua"  (e.g., symlink /usr/bin/lua -> /usr/bin/pihole-FTL),
+	// If the binary name is "lua"  (e.g., symlink /usr/bin/lua -> /usr/bin/lorentz),
 	// we operate in drop-in mode and consume all arguments for the embedded lua engine
 	// Also, we do this if the first argument is a file with ".lua" ending
 	if(strEndsWith(argv[0], "lua") ||
 	   (argc > 1 && strEndsWith(argv[1], ".lua")))
 		exit(run_lua_interpreter(argc, argv, false));
 
-	// If the binary name is "luac"  (e.g., symlink /usr/bin/luac -> /usr/bin/pihole-FTL),
+	// If the binary name is "luac"  (e.g., symlink /usr/bin/luac -> /usr/bin/lorentz),
 	// we operate in drop-in mode and consume all arguments for the embedded luac engine
 	if(strEndsWith(argv[0], "luac"))
 		exit(run_luac(argc, argv));
@@ -292,14 +292,14 @@ void parse_args(int argc, char *argv[])
 		exit(EXIT_SUCCESS);
 	}
 
-	// If the binary name is "sqlite3"  (e.g., symlink /usr/bin/sqlite3 -> /usr/bin/pihole-FTL),
+	// If the binary name is "sqlite3"  (e.g., symlink /usr/bin/sqlite3 -> /usr/bin/lorentz),
 	// we operate in drop-in mode and consume all arguments for the embedded SQLite3 engine
 	// Also, we do this if the first argument is a file with ".db" ending
 	if(strEndsWith(argv[0], "sqlite3") ||
 	   (argc > 1 && strEndsWith(argv[1], ".db")))
 			exit(sqlite3_shell_main(argc, argv));
 
-	// If the binary name is "sqlite3_rsync"  (e.g., symlink /usr/bin/sqlite3_rsync -> /usr/bin/pihole-FTL),
+	// If the binary name is "sqlite3_rsync"  (e.g., symlink /usr/bin/sqlite3_rsync -> /usr/bin/lorentz),
 	// we operate in drop-in mode and consume all arguments for the embedded sqlite3_rsync tool
 	if(strEndsWith(argv[0], "sqlite3_rsync"))
 		exit(sqlite3_rsync_main(argc, argv));
@@ -366,7 +366,7 @@ void parse_args(int argc, char *argv[])
 		// Enable stdout printing
 		cli_mode = true;
 		log_ctrl(false, false);
-		const bool conf_read = readFTLconf(&config, false);
+		const bool conf_read = readLorentzconf(&config, false);
 		log_ctrl(false, true);
 		clear_debug_flags(); // No debug printing wanted
 
@@ -374,9 +374,9 @@ void parse_args(int argc, char *argv[])
 		// value we are about to print may not reflect the current
 		// configuration. This happens when the primary config file exists
 		// but cannot be read - most commonly because the command is run
-		// without sudo as a user that is not allowed to read pihole.toml
-		// (which is installed mode 0640 owned by pihole:pihole). In that
-		// case, FTL silently falls back to a config backup or, if none can
+		// without sudo as a user that is not allowed to read lorentz.toml
+		// (which is installed mode 0640 owned by lorentz:lorentz). In that
+		// case, Lorentz silently falls back to a config backup or, if none can
 		// be read either, to the compiled-in defaults. We warn on stderr so
 		// the (possibly stale or default) value can still be consumed on
 		// stdout (see GitHub issue #2849).
@@ -430,7 +430,7 @@ void parse_args(int argc, char *argv[])
 	{
 		cli_mode = true;
 		log_ctrl(false, false);
-		readFTLconf(&config, false);
+		readLorentzconf(&config, false);
 		log_ctrl(false, true);
 		clear_debug_flags(); // No debug printing wanted
 		exit(printTOTP());
@@ -442,7 +442,7 @@ void parse_args(int argc, char *argv[])
 		// Enable stdout printing
 		cli_mode = true;
 		log_ctrl(false, true);
-		readFTLconf(&config, false);
+		readLorentzconf(&config, false);
 		exit(write_teleporter_zip_to_disk() ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -474,7 +474,7 @@ void parse_args(int argc, char *argv[])
 		// Enable stdout printing
 		cli_mode = true;
 		log_ctrl(false, true);
-		readFTLconf(&config, false);
+		readLorentzconf(&config, false);
 		exit(ntp_client(server, update, true) ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -484,7 +484,7 @@ void parse_args(int argc, char *argv[])
 		// Enable stdout printing
 		cli_mode = true;
 		log_ctrl(false, true);
-		readFTLconf(&config, false);
+		readLorentzconf(&config, false);
 		exit(read_teleporter_zip_from_disk(argv[2]) ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
@@ -495,24 +495,24 @@ void parse_args(int argc, char *argv[])
 		if(argc < 3 || argc > 5)
 		{
 			printf("Usage: %s --gen-x509 <output file> [<domain>] [rsa]\n", argv[0]);
-			printf("Example:          %s --gen-x509 /etc/pihole/tls.pem\n", argv[0]);
-			printf(" with domain:     %s --gen-x509 /etc/pihole/tls.pem pi.hole\n", argv[0]);
-			printf(" RSA with domain: %s --gen-x509 /etc/pihole/tls.pem nanopi.lan rsa\n", argv[0]);
+			printf("Example:          %s --gen-x509 /etc/lorentz/tls.pem\n", argv[0]);
+			printf(" with domain:     %s --gen-x509 /etc/lorentz/tls.pem lorentz.lan\n", argv[0]);
+			printf(" RSA with domain: %s --gen-x509 /etc/lorentz/tls.pem nanopi.lan rsa\n", argv[0]);
 			exit(EXIT_FAILURE);
 		}
 		// Read config
-		readFTLconf(&config, false);
+		readLorentzconf(&config, false);
 
 		// Enable stdout printing
 		cli_mode = true;
 		log_ctrl(false, true);
 
-		const char *domain = argc > 3 ? argv[3] : "pi.hole";
+		const char *domain = argc > 3 ? argv[3] : "lorentz.lan";
 		const bool rsa = argc > 4 && strcasecmp(argv[4], "rsa") == 0;
 
 		exit(generate_certificate(argv[2], rsa, domain, config.webserver.tls.validity.v.ui) ? EXIT_SUCCESS : EXIT_FAILURE);
 #else
-		printf("Error: FTL was compiled without TLS support. Certificate generation is not available.\n");
+		printf("Error: Lorentz was compiled without TLS support. Certificate generation is not available.\n");
 		exit(EXIT_FAILURE);
 #endif
 	}
@@ -526,8 +526,8 @@ void parse_args(int argc, char *argv[])
 		if(argc > 4)
 		{
 			printf("Usage: %s %s [<input file>] [<domain>]\n", argv[0], argv[1]);
-			printf("Example: %s %s /etc/pihole/tls.pem\n", argv[0], argv[1]);
-			printf(" with domain: %s %s /etc/pihole/tls.pem pi.hole\n", argv[0], argv[1]);
+			printf("Example: %s %s /etc/lorentz/tls.pem\n", argv[0], argv[1]);
+			printf(" with domain: %s %s /etc/lorentz/tls.pem lorentz.lan\n", argv[0], argv[1]);
 			exit(EXIT_FAILURE);
 		}
 
@@ -538,7 +538,7 @@ void parse_args(int argc, char *argv[])
 		const char *certfile = NULL;
 		if(argc == 2)
 		{
-			readFTLconf(&config, false);
+			readLorentzconf(&config, false);
 			certfile = config.webserver.tls.cert.v.s;
 		}
 		else
@@ -566,32 +566,32 @@ void parse_args(int argc, char *argv[])
 			exit(EXIT_FAILURE);
 		}
 #else
-		printf("Error: FTL was compiled without TLS support. Certificate reading is not available.\n");
+		printf("Error: Lorentz was compiled without TLS support. Certificate reading is not available.\n");
 		exit(EXIT_FAILURE);
 #endif
 	}
 
-	// If the first argument is "gravity" (e.g., /usr/bin/pihole-FTL gravity),
+	// If the first argument is "gravity" (e.g., /usr/bin/lorentz gravity),
 	// we offer some specialized gravity tools
 	if(argc > 1 && (strcmp(argv[1], "gravity") == 0 || strcmp(argv[1], "antigravity") == 0))
 	{
 		const bool antigravity = strcmp(argv[1], "antigravity") == 0;
 
-		// pihole-FTL gravity parseList <infile> <outfile> <adlistID>
+		// lorentz gravity parseList <infile> <outfile> <adlistID>
 		if(argc == 6 && strcasecmp(argv[2], "parseList") == 0)
 		{
 			// Parse the given list and write the result to the given file
 			exit(gravity_parseList(argv[3], argv[4], argv[5], false, antigravity));
 		}
 
-		// pihole-FTL gravity checkList <infile>
+		// lorentz gravity checkList <infile>
 		if(argc == 4 && strcasecmp(argv[2], "checkList") == 0)
 		{
 			// Parse the given list and write the result to the given file
 			exit(gravity_parseList(argv[3], "", "-1", true, antigravity));
 		}
 
-		printf("Incorrect usage of pihole-FTL gravity subcommand\n");
+		printf("Incorrect usage of lorentz gravity subcommand\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -691,7 +691,7 @@ void parse_args(int argc, char *argv[])
 	{
 		// Enable stdout printing
 		cli_mode = true;
-		const enum verify_result match = verify_FTL(true);
+		const enum verify_result match = verify_Lorentz(true);
 		printf("%s Binary integrity check: %s\n",
 		       match == VERIFY_OK ? cli_tick() :
 		         match == VERIFY_NO_CHECKSUM ? cli_qst() : cli_cross(),
@@ -708,7 +708,7 @@ void parse_args(int argc, char *argv[])
 		cli_mode = true;
 
 		// Need to get dns.port and the resolver settings
-		readFTLconf(&config, false);
+		readLorentzconf(&config, false);
 
 		// TCP or UDP (default)?
 		const bool tcp = argc == 4 && strcasecmp(argv[3], "tcp") == 0;
@@ -777,9 +777,9 @@ void parse_args(int argc, char *argv[])
 	}
 
 	// Check file for given string
-	// pihole-FTL wait-for <string> <file> <timeout> [<initial_filesize>]
-	// Example: pihole-FTL wait-for "DNS service is running" /var/log/pihole/FTL.log 30
-	// This will check /var/log/pihole/FTL.log for the string "DNS service is running"
+	// lorentz wait-for <string> <file> <timeout> [<initial_filesize>]
+	// Example: lorentz wait-for "DNS service is running" /var/log/lorentz/lorentz.log 30
+	// This will check /var/log/lorentz/lorentz.log for the string "DNS service is running"
 	if((argc == 5 || argc == 6) && strcmp(argv[1], "wait-for") == 0)
 	{
 		// Enable stdout printing
@@ -873,7 +873,7 @@ void parse_args(int argc, char *argv[])
 			exit(sqlite3_rsync_main(argc - i, &argv[i]));
 		}
 
-		// Implement dnsmasq's test function, no need to prepare the entire FTL
+		// Implement dnsmasq's test function, no need to prepare the entire Lorentz
 		// environment (initialize shared memory, load queries from long-term
 		// database, ...) when the task is a simple (dnsmasq) syntax check
 		if(strcmp(argv[i], "dnsmasq-test") == 0 ||
@@ -884,7 +884,7 @@ void parse_args(int argc, char *argv[])
 			arg[1] = "--test";
 			log_ctrl(false, true);
 			// Signal dnsmasq's die() to exit() instead of trying to
-			// jump back into FTL's main() via longjmp(exit_jmp, ...).
+			// jump back into Lorentz's main() via longjmp(exit_jmp, ...).
 			// exit_jmp is only initialized (setjmp) once we reach
 			// main(), which never happens on this early-exit path, so
 			// a config read error (e.g., permission denied) would
@@ -894,7 +894,7 @@ void parse_args(int argc, char *argv[])
 			exit(main_dnsmasq(2, (char**)arg));
 		}
 
-		// Implement dnsmasq's test function, no need to prepare the entire FTL
+		// Implement dnsmasq's test function, no need to prepare the entire Lorentz
 		// environment (initialize shared memory, lead queries from long-term
 		// database, ...) when the task is a simple (dnsmasq) syntax check
 		if(argc == 3 && strcmp(argv[1], "dnsmasq-test-file") == 0)
@@ -976,7 +976,7 @@ void parse_args(int argc, char *argv[])
 			return;
 		}
 
-		// What follows beyond this point are FTL internal command line arguments
+		// What follows beyond this point are Lorentz internal command line arguments
 
 		if(strcmp(argv[i], "d") == 0 ||
 		   strcmp(argv[i], "debug") == 0)
@@ -989,7 +989,7 @@ void parse_args(int argc, char *argv[])
 			argv_dnsmasq[1] = "-d";
 		}
 
-		// Full start FTL but shut down immediately once everything is up
+		// Full start Lorentz but shut down immediately once everything is up
 		// This ensures we'd catch any dnsmasq config errors,
 		// incorrect file permissions, etc.
 		if(strcmp(argv[i], "test") == 0)
@@ -1002,7 +1002,7 @@ void parse_args(int argc, char *argv[])
 		   strcmp(argv[i], "version") == 0 ||
 		   strcmp(argv[i], "--version") == 0)
 		{
-			printf("%s\n", get_FTL_version());
+			printf("%s\n", get_Lorentz_version());
 			exit(EXIT_SUCCESS);
 		}
 
@@ -1015,15 +1015,15 @@ void parse_args(int argc, char *argv[])
 			const char *red = cli_color(COL_RED);
 			const char *yellow = cli_color(COL_YELLOW);
 
-			// Print FTL version
-			printf("****************************** %s%sFTL%s **********************************\n",
+			// Print Lorentz version
+			printf("****************************** %s%sLorentz%s **********************************\n",
 			       yellow, bold, normal);
 			printf("Version:         %s%s%s%s\n",
-			       green, bold, get_FTL_version(), normal);
+			       green, bold, get_Lorentz_version(), normal);
 			printf("Branch:          %s\n", git_branch());
 			printf("Commit:          %s (%s)\n",git_hash(), git_date());
-			printf("Architecture:    %s\n", ftl_arch());
-			printf("Compiler:        %s\n", ftl_cc());
+			printf("Architecture:    %s\n", lorentz_arch());
+			printf("Compiler:        %s\n", lorentz_cc());
 #if defined(__GLIBC__) && defined(__GLIBC_MINOR__)
 			printf("GLIBC version:   %d.%d\n\n", __GLIBC__, __GLIBC_MINOR__);
 #else
@@ -1064,10 +1064,10 @@ void parse_args(int argc, char *argv[])
 			printf("****************************** %s%sCivetWeb%s *****************************\n",
 			       yellow, bold, normal);
 #ifdef HAVE_MBEDTLS
-			printf("Version:         %s%s%s%s (modified by Pi-hole) with %smbed TLS %s%s"MBEDTLS_VERSION_STRING"%s\n",
+			printf("Version:         %s%s%s%s (modified by Lorentz) with %smbed TLS %s%s"MBEDTLS_VERSION_STRING"%s\n",
 			       green, bold, mg_version(), normal, yellow, green, bold, normal);
 #else
-			printf("Version:         %s%s%s%s%s (modified by Pi-hole) without %smbed TLS%s\n",
+			printf("Version:         %s%s%s%s%s (modified by Lorentz) without %smbed TLS%s\n",
 			       green, bold, mg_version(), normal, red, yellow, normal);
 #endif
 			printf("Features:        ");
@@ -1173,7 +1173,7 @@ void parse_args(int argc, char *argv[])
 				exit(regex_test(debug_mode, quiet, argv[i + 1], argv[i + 2]));
 			else
 			{
-				printf("pihole-FTL: invalid option -- '%s' need either one or two parameters\nTry '%s --help' for more information\n", argv[i], argv[0]);
+				printf("lorentz: invalid option -- '%s' need either one or two parameters\nTry '%s --help' for more information\n", argv[i], argv[0]);
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -1191,15 +1191,15 @@ void parse_args(int argc, char *argv[])
 			const char *yellow = cli_color(COL_YELLOW);
 			const char *purple = cli_color(COL_PURPLE);
 
-			printf("%sThe Pi-hole FTL engine - %s%s\n\n", bold, get_FTL_version(), normal);
-			printf("Typically, pihole-FTL runs as a system service and is controlled\n");
-			printf("by %ssudo service pihole-FTL %s<action>%s where %s<action>%s is one out\n", green, purple, normal, purple, normal);
+			printf("%sThe Lorentz engine - %s%s\n\n", bold, get_Lorentz_version(), normal);
+			printf("Typically, lorentz runs as a system service and is controlled\n");
+			printf("by %ssudo service lorentz %s<action>%s where %s<action>%s is one out\n", green, purple, normal, purple, normal);
 			printf("of %sstart%s, %sstop%s, or %srestart%s.\n\n", green, normal, green, normal, green, normal);
-			printf("pihole-FTL exposes some features going beyond the standard\n");
-			printf("%sservice pihole-FTL%s command. These are:\n\n", green, normal);
+			printf("lorentz exposes some features going beyond the standard\n");
+			printf("%sservice lorentz%s command. These are:\n\n", green, normal);
 
 			printf("%sVersion information:%s\n", yellow, normal);
-			printf("\t%s-v%s, %sversion%s         Return FTL version\n", green, normal, green, normal);
+			printf("\t%s-v%s, %sversion%s         Return Lorentz version\n", green, normal, green, normal);
 			printf("\t%s-vv%s                 Return verbose version information\n", green, normal);
 			printf("\t%s-t%s, %stag%s             Return git tag\n", green, normal, green, normal);
 			printf("\t%s-b%s, %sbranch%s          Return git branch\n", green, normal, green, normal);
@@ -1217,8 +1217,8 @@ void parse_args(int argc, char *argv[])
 			printf("    %s%s %s-q%s regex-test %ssomebad.domain %sbad%s\n\n", green, argv[0], purple, green, blue, cyan, normal);
 
 			printf("%sEmbedded Lua engine:%s\n", yellow, normal);
-			printf("\t%s--lua%s, %slua%s          FTL's lua interpreter\n", green, normal, green, normal);
-			printf("\t%s--luac%s, %sluac%s        FTL's lua compiler\n\n", green, normal, green, normal);
+			printf("\t%s--lua%s, %slua%s          Lorentz's lua interpreter\n", green, normal, green, normal);
+			printf("\t%s--luac%s, %sluac%s        Lorentz's lua compiler\n\n", green, normal, green, normal);
 
 			printf("    Usage: %s%s lua %s[OPTIONS] [SCRIPT [ARGS]]%s\n\n", green, argv[0], cyan, normal);
 			printf("    Options:\n\n");
@@ -1231,7 +1231,7 @@ void parse_args(int argc, char *argv[])
 			printf("      the script.\n\n");
 
 			printf("%sEmbedded SQLite3 shell:%s\n", yellow, normal);
-			printf("\t%ssql%s, %ssqlite3%s                      FTL's SQLite3 shell\n", green, normal, green, normal);
+			printf("\t%ssql%s, %ssqlite3%s                      Lorentz's SQLite3 shell\n", green, normal, green, normal);
 			printf("    Usage: %s sqlite3 %s[OPTIONS] [FILENAME [SQL...]]%s\n\n", green, cyan, normal);
 			printf("    Options:\n\n");
 			printf("    - %s[OPTIONS]%s is an optional set of options. All available\n", cyan, normal);
@@ -1275,7 +1275,7 @@ void parse_args(int argc, char *argv[])
 			printf("%sDebugging and special use:%s\n", yellow, normal);
 			printf("\t%sd%s, %sdebug%s            Enter debugging mode: Don't go into \n", green, normal, green, normal);
 			printf("\t                    daemon mode and verbose logging\n");
-			printf("\t%stest%s                Don't start pihole-FTL but instead\n", green, normal);
+			printf("\t%stest%s                Don't start lorentz but instead\n", green, normal);
 			printf("\t                    process everything and quit immediately\n");
 			printf("\t%s-f%s, %sno-daemon%s       Don't go into daemon mode\n\n", green, normal, green, normal);
 
@@ -1293,9 +1293,9 @@ void parse_args(int argc, char *argv[])
 			printf("    A simple but fast in-memory gzip compressor\n\n");
 			printf("    Usage: %s%s --gzip %sinfile %s[outfile]%s\n\n", green, argv[0], cyan, purple, normal);
 			printf("    - %sinfile%s is the file to be processed. If the filename ends\n", cyan, normal);
-			printf("      in %s.gz%s, FTL will uncompress, otherwise it will compress\n\n", yellow, normal);
+			printf("      in %s.gz%s, Lorentz will uncompress, otherwise it will compress\n\n", yellow, normal);
 			printf("    - %s[outfile]%s is the optional target file.\n", purple, normal);
-			printf("      If omitted, FTL will try to derive the target file from\n");
+			printf("      If omitted, Lorentz will try to derive the target file from\n");
 			printf("      the source file.\n\n");
 			printf("    Examples:\n");
 			printf("      - %s%s --gzip %sfile.txt%s\n", green, argv[0], cyan, normal);
@@ -1316,7 +1316,7 @@ void parse_args(int argc, char *argv[])
 			printf("    an RSA (4096 bit) key will be generated instead.\n\n");
 			printf("    An optional %s[domain]%s can be given to specify the domain\n", blue, normal);
 			printf("    for which the certificate is valid. If omitted, the domain\n");
-			printf("    is set to %spi.hole%s.\n\n", blue, normal);
+			printf("    is set to %slorentz.lan%s.\n\n", blue, normal);
 			printf("    Usage: %s%s --gen-x509 %soutfile %s[domain] %s[rsa]%s\n\n", green, argv[0], cyan, blue, purple, normal);
 
 			printf("%sTLS X.509 certificate parser:%s\n", yellow, normal);
@@ -1330,7 +1330,7 @@ void parse_args(int argc, char *argv[])
 			printf("    Usage: %s%s --read-x509-key %s[certfile] %s[domain]%s\n\n", green, argv[0], cyan, purple, normal);
 
 			printf("%sGravity tools:%s\n", yellow, normal);
-			printf("    Check domains in a given file for validity using Pi-hole's\n");
+			printf("    Check domains in a given file for validity using Lorentz's\n");
 			printf("    gravity filters. The expected input format is one domain\n");
 			printf("    per line (no HOSTS lists, etc.)\n\n");
 			printf("    Usage: %s%s gravity checkList %sinfile%s\n\n", green, argv[0], cyan, normal);
@@ -1357,7 +1357,7 @@ void parse_args(int argc, char *argv[])
 			printf("    Usage: %s%s sha256sum %sfile%s\n\n", green, argv[0], cyan, normal);
 
 			printf("%sOther:%s\n", yellow, normal);
-			printf("\t%sverify%s              Verify the integrity of the FTL binary\n", green, normal);
+			printf("\t%sverify%s              Verify the integrity of the Lorentz binary\n", green, normal);
 			printf("\t%sptr %sIP%s %s[tcp]%s        Resolve IP address to hostname\n", green, cyan, normal, purple, normal);
 			printf("\t                    Append %stcp%s to use TCP instead of UDP\n", purple, normal);
 			printf("\t%sdhcp-discover%s       Discover DHCP servers in the local\n", green, normal);
@@ -1389,7 +1389,7 @@ void parse_args(int argc, char *argv[])
 		// Complain if invalid options have been found
 		if(!ok)
 		{
-			printf("pihole-FTL: invalid option -- '%s'\n", argv[i]);
+			printf("lorentz: invalid option -- '%s'\n", argv[i]);
 			printf("Command: '");
 			for(int j = 0; j < argc; j++)
 			{
@@ -1412,7 +1412,7 @@ void test_dnsmasq_options(int argc, const char *argv[])
 	// Reset getopt before calling read_opts
 	optind = 0;
 
-	// Signal we don't want to jump back to FTL's main()
+	// Signal we don't want to jump back to Lorentz's main()
 	// but die after configuration parsing
 	only_testing = true;
 
@@ -1449,7 +1449,7 @@ static void list_matches(const char *last_word, const char *const *list, size_t 
  * @brief Provides auto-complete suggestions for the CLI based on the current command-line arguments.
  *
  * This function analyzes the provided arguments and prints possible completions to stdout,
- * aiding in command-line auto-completion for the `pihole-FTL` utility and its subcommands.
+ * aiding in command-line auto-completion for the `lorentz` utility and its subcommands.
  * It supports suggestions for root-level commands, subcommands, and configuration keys/values.
  *
  * @param argc The number of command-line arguments.
@@ -1466,9 +1466,9 @@ void suggest_complete(const int argc, char *argv[])
 	// This is the last argument in the command line
 	const char *last_word = argv[argc-1];
 
-	if(argc == 4 && strEndsWith(argv[2], "pihole-FTL"))
+	if(argc == 4 && strEndsWith(argv[2], "lorentz"))
 	{
-		// Root-level suggestion: "pihole-FTL ..."
+		// Root-level suggestion: "lorentz ..."
 		const char *options[] = {
 			"arp-scan", "branch", "backtrace", "crash", "--config", "debug",
 		    "--default-gateway", "dhcp-discover", "dnsmasq-test", "-f",
@@ -1485,7 +1485,7 @@ void suggest_complete(const int argc, char *argv[])
 	}
 	else if(argc == 5 && strEndsWith(argv[3], "gravity"))
 	{
-		// pihole-FTL gravity ...
+		// lorentz gravity ...
 		const char *options[] = {
 			"checkList"
 		};
@@ -1495,7 +1495,7 @@ void suggest_complete(const int argc, char *argv[])
 	}
 	else if(argc == 5 && strEndsWith(argv[3], "ntp"))
 	{
-		// pihole-FTL ntp ...
+		// lorentz ntp ...
 		const char *options[] = {
 			"--update"
 		};
@@ -1505,7 +1505,7 @@ void suggest_complete(const int argc, char *argv[])
 	}
 	else if((argc == 5 || argc == 6) && strEndsWith(argv[3], "sqlite3"))
 	{
-		// pihole-FTL sqlite3 ...
+		// lorentz sqlite3 ...
 		const char *options[] = {
 			"-h", "-ni"
 		};
@@ -1526,7 +1526,7 @@ void suggest_complete(const int argc, char *argv[])
 	}
 	else if(argc == 5 && strEndsWith(argv[3], "arp-scan"))
 	{
-		// pihole-FTL lua ...
+		// lorentz lua ...
 		const char *options[] = {
 			"-a", "-x"
 		};
@@ -1536,7 +1536,7 @@ void suggest_complete(const int argc, char *argv[])
 	}
 	else if(argc == 5 && strEndsWith(argv[3], "idn2"))
 	{
-		// pihole-FTL gzip ...
+		// lorentz gzip ...
 		const char *options[] = {
 			"-d", "--decode"
 		};
@@ -1550,7 +1550,7 @@ void suggest_complete(const int argc, char *argv[])
 		initConfig(&config);
 		if(argc == 5)
 		{
-			// pihole-FTL --config ...
+			// lorentz --config ...
 			for(unsigned int i = 0; i < CONFIG_ELEMENTS; i++)
 			{
 				struct conf_item *conf_item = get_conf_item(&config, i);
@@ -1562,7 +1562,7 @@ void suggest_complete(const int argc, char *argv[])
 		}
 		else if(argc == 6)
 		{
-			// pihole-FTL --config <some key> ...
+			// lorentz --config <some key> ...
 			for(unsigned int i = 0; i < CONFIG_ELEMENTS; i++)
 			{
 				struct conf_item *conf_item = get_conf_item(&config, i);
@@ -1576,7 +1576,7 @@ void suggest_complete(const int argc, char *argv[])
 						case CONF_BOOL:
 						case CONF_ALL_DEBUG_BOOL:
 						{
-							// pihole-FTL --config <boolean option>> ...
+							// lorentz --config <boolean option>> ...
 							const char *options[] = {
 								"true", "false"
 							};
@@ -1595,7 +1595,7 @@ void suggest_complete(const int argc, char *argv[])
 						case CONF_STRING_ALLOCATED:
 						case CONF_JSON_STRING_ARRAY:
 						{
-							// pihole-FTL --config ... <int/long/double/string>
+							// lorentz --config ... <int/long/double/string>
 							// Provide the default value as suggestion
 							char *value = NULL;
 							cJSON *val = addJSONConfValue(conf_item->t, &conf_item->d);
@@ -1704,7 +1704,7 @@ void suggest_complete(const int argc, char *argv[])
 							break;
 
 						case CONF_ENUM_WEB_THEME:
-							// pihole-FTL --config webserver.interface.theme ...
+							// lorentz --config webserver.interface.theme ...
 
 							// Provide matching suggestions
 							for(size_t j = 0; j < THEME_MAX; j++)

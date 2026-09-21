@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/docs
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -10,7 +10,7 @@
 
 #include "docs.h"
 
-int api_docs(struct ftl_conn *api)
+int api_docs(struct lorentz_conn *api)
 {
 	// Handle resource request by redirecting to "/"
 	if(strcmp(api->request->request_uri, "/api/docs") == 0)

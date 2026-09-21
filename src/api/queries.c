@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api/api.h"
@@ -21,7 +21,7 @@
 #include "database/common.h"
 
 #if 0
-static int add_strings_to_array(struct ftl_conn *api, cJSON *array1, cJSON *array2, const char *querystr, const int max_count)
+static int add_strings_to_array(struct lorentz_conn *api, cJSON *array1, cJSON *array2, const char *querystr, const int max_count)
 {
 
 	db_conn *memdb = get_memdb();
@@ -81,7 +81,7 @@ static int add_strings_to_array(struct ftl_conn *api, cJSON *array1, cJSON *arra
 }
 #endif
 
-int api_queries_suggestions(struct ftl_conn *api)
+int api_queries_suggestions(struct lorentz_conn *api)
 {
 	// Does the user request a custom number of records to be included?
 	int count = 30;
@@ -187,7 +187,7 @@ int api_queries_suggestions(struct ftl_conn *api)
 // building the entire (in-memory or on-disk) query history as one document.
 #define API_QUERIES_MAX_ROWS 10000
 
-static void add_querystr_string(struct ftl_conn *api, char *querystr, const char *sql, const char *val, bool *where)
+static void add_querystr_string(struct lorentz_conn *api, char *querystr, const char *sql, const char *val, bool *where)
 {
 	const size_t strpos = strlen(querystr);
 	const char *glue = *where ? "AND" : "WHERE";
@@ -266,7 +266,7 @@ static bool is_wildcard(char *string)
 	return wildcard;
 }
 
-int api_queries(struct ftl_conn *api)
+int api_queries(struct lorentz_conn *api)
 {
 	// Exit before processing any data if requested via config setting
 	if(config.misc.privacylevel.v.privacy_level >= PRIVACY_MAXIMUM)
@@ -1174,7 +1174,7 @@ void free_filter_regex(regex_t *regex, const unsigned int N_regex)
 // and get_top_clients() return a cJSON object, not a status - would go on to
 // send a second body on the same connection. Those pass NULL, and a failure is
 // logged and treated as "no filtering" instead.
-bool compile_filter_regex(struct ftl_conn *api, const char *path, cJSON *json,
+bool compile_filter_regex(struct lorentz_conn *api, const char *path, cJSON *json,
                           regex_t **regex, unsigned int *N_regex, int *ret)
 {
 	if(ret != NULL)

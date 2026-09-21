@@ -4,12 +4,12 @@ components:
   paths:
     gateway:
       get:
-        summary: Get info about the gateway of your Pi-hole
+        summary: Get info about the gateway of your Lorentz
         tags:
           - "Network information"
         operationId: "get_gateway"
         description: |
-          This API hook returns infos about the gateway of your Pi-hole.
+          This API hook returns infos about the gateway of your Lorentz.
 
           If the optional parameter `detailed` is set to `true`, the response will include detailed information about the individual interfaces and routes. Note that the available information is dependent on the interface type and state.
         parameters:
@@ -33,14 +33,14 @@ components:
                     - $ref: 'common.yaml#/components/schemas/took'
     routes:
       get:
-        summary: Get info about the routes of your Pi-hole
+        summary: Get info about the routes of your Lorentz
         tags:
           - "Network information"
         operationId: "get_routes"
         parameters:
           - $ref: 'network.yaml#/components/parameters/devices/detailed'
         description: |
-          This API hook returns infos about the networking routes of your Pi-hole. Note that not all described fields are applicable to any routing type. Users must not rely on the presence of any field without checking the route type first.
+          This API hook returns infos about the networking routes of your Lorentz. Note that not all described fields are applicable to any routing type. Users must not rely on the presence of any field without checking the route type first.
 
           If the optional parameter `detailed` is set to `true`, the response will include more detailed information about the individual routes where the available information is dependent on the route type and state.
         responses:
@@ -62,14 +62,14 @@ components:
                     - $ref: 'common.yaml#/components/schemas/took'
     interfaces:
       get:
-        summary: Get info about the interfaces of your Pi-hole
+        summary: Get info about the interfaces of your Lorentz
         tags:
           - "Network information"
         operationId: "get_interfaces"
         parameters:
           - $ref: 'network.yaml#/components/parameters/devices/detailed'
         description: |
-          This API hook returns infos about the networking interfaces of your Pi-hole. Note that not all described fields are applicable to any routing type. Users must not rely on the presence of any field without checking the route type first.
+          This API hook returns infos about the networking interfaces of your Lorentz. Note that not all described fields are applicable to any routing type. Users must not rely on the presence of any field without checking the route type first.
 
           If the optional parameter `detailed` is set to `true`, the response will include more detailed information about the individual interfaces where the available information is dependent on the interface type and state.
         responses:
@@ -91,12 +91,12 @@ components:
                     - $ref: 'common.yaml#/components/schemas/took'
     devices:
       get:
-        summary: Get info about the devices in your local network as seen by your Pi-hole
+        summary: Get info about the devices in your local network as seen by your Lorentz
         tags:
           - "Network information"
         operationId: "get_network"
         description: |
-          This API hook returns infos about the devices in your local network as seen by your Pi-hole. By default, this number of shown devices is limited to 10. Devices are ordered by when your Pi-hole has received the last query from this device (most recent first)
+          This API hook returns infos about the devices in your local network as seen by your Lorentz. By default, this number of shown devices is limited to 10. Devices are ordered by when your Lorentz has received the last query from this device (most recent first)
         parameters:
           - $ref: 'network.yaml#/components/parameters/devices/max_devices'
           - $ref: 'network.yaml#/components/parameters/devices/max_addresses'
@@ -581,15 +581,15 @@ components:
                 example: enp2s0
               firstSeen:
                 type: integer
-                description: Unix timestamp when this device was first seen by your Pi-hole
+                description: Unix timestamp when this device was first seen by your Lorentz
                 example: 1664623620
               lastQuery:
                 type: integer
-                description: Unix timestamp when your Pi-hole received the last query from this device
+                description: Unix timestamp when your Lorentz received the last query from this device
                 example: 1664688620
               numQueries:
                 type: integer
-                description: Total number of queries your Pi-hole has received from this device
+                description: Total number of queries your Lorentz has received from this device
                 example: 585462
               macVendor:
                 type: string
@@ -612,7 +612,7 @@ components:
                       example: ubuntu-server
                     lastSeen:
                       type: integer
-                      description: Unix timestamp when your Pi-hole has seen this address the last time
+                      description: Unix timestamp when your Lorentz has seen this address the last time
                       example: 1664688620
                     nameUpdated:
                       type: integer

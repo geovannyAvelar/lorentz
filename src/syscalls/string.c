@@ -1,19 +1,19 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
-*  Pi-hole syscall implementation for string-related functions
+*  Lorentz Engine
+*  Lorentz syscall implementation for string-related functions
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
-//#include "syscalls.h" is implicitly done in FTL.h
+#include "lorentz.h"
+//#include "syscalls.h" is implicitly done in lorentz.h
 #include "log.h"
 
 #undef strlen
-size_t FTLstrlen(const char *s, const char *file, const char *func, const int line)
+size_t Lorentzstrlen(const char *s, const char *file, const char *func, const int line)
 {
 	// The strlen() function calculates the length of the string s, not
 	// including the terminating '\0' character.
@@ -26,7 +26,7 @@ size_t FTLstrlen(const char *s, const char *file, const char *func, const int li
 }
 
 #undef strnlen
-size_t FTLstrnlen(const char *s, const size_t maxlen, const char *file, const char *func, const int line)
+size_t Lorentzstrnlen(const char *s, const size_t maxlen, const char *file, const char *func, const int line)
 {
 	// The strnlen() function returns the number of characters in the string s,
 	// not including the terminating '\0' character, but at most maxlen. In
@@ -41,7 +41,7 @@ size_t FTLstrnlen(const char *s, const size_t maxlen, const char *file, const ch
 }
 
 #undef strstr
-char *FTLstrstr(const char *haystack, const char *needle, const char *file, const char *func, const int line)
+char *Lorentzstrstr(const char *haystack, const char *needle, const char *file, const char *func, const int line)
 {
 	// The strstr() function finds the first occurrence of the substring needle
 	// in the string haystack. The terminating '\0' characters are not
@@ -56,7 +56,7 @@ char *FTLstrstr(const char *haystack, const char *needle, const char *file, cons
 }
 
 #undef strcmp
-int FTLstrcmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
+int Lorentzstrcmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
 {
 	// The strcmp() function compares the two strings s1 and s2. It returns an
 	// integer less than, equal to, or greater than zero if s1 is found,
@@ -71,7 +71,7 @@ int FTLstrcmp(const char *s1, const char *s2, const char *file, const char *func
 }
 
 #undef strncmp
-int FTLstrncmp(const char *s1, const char *s2, const size_t n, const char *file, const char *func, const int line)
+int Lorentzstrncmp(const char *s1, const char *s2, const size_t n, const char *file, const char *func, const int line)
 {
 	// The strncmp() function is similar, except it compares only the first (at
 	// most) n bytes of s1 and s2.
@@ -85,7 +85,7 @@ int FTLstrncmp(const char *s1, const char *s2, const size_t n, const char *file,
 }
 
 #undef strcasecmp
-int FTLstrcasecmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
+int Lorentzstrcasecmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
 {
 	// The strcasecmp() function performs a byte-by-byte comparison of the
 	// strings s1 and s2, ignoring the case of the characters. It returns an
@@ -101,7 +101,7 @@ int FTLstrcasecmp(const char *s1, const char *s2, const char *file, const char *
 }
 
 #undef strncasecmp
-int FTLstrncasecmp(const char *s1, const char *s2, const size_t n, const char *file, const char *func, const int line)
+int Lorentzstrncasecmp(const char *s1, const char *s2, const size_t n, const char *file, const char *func, const int line)
 {
 	// The strncasecmp() function is similar, except it compares only the first
 	// (at most) n bytes of s1 and s2.
@@ -115,7 +115,7 @@ int FTLstrncasecmp(const char *s1, const char *s2, const size_t n, const char *f
 }
 
 #undef strcat
-char *FTLstrcat(char *dest, const char *src, const char *file, const char *func, const int line)
+char *Lorentzstrcat(char *dest, const char *src, const char *file, const char *func, const int line)
 {
 	// The strcat() function appends the src string to the dest string,
 	// overwriting the terminating null byte ('\0') at the end of dest, and then
@@ -133,7 +133,7 @@ char *FTLstrcat(char *dest, const char *src, const char *file, const char *func,
 }
 
 #undef strncat
-char *FTLstrncat(char *dest, const char *src, const size_t n, const char *file, const char *func, const int line)
+char *Lorentzstrncat(char *dest, const char *src, const size_t n, const char *file, const char *func, const int line)
 {
 	// The strncat() function is similar, except that it will use at most n bytes
 	// from src; and src does not need to be null-terminated if it contains n or
@@ -148,7 +148,7 @@ char *FTLstrncat(char *dest, const char *src, const size_t n, const char *file, 
 }
 
 #undef strcpy
-char *FTLstrcpy(char *dest, const char *src, const char *file, const char *func, const int line)
+char *Lorentzstrcpy(char *dest, const char *src, const char *file, const char *func, const int line)
 {
 	// The strcpy() function copies the string src to dest (including the
 	// terminating '\0' character.)
@@ -162,7 +162,7 @@ char *FTLstrcpy(char *dest, const char *src, const char *file, const char *func,
 }
 
 #undef strncpy
-char *FTLstrncpy(char *dest, const char *src, const size_t n, const char *file, const char *func, const int line)
+char *Lorentzstrncpy(char *dest, const char *src, const size_t n, const char *file, const char *func, const int line)
 {
 	// The strncpy() function is similar, except that at most n bytes of src are
 	// copied. Warning: If there is no null byte among the first n bytes of src,
@@ -177,7 +177,7 @@ char *FTLstrncpy(char *dest, const char *src, const size_t n, const char *file, 
 }
 
 #undef memset
-void *FTLmemset(void *s, const int c, const size_t n, const char *file, const char *func, const int line)
+void *Lorentzmemset(void *s, const int c, const size_t n, const char *file, const char *func, const int line)
 {
 	// The memset() function fills the first n bytes of the memory area pointed
 	// to by s with the constant byte c.
@@ -190,7 +190,7 @@ void *FTLmemset(void *s, const int c, const size_t n, const char *file, const ch
 }
 
 #undef memcpy
-void *FTLmemcpy(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
+void *Lorentzmemcpy(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
 {
 	// The memcpy() function copies n bytes from memory area src to memory area
 	// dest. The memory areas must not overlap. Use memmove(3) if the memory
@@ -205,7 +205,7 @@ void *FTLmemcpy(void *dest, const void *src, const size_t n, const char *file, c
 }
 
 #undef memmove
-void *FTLmemmove(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
+void *Lorentzmemmove(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
 {
 	// The memmove() function copies n bytes from memory area src to memory area
 	// dest. The memory areas may overlap: copying takes place as though the
@@ -222,7 +222,7 @@ void *FTLmemmove(void *dest, const void *src, const size_t n, const char *file, 
 }
 
 #undef memcmp
-int FTLmemcmp(const void *s1, const void *s2, const size_t n, const char *file, const char *func, const int line)
+int Lorentzmemcmp(const void *s1, const void *s2, const size_t n, const char *file, const char *func, const int line)
 {
 	// The memcmp() function compares the first n bytes (each interpreted as
 	// unsigned char) of the memory areas s1 and s2.
@@ -236,7 +236,7 @@ int FTLmemcmp(const void *s1, const void *s2, const size_t n, const char *file, 
 }
 
 #undef memmem
-void *FTLmemmem(const void *haystack, const size_t haystacklen, const void *needle, const size_t needlelen, const char *file, const char *func, const int line)
+void *Lorentzmemmem(const void *haystack, const size_t haystacklen, const void *needle, const size_t needlelen, const char *file, const char *func, const int line)
 {
 	// The memmem() function finds the start of the first occurrence of the
 	// substring needle of length needlelen in the memory area haystack of

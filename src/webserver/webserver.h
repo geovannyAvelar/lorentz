@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  HTTP server prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -27,7 +27,7 @@ void *webserver_thread(void *val);
 void get_all_supported_ciphersuites(void);
 void set_mbedtls_debug_threshold(const bool enabled);
 
-int ftl_http_redirect(struct mg_connection *conn, const int code, const char *format, ...) __attribute__((format(printf, 3, 4), nonnull(1, 3)));
+int lorentz_http_redirect(struct mg_connection *conn, const int code, const char *format, ...) __attribute__((format(printf, 3, 4), nonnull(1, 3)));
 in_port_t get_https_port(void) __attribute__((pure));
 unsigned short get_api_string(char **buf, const bool domain);
 char *get_prefix_webhome(void) __attribute__((pure));

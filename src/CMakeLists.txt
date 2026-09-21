@@ -1,8 +1,8 @@
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine
+# Lorentz Engine
 # /src/CMakeList.txt
 #
 # This file is copyright under the latest version of the EUPL.
@@ -18,10 +18,10 @@ endif()
 # Do not add run time path information
 # This ensures CMake does not add rpath information to the binary and
 # subsequently strip it from the binary during install causing the binary
-# validation to fail. RPATH is not needed for the FTL binary
+# validation to fail. RPATH is not needed for the Lorentz binary
 SET(CMAKE_SKIP_RPATH TRUE)
 
-# Put runtime output, i.e. pihole-FTL, in the root of the build dir
+# Put runtime output, i.e. lorentz, in the root of the build dir
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
 # SQLITE_OMIT_LOAD_EXTENSION: This option omits the entire extension loading mechanism from SQLite, including sqlite3_enable_load_extension() and sqlite3_load_extension() interfaces. (needs -ldl linking option, otherwise)
@@ -33,13 +33,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 # SQLITE_DQS=0: This setting disables the double-quoted string literal misfeature.
 # SQLITE_ENABLE_DBPAGE_VTAB: Enables the SQLITE_DBPAGE virtual table. Warning: writing to the SQLITE_DBPAGE virtual table can very easily cause unrecoverably database corruption. It is needed for the .recover SQLite3 command.
 # SQLITE_TEMP_STORE=1: This option sets the default value for the temp_store pragma to 1. This means that temporary tables and indices are always stored on disk. This is the default setting.
-# SQLITE_DEFAULT_CACHE_SIZE=4096: Per-connection page cache. Positive value means pages (not kiB), so at the default 4 kiB page size this caps each sqlite3 connection's private cache at ~16 MiB. Previously set to 16384 (= ~64 MiB/conn), which was oversized for FTL's workload: the mmap-backed on-disk query DB lets the kernel page cache cover cold reads for free, and both long-lived handles (_memdb, gravity_db) work against small hot sets. 16 MiB is still comfortably larger than either hot set.
+# SQLITE_DEFAULT_CACHE_SIZE=4096: Per-connection page cache. Positive value means pages (not kiB), so at the default 4 kiB page size this caps each sqlite3 connection's private cache at ~16 MiB. Previously set to 16384 (= ~64 MiB/conn), which was oversized for Lorentz's workload: the mmap-backed on-disk query DB lets the kernel page cache cover cold reads for free, and both long-lived handles (_memdb, gravity_db) work against small hot sets. 16 MiB is still comfortably larger than either hot set.
 # SQLITE_DEFAULT_SYNCHRONOUS=1: Use normal synchronous mode (default is 2)
 # SQLITE_LIKE_DOESNT_MATCH_BLOBS: This option causes the LIKE operator to only match BLOB values against BLOB values and TEXT values against TEXT values. This compile-time option makes SQLite run more efficiently when processing queries that use the LIKE operator.
 # HAVE_MALLOC_H + HAVE_MALLOC_USABLE_SIZE: This option causes SQLite to try to use the malloc_usable_size() function to obtain the actual size of memory allocations from the underlying malloc() system interface. Applications are encouraged to use HAVE_MALLOC_USABLE_SIZE whenever possible.
 # HAVE_FDATASYNC: This option causes SQLite to try to use the fdatasync() system call to sync the database file to disk when committing a transaction. Syncing using fdatasync() is faster than syncing using fsync() as fdatasync() does not wait for the file metadata to be written to disk.
 # SQLITE_DEFAULT_WORKER_THREADS=0: This option sets the default number of worker threads to use when doing parallel sorting and indexing. The default is 0 which means to use a single thread. Do not increase this value as it, ironically, can cause performance degradation and definitely increases total memory usage.
-# SQLITE_MAX_PREPARE_RETRY=200: This option sets the maximum number of automatic re-preparation attempts that can occur after encountering a schema change. This can be caused by running ANALYZE which is done periodically by FTL.
+# SQLITE_MAX_PREPARE_RETRY=200: This option sets the maximum number of automatic re-preparation attempts that can occur after encountering a schema change. This can be caused by running ANALYZE which is done periodically by Lorentz.
 # SQLITE_ENABLE_CARRAY: Enable the carray virtual table module
 # SQLITE_ENABLE_PERCENTILE: Enable the percentile aggregate function
 # SQLITE_DEFAULT_JOURNAL_SIZE_LIMIT=33554432: Cap the rollback journal / WAL file at 32 MiB. Without this, the -wal file on the on-disk query database can grow unbounded between checkpoints on busy resolvers, increasing latency and disk usage. Applied as a compile-time default so every connection inherits it (including attached databases).
@@ -69,7 +69,7 @@ endif()
 # -Wno-unused-parameter: Disable warning for unused parameters. For threads that don't need arguments, we still have to provide a void* args which is then unused.
 set(WARN_FLAGS "-Wall -Wextra -Wno-unused-parameter")
 
-# Extra warning flags we apply only to the FTL part of the code (used not for foreign code such as dnsmasq and SQLite3)
+# Extra warning flags we apply only to the Lorentz part of the code (used not for foreign code such as dnsmasq and SQLite3)
 set(EXTRAWARN_GCC6 "-Werror \
                     -Waddress \
                     -Wlogical-op \
@@ -241,7 +241,7 @@ set(sources
         events.h
         files.c
         files.h
-        FTL.h
+        lorentz.h
         gc.c
         gc.h
         log.c
@@ -283,9 +283,9 @@ target_compile_definitions(core PRIVATE DNSMASQ_VERSION=\"${DNSMASQ_VERSION}\")
 target_include_directories(core PRIVATE ${PROJECT_SOURCE_DIR}/src)
 add_dependencies(core gen_version)
 
-# Every object file of the FTL executable. The database layer regression
+# Every object file of the Lorentz executable. The database layer regression
 # harness (see the end of this file) is linked with the same set
-set(FTL_OBJECT_FILES
+set(LORENTZ_OBJECT_FILES
         $<TARGET_OBJECTS:core>
         $<TARGET_OBJECTS:api>
         $<TARGET_OBJECTS:api_docs>
@@ -298,7 +298,7 @@ set(FTL_OBJECT_FILES
         $<TARGET_OBJECTS:dnsmasq>
         $<TARGET_OBJECTS:sqlite3>
         $<TARGET_OBJECTS:lua>
-        $<TARGET_OBJECTS:ftl_lua>
+        $<TARGET_OBJECTS:lorentz_lua>
         $<TARGET_OBJECTS:tre-regex>
         $<TARGET_OBJECTS:syscalls>
         $<TARGET_OBJECTS:tomlc17>
@@ -306,15 +306,15 @@ set(FTL_OBJECT_FILES
         $<TARGET_OBJECTS:tools>
         $<TARGET_OBJECTS:ntp>
         )
-add_executable(pihole-FTL ${FTL_OBJECT_FILES})
+add_executable(lorentz ${LORENTZ_OBJECT_FILES})
 if(STATIC)
-    set_target_properties(pihole-FTL PROPERTIES LINK_SEARCH_START_STATIC ON)
-    set_target_properties(pihole-FTL PROPERTIES LINK_SEARCH_END_STATIC ON)
-    target_link_libraries(pihole-FTL -static-libgcc -static)
+    set_target_properties(lorentz PROPERTIES LINK_SEARCH_START_STATIC ON)
+    set_target_properties(lorentz PROPERTIES LINK_SEARCH_END_STATIC ON)
+    target_link_libraries(lorentz -static-libgcc -static)
     set(LIBRARY_SUFFIX "${CMAKE_STATIC_LIBRARY_SUFFIX}")
 else()
     find_library(LIBMATH m)
-    target_link_libraries(pihole-FTL ${LIBMATH})
+    target_link_libraries(lorentz ${LIBMATH})
     set(LIBRARY_SUFFIX "")
 endif()
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
@@ -357,11 +357,11 @@ else()
     message(WARNING "libunistring not found, IDN support will be disabled")
 endif()
 
-target_link_libraries(pihole-FTL rt Threads::Threads ${LIBHOGWEED} ${LIBGMP} ${LIBNETTLE} ${LIBIDN2} ${LIBUNISTRING})
+target_link_libraries(lorentz rt Threads::Threads ${LIBHOGWEED} ${LIBGMP} ${LIBNETTLE} ${LIBIDN2} ${LIBUNISTRING})
 
 if(LUA_DL STREQUAL "true")
     find_library(LIBDL dl)
-    target_link_libraries(pihole-FTL ${LIBDL})
+    target_link_libraries(lorentz ${LIBDL})
 endif()
 
 add_subdirectory(api)
@@ -379,10 +379,10 @@ add_subdirectory(ntp)
 
 # Standalone regression harness for the in-memory tar parser (zip/tar.c).
 # It #includes tar.c directly to reach the file-internal helpers, stubs the
-# few FTL* syscall wrappers tar.c needs (instead of linking syscalls/log) and
+# few Lorentz* syscall wrappers tar.c needs (instead of linking syscalls/log) and
 # reuses the cJSON object library. The "TAR parser regression harness" bats
 # test runs the resulting binary. It is deliberately NOT given the strict
-# EXTRAWARN/-Werror flags applied to FTL code, matching the lighter warning
+# EXTRAWARN/-Werror flags applied to Lorentz code, matching the lighter warning
 # level the test was written against.
 #
 # Only built on request so an ordinary build does not produce it: `./build.sh
@@ -407,11 +407,11 @@ if(BUILD_TAR_REGRESSION)
 endif()
 
 # Standalone regression harness for the internal PTR resolver. It compiles
-# src/resolve.c a second time and stubs the FTL wrappers that file needs, so a
+# src/resolve.c a second time and stubs the Lorentz wrappers that file needs, so a
 # scripted DNS server can replay a stale response against the real resolver.
 # The "PTR stale-response regression harness" bats test runs the resulting
 # binary. Deliberately NOT given the strict EXTRAWARN/-Werror flags applied to
-# FTL code.
+# Lorentz code.
 #
 # -fvisibility=hidden is load-bearing here: with default visibility the entry
 # points of resolve.c are GC roots for -Wl,--gc-sections, so the linker keeps
@@ -443,9 +443,9 @@ endif()
 
 # Standalone regression harness for the in-memory gzip parser (zip/gzip.c).
 # It #includes gzip.c directly to reuse implementation-private constants, stubs
-# the few FTL* wrappers gzip.c needs, and reuses the miniz object library. The
+# the few Lorentz* wrappers gzip.c needs, and reuses the miniz object library. The
 # "GZIP parser regression harness" bats test runs the resulting binary. It is
-# deliberately NOT given the strict EXTRAWARN/-Werror flags applied to FTL code,
+# deliberately NOT given the strict EXTRAWARN/-Werror flags applied to Lorentz code,
 # matching the lighter warning level the test was written against.
 #
 # Only built on request so an ordinary build does not produce it: `./build.sh
@@ -483,116 +483,116 @@ endif()
 check_include_file("unwind.h" HAVE_UNWIND_H)
 if(HAVE_UNWIND_H)
     target_compile_definitions(core PRIVATE USE_UNWIND)
-    message(STATUS "Building FTL with _Unwind_Backtrace support: YES")
+    message(STATUS "Building Lorentz with _Unwind_Backtrace support: YES")
 else()
-    message(STATUS "Building FTL with _Unwind_Backtrace support: NO")
+    message(STATUS "Building Lorentz with _Unwind_Backtrace support: NO")
 endif()
 
 # Embed the source root so crash backtraces can show project-relative paths
-# (e.g. "src/args.c" instead of "/home/user/FTL/src/args.c").
+# (e.g. "src/args.c" instead of "/home/user/Lorentz/src/args.c").
 target_compile_definitions(core PRIVATE SOURCE_ROOT="${CMAKE_SOURCE_DIR}/")
 
-option(USE_CONNTRACK "Build FTL with dnsmasq conntrack support, if available" ON)
+option(USE_CONNTRACK "Build Lorentz with dnsmasq conntrack support, if available" ON)
 
 check_include_file("libnetfilter_conntrack/libnetfilter_conntrack.h" HAVE_LIBNETFILTER_CONNTRACK_H)
 find_library(LIBNETFILTER_CONNTRACK NAMES libnetfilter_conntrack${LIBRARY_SUFFIX} netfilter_conntrack)
 if(HAVE_LIBNETFILTER_CONNTRACK_H AND LIBNETFILTER_CONNTRACK AND USE_CONNTRACK)
-    message(STATUS "Building FTL with dnsmasq conntrack support: YES")
+    message(STATUS "Building Lorentz with dnsmasq conntrack support: YES")
     target_compile_definitions(dnsmasq PRIVATE HAVE_CONNTRACK)
-    target_link_libraries(pihole-FTL ${LIBNETFILTER_CONNTRACK})
+    target_link_libraries(lorentz ${LIBNETFILTER_CONNTRACK})
 else()
-    message(STATUS "Building FTL with dnsmasq conntrack support: NO")
+    message(STATUS "Building Lorentz with dnsmasq conntrack support: NO")
 endif()
 
-option(USE_NFTSET "Build FTL with dnsmasq nftset support, if available" ON)
+option(USE_NFTSET "Build Lorentz with dnsmasq nftset support, if available" ON)
 
 check_include_file("nftables/libnftables.h" HAVE_LIBNFTABLES_H)
 find_library(LIBNFTABLES NAMES libnftables${LIBRARY_SUFFIX} nftables)
 if(HAVE_LIBNFTABLES_H AND LIBNFTABLES AND USE_NFTSET)
-    message(STATUS "Building FTL with dnsmasq nftset support: YES")
+    message(STATUS "Building Lorentz with dnsmasq nftset support: YES")
     target_compile_definitions(dnsmasq PRIVATE HAVE_NFTSET)
-    target_link_libraries(pihole-FTL ${LIBNFTABLES})
+    target_link_libraries(lorentz ${LIBNFTABLES})
 else()
-    message(STATUS "Building FTL with dnsmasq nftset support: NO")
+    message(STATUS "Building Lorentz with dnsmasq nftset support: NO")
 endif()
 
-option(USE_DBUS "Build FTL with dnsmasq DBus support, if available" ON)
+option(USE_DBUS "Build Lorentz with dnsmasq DBus support, if available" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
 find_package(DBus)
 if(DBUS_FOUND AND USE_DBUS)
-    message(STATUS "Building FTL with dnsmasq DBus support: YES")
+    message(STATUS "Building Lorentz with dnsmasq DBus support: YES")
     target_compile_definitions(dnsmasq PRIVATE HAVE_DBUS)
     target_include_directories(dnsmasq PRIVATE ${DBUS_INCLUDE_DIRS})
-    target_link_libraries(pihole-FTL ${DBUS_LIBRARIES})
+    target_link_libraries(lorentz ${DBUS_LIBRARIES})
 else()
-    message(STATUS "Building FTL with dnsmasq DBus support: NO")
+    message(STATUS "Building Lorentz with dnsmasq DBus support: NO")
 endif()
 
-option(USE_READLINE "Build FTL with readline support, if available" ON)
+option(USE_READLINE "Build Lorentz with readline support, if available" ON)
 
 find_library(LIBREADLINE NAMES libreadline${LIBRARY_SUFFIX} readline)
 find_library(LIBHISTORY NAMES libhistory${LIBRARY_SUFFIX} history)
 find_library(LIBTERMCAP NAMES libtermcap${LIBRARY_SUFFIX} termcap)
 if(LIBREADLINE AND LIBHISTORY AND LIBTERMCAP AND USE_READLINE)
-    message(STATUS "Building FTL with readline support: YES")
+    message(STATUS "Building Lorentz with readline support: YES")
     target_compile_definitions(lua PRIVATE LUA_USE_READLINE)
     target_compile_definitions(sqlite3 PRIVATE HAVE_READLINE)
-    target_link_libraries(pihole-FTL ${LIBREADLINE} ${LIBHISTORY} ${LIBTERMCAP})
+    target_link_libraries(lorentz ${LIBREADLINE} ${LIBHISTORY} ${LIBTERMCAP})
 else()
-    message(STATUS "Building FTL with readline support: NO")
+    message(STATUS "Building Lorentz with readline support: NO")
 endif()
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "..." FORCE)
 endif()
 
-option(USE_MBED_TLS "Build FTL with TLS support, if available" ON)
+option(USE_MBED_TLS "Build Lorentz with TLS support, if available" ON)
 
 find_library(LIBMBEDCRYPTO NAMES lmbedcrypto${LIBRARY_SUFFIX} mbedcrypto)
 find_library(LIBMBEDX509 NAMES lmbedx509${LIBRARY_SUFFIX} mbedx509)
 find_library(LIBMBEDTLS NAMES lmbedtls${LIBRARY_SUFFIX} mbedtls)
 if(LIBMBEDCRYPTO AND LIBMBEDX509 AND LIBMBEDTLS AND USE_MBED_TLS)
     # Enable TLS support in civetweb if mbedTLS is selected and available
-    message(STATUS "Building FTL with TLS support: YES")
+    message(STATUS "Building Lorentz with TLS support: YES")
     target_compile_definitions(core PRIVATE HAVE_MBEDTLS)
     target_compile_definitions(civetweb PRIVATE USE_MBEDTLS)
     target_compile_definitions(webserver PRIVATE HAVE_MBEDTLS)
     # Link against the mbedTLS libraries, the order is important (!)
-    target_link_libraries(pihole-FTL ${LIBMBEDTLS} ${LIBMBEDX509} ${LIBMBEDCRYPTO})
+    target_link_libraries(lorentz ${LIBMBEDTLS} ${LIBMBEDX509} ${LIBMBEDCRYPTO})
 else()
     # Disable TLS support in civetweb if mbedTLS is not selected or not available
-    message(STATUS "Building FTL with TLS support: NO")
+    message(STATUS "Building Lorentz with TLS support: NO")
     target_compile_definitions(civetweb PRIVATE NO_SSL)
 endif()
 
-# After finishing building the FTL binary, we append the sha256sum of the binary
+# After finishing building the Lorentz binary, we append the sha256sum of the binary
 # in raw form to itself and print the checksum to the console
-add_custom_command(TARGET pihole-FTL POST_BUILD COMMENT "Appending sha256sum to pihole-FTL"
-        COMMAND echo -n "SHA256 checksum of pihole-FTL: " && sha256sum $<TARGET_FILE:pihole-FTL> | cut -d ' ' -f 1
-        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:pihole-FTL> $<TARGET_FILE_DIR:pihole-FTL>/pihole-FTL.tmp
-        COMMAND echo -n "sha256sum" >> $<TARGET_FILE:pihole-FTL>.tmp
-        COMMAND sha256sum $<TARGET_FILE:pihole-FTL>.tmp | cut -d ' ' -f 1 | xxd -r -p >> $<TARGET_FILE:pihole-FTL>.tmp
-        COMMAND mv $<TARGET_FILE:pihole-FTL>.tmp $<TARGET_FILE:pihole-FTL>
+add_custom_command(TARGET lorentz POST_BUILD COMMENT "Appending sha256sum to lorentz"
+        COMMAND echo -n "SHA256 checksum of lorentz: " && sha256sum $<TARGET_FILE:lorentz> | cut -d ' ' -f 1
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lorentz> $<TARGET_FILE_DIR:lorentz>/lorentz.tmp
+        COMMAND echo -n "sha256sum" >> $<TARGET_FILE:lorentz>.tmp
+        COMMAND sha256sum $<TARGET_FILE:lorentz>.tmp | cut -d ' ' -f 1 | xxd -r -p >> $<TARGET_FILE:lorentz>.tmp
+        COMMAND mv $<TARGET_FILE:lorentz>.tmp $<TARGET_FILE:lorentz>
         )
 
 ######### Installation target ############
 # Install the binary
-install(TARGETS pihole-FTL
+install(TARGETS lorentz
         RUNTIME DESTINATION bin
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 find_program(SETCAP setcap)
 # After installing the binary, we set the capabilities on the binary ...
-install(CODE "execute_process(COMMAND ${SETCAP} CAP_NET_BIND_SERVICE,CAP_NET_RAW,CAP_NET_ADMIN,CAP_SYS_NICE,CAP_CHOWN,CAP_SYS_TIME+eip \${CMAKE_INSTALL_PREFIX}/bin/pihole-FTL)")
+install(CODE "execute_process(COMMAND ${SETCAP} CAP_NET_BIND_SERVICE,CAP_NET_RAW,CAP_NET_ADMIN,CAP_SYS_NICE,CAP_CHOWN,CAP_SYS_TIME+eip \${CMAKE_INSTALL_PREFIX}/bin/lorentz)")
 # ... and verify the binary integrity
-install(CODE "execute_process(COMMAND \${CMAKE_INSTALL_PREFIX}/bin/pihole-FTL verify)")
+install(CODE "execute_process(COMMAND \${CMAKE_INSTALL_PREFIX}/bin/lorentz verify)")
 
 # Standalone regression harness for the database driver layer
 # (src/database/db-driver.c, db-sqlite.c). It links the driver and the SQLite
-# object library only and stubs the few FTL wrappers and the logging entry
-# point the driver needs, so it runs without any FTL configuration. The
+# object library only and stubs the few Lorentz wrappers and the logging entry
+# point the driver needs, so it runs without any Lorentz configuration. The
 # "Database driver regression harness" bats test runs the resulting binary.
-# Deliberately NOT given the strict EXTRAWARN/-Werror flags applied to FTL code.
+# Deliberately NOT given the strict EXTRAWARN/-Werror flags applied to Lorentz code.
 #
 # Only built on request: `./build.sh test` enables it for local runs and the
 # CI Dockerfile passes -DBUILD_DB_DRIVER_REGRESSION=ON at build time.
@@ -605,9 +605,9 @@ if(BUILD_DB_DRIVER_REGRESSION)
             $<TARGET_OBJECTS:sqlite3>)
     target_include_directories(db_driver_regression PRIVATE ${PROJECT_SOURCE_DIR}/src)
     # The SQLite object library includes the SQLite shell, which needs whatever
-    # libraries (readline, ...) the FTL executable is linked with
+    # libraries (readline, ...) the Lorentz executable is linked with
     target_link_libraries(db_driver_regression Threads::Threads ${CMAKE_DL_LIBS} m
-            $<TARGET_PROPERTY:pihole-FTL,LINK_LIBRARIES>)
+            $<TARGET_PROPERTY:lorentz,LINK_LIBRARIES>)
 
     # Optional ASan/UBSan instrumentation for local runs:
     #   ./build.sh "-DDB_DRIVER_REGRESSION_SANITIZE=ON" test
@@ -622,7 +622,7 @@ endif()
 # common helpers, the in-memory query database, the gravity database, the
 # message, session and network tables, gravity_parseList(), the Teleporter
 # database code and the API handlers that read the query databases. It is
-# linked with the complete FTL object set and drives the real code against
+# linked with the complete Lorentz object set and drives the real code against
 # throw-away databases. The Teleporter and API handler sources are also
 # #included by the test files to reach their file-internal functions, which is
 # why the linker is told to prefer the first definition of a symbol.
@@ -637,7 +637,7 @@ if(BUILD_DB_LAYER_REGRESSION)
             ${PROJECT_SOURCE_DIR}/test/db_layer_regression.c
             ${PROJECT_SOURCE_DIR}/test/db_layer_teleporter.c
             ${PROJECT_SOURCE_DIR}/test/db_layer_handlers.c
-            ${FTL_OBJECT_FILES})
+            ${LORENTZ_OBJECT_FILES})
     target_include_directories(db_layer_regression PRIVATE
             ${PROJECT_SOURCE_DIR}/src
             ${PROJECT_SOURCE_DIR}/src/api
@@ -650,8 +650,8 @@ if(BUILD_DB_LAYER_REGRESSION)
         set_target_properties(db_layer_regression PROPERTIES LINK_SEARCH_END_STATIC ON)
         target_link_libraries(db_layer_regression -static-libgcc -static)
     endif()
-    # Same libraries as the FTL executable (they are added to it in several
+    # Same libraries as the Lorentz executable (they are added to it in several
     # places above, depending on what was found on the build system)
     target_link_libraries(db_layer_regression Threads::Threads m
-            $<TARGET_PROPERTY:pihole-FTL,LINK_LIBRARIES>)
+            $<TARGET_PROPERTY:lorentz,LINK_LIBRARIES>)
 endif()

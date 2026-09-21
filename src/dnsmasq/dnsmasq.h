@@ -207,7 +207,7 @@ struct event_desc {
 #define EVENT_RESOLV_ERR 30
 #define EVENT_IFILE_ERR  31
 
-// Pi-hole
+// Lorentz
 #define EVENT_SIGNAL     255
 
 /* Exit codes. */
@@ -307,7 +307,7 @@ struct event_desc {
 #define option_val(x) ((1u) << ((x) % OPTION_BITS))
 #define option_bool(x) (option_var(x) & option_val(x))
 
-/***** Pi-hole modification *****/
+/***** Lorentz modification *****/
 #define option_set(x) (option_var(x) |= option_val(x))
 #define option_clear(x) (option_var(x) &= ~option_val(x))
 /********************************/
@@ -403,7 +403,7 @@ struct naptr {
 #define TXT_STAT_HITS          5
 #define TXT_STAT_AUTH          6
 #define TXT_STAT_SERVERS       7
-/* Pi-hole modification */
+/* Lorentz modification */
 #define TXT_API_DOMAIN         124
 #define TXT_API_LOCAL          125
 /************************/
@@ -688,7 +688,7 @@ struct irec {
   int tftp_ok, dhcp4_ok, dhcp6_ok, mtu, done, warned, dad;
   int dns_auth, index, multicast_done, found, label;
   char *name; 
-  /* Pi-hole modification */
+  /* Lorentz modification */
   char *slabel;
   /************************/
   struct irec *next;
@@ -1385,7 +1385,7 @@ struct server_details {
 void cache_init(void);
 unsigned short rrtype(char *in);
 void next_uid(struct crec *crecp);
-/********************************************* Pi-hole modification ***********************************************/
+/********************************************* Lorentz modification ***********************************************/
 #define log_query(flags,name,addr,arg,type) _log_query(flags, name, addr, arg, type, __FILE__, __LINE__)
 void _log_query(unsigned int flags, char *name, union all_addr *addr, char *arg, unsigned short type, const char* file, const int line);
 #include "../metrics.h"

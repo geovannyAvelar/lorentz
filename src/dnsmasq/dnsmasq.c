@@ -26,7 +26,7 @@
 #include "dnsmasq_interface.h"
 // killed
 #include "signals.h"
-// FTL_fork_and_bind_sockets()
+// Lorentz_fork_and_bind_sockets()
 #include "main.h"
 // log_debug()
 #include "log.h"
@@ -93,7 +93,7 @@ int main_dnsmasq (int argc, char **argv)
 #endif
   
 #if defined(HAVE_IDN) || defined(HAVE_LIBIDN2) || defined(LOCALEDIR)
-  /*** Pi-hole modification: Locale is already initialized in main.c ***/
+  /*** Lorentz modification: Locale is already initialized in main.c ***/
 #endif
 #ifdef LOCALEDIR
   bindtextdomain("dnsmasq", LOCALEDIR); 
@@ -106,7 +106,7 @@ int main_dnsmasq (int argc, char **argv)
   sigaction(SIGUSR1, &sigact, NULL);
   sigaction(SIGUSR2, &sigact, NULL);
   sigaction(SIGHUP, &sigact, NULL);
-  sigaction(SIGUSR6, &sigact, NULL); // Pi-hole modification
+  sigaction(SIGUSR6, &sigact, NULL); // Lorentz modification
   sigaction(SIGALRM, &sigact, NULL);
   sigaction(SIGCHLD, &sigact, NULL);
   sigaction(SIGINT, &sigact, NULL);
@@ -711,7 +711,7 @@ int main_dnsmasq (int argc, char **argv)
 	}
     }
 
-    FTL_fork_and_bind_sockets(ent_pw, true);
+    Lorentz_fork_and_bind_sockets(ent_pw, true);
   
    log_err = log_start(ent_pw, err_pipe[1]);
 
@@ -1354,7 +1354,7 @@ int main_dnsmasq (int argc, char **argv)
 
 static void sig_handler(int sig)
 {
-  /**** Pi-hole modification ****/
+  /**** Lorentz modification ****/
   send_event(pipewrite, EVENT_SIGNAL, sig, NULL);
   /******************************/
 
@@ -1374,9 +1374,9 @@ static void sig_handler(int sig)
 	  if (!daemon->forward_to_tcp)
 #endif
 	  {
-	    /*** Pi-hole modification ***/
+	    /*** Lorentz modification ***/
 	    // TCP workers ignore all signals except SIGALRM
-	    FTL_TCP_worker_terminating(false);
+	    Lorentz_TCP_worker_terminating(false);
 	    /****************************/
 	    _exit(0); /* Normal TCP child */
 	  }
@@ -1400,9 +1400,9 @@ static void sig_handler(int sig)
 		  read_write(daemon->pipe_to_parent, (unsigned char *)(&daemon->forward_to_tcp), sizeof(daemon->forward_to_tcp), RW_WRITE);
 		  read_write(daemon->pipe_to_parent, (unsigned char *)(&daemon->forward_to_tcp->uid), sizeof(daemon->forward_to_tcp->uid), RW_WRITE);
 
-		  /*** Pi-hole modification ***/
+		  /*** Lorentz modification ***/
 		  // TCP workers ignore all signals except SIGALRM
-		  FTL_TCP_worker_terminating(false);
+		  Lorentz_TCP_worker_terminating(false);
 		  /****************************/
 
 		  _exit(0);
@@ -1422,7 +1422,7 @@ static void sig_handler(int sig)
 	event = EVENT_CHILD;
       else if (sig == SIGALRM)
 	event = EVENT_ALARM;
-      else if (sig == SIGUSR6) // Pi-hole modified
+      else if (sig == SIGUSR6) // Lorentz modified
 	event = EVENT_TERM;
       else if (sig == SIGUSR1)
 	event = EVENT_DUMP;
@@ -1690,7 +1690,7 @@ static void async_event(int pipe, time_t now)
 	my_syslog(LOG_WARNING, _("script process exited with status %d"), ev.data);
 	break;
 
-  /**** Pi-hole modification ****/
+  /**** Lorentz modification ****/
       case EVENT_SIGNAL:
 	log_debug(DEBUG_ANY, "dnsmasq received signal %d", ev.data);
 	break;
@@ -1787,10 +1787,10 @@ static void async_event(int pipe, time_t now)
 	
 	my_syslog(LOG_INFO, _("exiting on receipt of SIGTERM"));
 	flush_log();
-	/*** Pi-hole modification ***/
+	/*** Lorentz modification ***/
 //	exit(EC_GOOD);
 	killed = 1;
-	/*** Pi-hole modification ***/
+	/*** Lorentz modification ***/
       }
 }
 
@@ -1874,7 +1874,7 @@ void clear_cache_and_reload(time_t now)
 {
   (void)now;
 
-  FTL_dnsmasq_reload();
+  Lorentz_dnsmasq_reload();
 
   if (daemon->port != 0)
     cache_reload();
@@ -2231,17 +2231,17 @@ static void do_tcp_connection(struct listener *listener, time_t now, int slot)
   if ((flags = fcntl(confd, F_GETFL, 0)) != -1)
     while(retry_send(fcntl(confd, F_SETFL, flags & ~O_NONBLOCK)));
 
-  /************ Pi-hole modification ************/
-  FTL_TCP_worker_created(confd);
+  /************ Lorentz modification ************/
+  Lorentz_TCP_worker_created(confd);
   // Store interface this fork is handling exclusively
-  FTL_iface(iface, NULL, 0);
+  Lorentz_iface(iface, NULL, 0);
   /**********************************************/
 
   tcp_request(confd, now, &tcpbuff, &tcp_addr, netmask, auth_dns);
   free(tcpbuff.iov_base);
 
-  /************ Pi-hole modification ************/
-  FTL_TCP_worker_terminating(true);
+  /************ Lorentz modification ************/
+  Lorentz_TCP_worker_terminating(true);
   /**********************************************/
   
   for (s = daemon->servers; s; s = s->next)
@@ -2345,7 +2345,7 @@ int swap_to_tcp(struct frec *forward, time_t now, int status, struct dns_header 
 	  close(daemon->netlinkfd);
 	  read_write(pipefd[1], &a, 1, RW_WRITE);
 
-    // Pi-hole modification
+    // Lorentz modification
     daemon->netlinkfd = -1;
 #endif		  
 	  alarm(CHILD_LIFETIME);
@@ -2556,7 +2556,7 @@ int delay_dhcp(time_t start, int sec, int fd, uint32_t addr, unsigned short id)
 }
 #endif /* HAVE_DHCP */
 
-/******************************** Pi-hole modification ********************************/
+/******************************** Lorentz modification ********************************/
 void print_dnsmasq_version(const char *yellow, const char *green, const char *bold, const char *normal)
 {
   printf("****************************** %s%sdnsmasq%s ******************************\n",

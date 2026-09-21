@@ -1,8 +1,8 @@
-// Pi-hole: A black hole for Internet advertisements
+// Lorentz: A black hole for Internet advertisements
 // (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 // Network-wide ad blocking via your own hardware.
 //
-// FTL - API test file
+// Lorentz - API test file
 //
 // This is a node script
 //

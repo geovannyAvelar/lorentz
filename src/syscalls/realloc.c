@@ -1,21 +1,21 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
-*  Pi-hole syscall implementation for realloc
+*  Lorentz Engine
+*  Lorentz syscall implementation for realloc
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
-//#include "syscalls.h" is implicitly done in FTL.h
+#include "lorentz.h"
+//#include "syscalls.h" is implicitly done in lorentz.h
 #include "log.h"
 
 #undef realloc
-void __attribute__((alloc_size(2))) *FTLrealloc(void *ptr_in, const size_t size, const char * file, const char * func, const int line)
+void __attribute__((alloc_size(2))) *Lorentzrealloc(void *ptr_in, const size_t size, const char * file, const char * func, const int line)
 {
-	// The FTLrealloc() function changes the size of the memory block pointed to
+	// The Lorentzrealloc() function changes the size of the memory block pointed to
 	// by ptr to size bytes. The contents will be unchanged in the range from
 	// the start of the region up to the minimum of the old and new sizes. If
 	// the new size is larger than the old size, the added memory will not be

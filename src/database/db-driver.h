@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2026 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Database driver abstraction layer (vtable)
 *  /src/database/db-driver.h
 *
@@ -203,7 +203,7 @@ const db_driver *db_driver_get(const char *name);
 bool db_driver_select(const char *name);
 const db_driver *db_driver_active(void);
 
-// Dispatch helpers: the API the rest of FTL uses. Callers never touch a driver
+// Dispatch helpers: the API the rest of Lorentz uses. Callers never touch a driver
 // directly. A NULL slot means the driver does not support the feature; helpers
 // for optional features return DB_ERROR (or a neutral value) in that case
 static inline db_conn *db_open(const char *uri, unsigned int flags) { return db_driver_active()->open(uri, flags, NULL, NULL); }

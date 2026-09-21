@@ -5,7 +5,7 @@ components:
       get:
         summary: Get information about requesting client
         tags:
-          - "FTL information"
+          - "Lorentz information"
         security: []
         operationId: "get_client"
         description: |
@@ -28,7 +28,7 @@ components:
         get:
           summary: Get DNS log content
           tags:
-            - "FTL information"
+            - "Lorentz information"
           operationId: "get_dns_log"
           description: |
             This API hook returns content from the log of the embedded DNS resolver `dnsmasq`.
@@ -62,7 +62,7 @@ components:
       get:
         summary: Get info about various system parameters
         tags:
-          - "FTL information"
+          - "Lorentz information"
         operationId: "get_systeminfo"
         description: |
           This API hook returns a collection of various system infos.
@@ -87,7 +87,7 @@ components:
       get:
         summary: Get info about various host parameters
         tags:
-          - "FTL information"
+          - "Lorentz information"
         operationId: "get_hostinfo"
         description: |
           This API hook returns a collection of host infos.
@@ -108,14 +108,14 @@ components:
                   allOf:
                     - $ref: 'common.yaml#/components/errors/unauthorized'
                     - $ref: 'common.yaml#/components/schemas/took'
-    ftl:
+    lorentz:
       get:
-        summary: Get info about various ftl parameters
+        summary: Get info about various lorentz parameters
         tags:
-          - "FTL information"
-        operationId: "get_ftlinfo"
+          - "Lorentz information"
+        operationId: "get_lorentzinfo"
         description: |
-          This API hook returns a collection of various ftl infos.
+          This API hook returns a collection of various lorentz infos.
         responses:
           '200':
             description: OK
@@ -123,7 +123,7 @@ components:
               application/json:
                 schema:
                   allOf:
-                    - $ref: 'info.yaml#/components/schemas/ftl'
+                    - $ref: 'info.yaml#/components/schemas/lorentz'
                     - $ref: 'common.yaml#/components/schemas/took'
           '401':
             description: Unauthorized
@@ -137,7 +137,7 @@ components:
       get:
         summary: Get info about various sensors
         tags:
-          - "FTL information"
+          - "Lorentz information"
         operationId: "get_sensors"
         description: |
           This API hook returns a collection of various sensors.
@@ -162,7 +162,7 @@ components:
       get:
         summary: Get info about long-term database
         tags:
-          - "FTL information"
+          - "Lorentz information"
         operationId: "get_dbinfo"
         description: |
           This API hook returns a collection of various long-term database properties infos.
@@ -177,12 +177,12 @@ components:
                     - $ref: 'common.yaml#/components/schemas/took'
     version:
       get:
-        summary: Get Pi-hole version
+        summary: Get Lorentz version
         tags:
-          - "FTL information"
+          - "Lorentz information"
         operationId: "get_version"
         description: |
-          Request versions of the individual Pi-hole components
+          Request versions of the individual Lorentz components
         responses:
           '200':
             description: OK
@@ -194,12 +194,12 @@ components:
                     - $ref: 'common.yaml#/components/schemas/took'
     messages:
       get:
-        summary: Get Pi-hole diagnosis messages
+        summary: Get Lorentz diagnosis messages
         tags:
-          - "FTL information"
+          - "Lorentz information"
         operationId: "get_messages"
         description: |
-          Request Pi-hole diagnosis messages
+          Request Lorentz diagnosis messages
         responses:
           '200':
             description: OK
@@ -211,9 +211,9 @@ components:
                     - $ref: 'common.yaml#/components/schemas/took'
     messages_with_id:
       delete:
-        summary: Delete Pi-hole diagnosis message
+        summary: Delete Lorentz diagnosis message
         tags:
-          - "FTL information"
+          - "Lorentz information"
         operationId: "delete_message"
         parameters:
           - $ref: 'info.yaml#/components/parameters/message_id'
@@ -251,12 +251,12 @@ components:
                     - $ref: 'common.yaml#/components/schemas/took'
     messages_count:
       get:
-        summary: Get count of Pi-hole diagnosis messages
+        summary: Get count of Lorentz diagnosis messages
         tags:
-          - "FTL information"
+          - "Lorentz information"
         operationId: "get_messages_count"
         description: |
-          Request number of Pi-hole diagnosis messages
+          Request number of Lorentz diagnosis messages
         responses:
           '200':
             description: OK
@@ -270,7 +270,7 @@ components:
       get:
         summary: Get metrics info
         tags:
-          - "FTL information"
+          - "Lorentz information"
         operationId: "get_metricsinfo"
         description: |
           This API hook returns live information about the DNS and DHCP metrics.
@@ -298,7 +298,7 @@ components:
       get:
         summary: Login page related information
         tags:
-          - "FTL information"
+          - "Lorentz information"
         operationId: "get_logininfo"
         security: []
         description: |
@@ -377,7 +377,7 @@ components:
                     description: Log line content
               example:
                 - timestamp: 1611729969.0
-                  message: "started, version pi-hole-2.84 cachesize 10000"
+                  message: "started, version lorentz-2.84 cachesize 10000"
                 - timestamp: 1611729969.0
                   message: "reading /etc/resolv.conf"
                 - timestamp: 1611729969.0
@@ -481,17 +481,17 @@ components:
                       items:
                         type: number
                       example: [4.903157711029053, 5.415853023529053, 5.562337398529053]
-            ftl:
+            lorentz:
               type: object
-              description: FTL process info
+              description: Lorentz process info
               properties:
                 "%mem":
                   type: number
-                  description: Percentage of total RAM memory used by FTL
+                  description: Percentage of total RAM memory used by Lorentz
                   example: 0.1
                 "%cpu":
                   type: number
-                  description: Percentage of total CPU used by FTL
+                  description: Percentage of total CPU used by Lorentz
                   example: 1.2
 
     sensors:
@@ -603,7 +603,7 @@ components:
               example: 48.0
             hot_limit:
               type: number
-              description: Limit defined in FTL's config beyond which the CPU should be considered hot
+              description: Limit defined in Lorentz's config beyond which the CPU should be considered hot
               example: 60.0
             unit:
               type: string
@@ -697,10 +697,10 @@ components:
                       description: System vendor (if available, `null` otherwise)
                       example: "Raspberry Pi Foundation"
                       nullable: true
-    ftl:
+    lorentz:
       type: object
       properties:
-        ftl:
+        lorentz:
           type: object
           properties:
             database:
@@ -789,31 +789,31 @@ components:
               properties:
                 total:
                   type: integer
-                  description: Number of clients FTL has seen in its lfetime
+                  description: Number of clients Lorentz has seen in its lfetime
                   example: 10
                 active:
                   type: integer
-                  description: Number of clients actively using FTL
+                  description: Number of clients actively using Lorentz
                   example: 8
             pid:
               type: integer
-              description: PID of FTL process
+              description: PID of Lorentz process
               example: 1234
             uptime:
               type: number
-              description: Uptime of FTL in milliseconds
+              description: Uptime of Lorentz in milliseconds
               example: 123456789
             "%mem":
               type: number
-              description: Percentage of total RAM memory used by FTL
+              description: Percentage of total RAM memory used by Lorentz
               example: 0.1
             "%cpu":
               type: number
-              description: Percentage of total CPU used by FTL (ten seconds average)
+              description: Percentage of total CPU used by Lorentz (ten seconds average)
               example: 1.2
             allow_destructive:
               type: boolean
-              description: Whether or not FTL is allowed to perform destructive actions
+              description: Whether or not Lorentz is allowed to perform destructive actions
               example: true
             dnsmasq:
               type: object
@@ -980,7 +980,7 @@ components:
                 name:
                   type: string
                   description: Name of database owner (user)
-                  example: "pihole"
+                  example: "lorentz"
                 info:
                   type: string
                   description: User info
@@ -995,7 +995,7 @@ components:
                 name:
                   type: string
                   description: Name of database owner (group)
-                  example: "pihole"
+                  example: "lorentz"
         queries:
           type: integer
           description: Number of queries in in-memory database
@@ -1031,17 +1031,17 @@ components:
                     branch:
                       type: string
                       nullable: true
-                      description: Local Pi-hole Core branch
+                      description: Local Lorentz Core branch
                       example: "development"
                     version:
                       type: string
                       nullable: true
-                      description: Local Pi-hole Core version
+                      description: Local Lorentz Core version
                       example: "v6.1"
                     hash:
                       type: string
                       nullable: true
-                      description: Local Pi-hole Core hash
+                      description: Local Lorentz Core hash
                       example: "955e36a9"
                 remote:
                   type: object
@@ -1049,12 +1049,12 @@ components:
                     version:
                       type: string
                       nullable: true
-                      description: Remote (Github) Pi-hole Core version (null if on custom branch)
+                      description: Remote (Github) Lorentz Core version (null if on custom branch)
                       example: "v6.1"
                     hash:
                       type: string
                       nullable: true
-                      description: Remote (Github) Pi-hole Core hash
+                      description: Remote (Github) Lorentz Core hash
                       example: "955e36a9"
             web:
               type: object
@@ -1065,17 +1065,17 @@ components:
                     branch:
                       type: string
                       nullable: true
-                      description: Local Pi-hole Web branch
+                      description: Local Lorentz Web branch
                       example: "devel"
                     version:
                       type: string
                       nullable: true
-                      description: Local Pi-hole Web version
+                      description: Local Lorentz Web version
                       example: "v6.1"
                     hash:
                       type: string
                       nullable: true
-                      description: Local Pi-hole Web hash
+                      description: Local Lorentz Web hash
                       example: "f69f7e88"
                 remote:
                   type: object
@@ -1083,14 +1083,14 @@ components:
                     version:
                       type: string
                       nullable: true
-                      description: Remote (Github) Pi-hole Web version (null if on custom branch)
+                      description: Remote (Github) Lorentz Web version (null if on custom branch)
                       example: "v6.1"
                     hash:
                       type: string
                       nullable: true
-                      description: Remote (Github) Pi-hole Web hash
+                      description: Remote (Github) Lorentz Web hash
                       example: "f69f7e88"
-            ftl:
+            lorentz:
               type: object
               properties:
                 local:
@@ -1099,22 +1099,22 @@ components:
                     branch:
                       type: string
                       nullable: true
-                      description: Local Pi-hole FTL branch
+                      description: Local Lorentz branch
                       example: "development"
                     version:
                       type: string
                       nullable: true
-                      description: Local Pi-hole FTL version
+                      description: Local Lorentz version
                       example: "v6.1"
                     hash:
                       type: string
                       nullable: true
-                      description: Local Pi-hole FTL hash
+                      description: Local Lorentz hash
                       example: "64441ed6-dirty"
                     date:
                       type: string
                       nullable: true
-                      description: Build time of your local Pi-hole FTL
+                      description: Build time of your local Lorentz
                       example: "2023-01-09 20:25:24 +0100"
                 remote:
                   type: object
@@ -1122,12 +1122,12 @@ components:
                     version:
                       type: string
                       nullable: true
-                      description: Remote (Github) Pi-hole FTL version (null if on custom branch)
+                      description: Remote (Github) Lorentz version (null if on custom branch)
                       example: "v6.1"
                     hash:
                       type: string
                       nullable: true
-                      description: Remote (Github) Pi-hole FTL hash
+                      description: Remote (Github) Lorentz hash
                       example: "64441ed6"
             docker:
               type: object
@@ -1135,12 +1135,12 @@ components:
                 local:
                   type: string
                   nullable: true
-                  description: Local Pi-hole Docker image version (`null` if not running in Docker)
+                  description: Local Lorentz Docker image version (`null` if not running in Docker)
                   example: "v6.1"
                 remote:
                   type: string
                   nullable: true
-                  description: Remote (Docker Hub) Pi-hole Docker image version (`null` if not running in Docker)
+                  description: Remote (Docker Hub) Lorentz Docker image version (`null` if not running in Docker)
                   example: "v6.1"
     messages:
       type: object
@@ -1307,7 +1307,7 @@ components:
       properties:
         https_port:
           type: integer
-          description: HTTPS port of the Pi-hole webserver (0 if disabled)
+          description: HTTPS port of the Lorentz webserver (0 if disabled)
         dns:
           type: boolean
           description: Whether the DNS server is up and running. False only in failed state

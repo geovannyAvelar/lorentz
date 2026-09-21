@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2026 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Regression harness for the database driver layer (src/database/db-driver.*,
 *  src/database/db-sqlite.c)
 *
@@ -10,8 +10,8 @@
 *  Please see LICENSE file for your rights under this license. */
 
 // Standalone harness: it links the driver and the SQLite object library only,
-// no FTL configuration, logging or shared memory. db-sqlite.c pulls in FTL.h,
-// which redefines a few libc calls to FTL* wrappers, and log.h, so the wrappers
+// no Lorentz configuration, logging or shared memory. db-sqlite.c pulls in lorentz.h,
+// which redefines a few libc calls to Lorentz* wrappers, and log.h, so the wrappers
 // and the logging entry point it needs are provided as thin stubs at the end of
 // this file. The harness itself only includes the driver header and therefore
 // sees the plain libc names.
@@ -682,11 +682,11 @@ int main(void)
 	return failures == 0 ? 0 : 1;
 }
 
-// db-sqlite.c includes FTL.h (libc wrappers) and log.h (logging entry point).
+// db-sqlite.c includes lorentz.h (libc wrappers) and log.h (logging entry point).
 // These stubs stand in for src/syscalls and src/log.c so that the harness does
-// not need the rest of FTL. The last two are hooks of the SQLite shell, which
+// not need the rest of Lorentz. The last two are hooks of the SQLite shell, which
 // is part of the SQLite object library but never started here.
-void _FTL_log(const int priority, const int flag, const char *format, ...)
+void _Lorentz_log(const int priority, const int flag, const char *format, ...)
 {
 	(void)priority;
 	(void)flag;
@@ -698,32 +698,32 @@ void _FTL_log(const int priority, const int flag, const char *format, ...)
 	va_end(ap);
 }
 
-void *FTLcalloc(size_t n, size_t size, const char *file, const char *func, const int line)
+void *Lorentzcalloc(size_t n, size_t size, const char *file, const char *func, const int line)
 {
 	(void)file; (void)func; (void)line;
 	return calloc(n, size);
 }
 
-bool FTLfree(void *ptr, const char *file, const char *func, const int line)
+bool Lorentzfree(void *ptr, const char *file, const char *func, const int line)
 {
 	(void)file; (void)func; (void)line;
 	free(ptr);
 	return true;
 }
 
-void *FTLmemcpy(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
+void *Lorentzmemcpy(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file; (void)func; (void)line;
 	return memcpy(dest, src, n);
 }
 
-int FTLstrcmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
+int Lorentzstrcmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
 {
 	(void)file; (void)func; (void)line;
 	return strcmp(s1, s2);
 }
 
-int FTLsnprintf(const char *file, const char *func, const int line, char *__restrict__ buffer, const size_t maxlen, const char *format, ...)
+int Lorentzsnprintf(const char *file, const char *func, const int line, char *__restrict__ buffer, const size_t maxlen, const char *format, ...)
 {
 	(void)file; (void)func; (void)line;
 	va_list ap;
@@ -733,10 +733,10 @@ int FTLsnprintf(const char *file, const char *func, const int line, char *__rest
 	return ret;
 }
 
-void pihole_sqlite3_initalize(void)
+void lorentz_sqlite3_initalize(void)
 {
 }
 
-void print_FTL_version(void)
+void print_Lorentz_version(void)
 {
 }

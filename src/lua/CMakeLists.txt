@@ -1,9 +1,9 @@
-set(ftl_sources
-        ftl_lua.c
-        ftl_lua.h
+set(lorentz_sources
+        lorentz_lua.c
+        lorentz_lua.h
 )
 
-add_library(ftl_lua OBJECT ${ftl_sources})
+add_library(lorentz_lua OBJECT ${lorentz_sources})
 
 set(sources
         lapi.c
@@ -72,7 +72,7 @@ set(sources
 add_library(lua OBJECT ${sources})
 if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_compile_options(lua PRIVATE -Wno-maybe-uninitialized -Wno-unused-variable -Wno-unused-value)
-    target_compile_options(ftl_lua PRIVATE -Wno-unused-value ${EXTRAWARN})
+    target_compile_options(lorentz_lua PRIVATE -Wno-unused-value ${EXTRAWARN})
 endif()
 
 # LUA_USE_POSIX: ensures recommended POSIX functions are used instead of
@@ -80,11 +80,11 @@ endif()
 target_compile_definitions(lua PRIVATE LUA_USE_POSIX)
 
 # Set the default path that Lua uses to look for Lua libraries.
-target_compile_definitions(lua PRIVATE LUA_PATH_DEFAULT="/opt/pihole/libs/?.lua")
+target_compile_definitions(lua PRIVATE LUA_PATH_DEFAULT="/opt/lorentz/libs/?.lua")
 
 if(LUA_DL STREQUAL "true")
     target_compile_definitions(lua PRIVATE LUA_USE_DLOPEN)
 endif()
 
 target_include_directories(lua PRIVATE ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/src/lua)
-target_include_directories(ftl_lua PRIVATE ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/src/lua)
+target_include_directories(lorentz_lua PRIVATE ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/src/lua)

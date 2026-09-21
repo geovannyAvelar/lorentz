@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/teleporter
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "zip/teleporter.h"
@@ -27,14 +27,14 @@
 #include "files.h"
 //basename()
 #include <libgen.h>
-// restart_ftl()
+// restart_lorentz()
 #include "signals.h"
 // create_migration_target_v6()
 #include "config/config.h"
 
 #define MAXFILESIZE (50u*1024*1024)
 
-static int api_teleporter_GET(struct ftl_conn *api)
+static int api_teleporter_GET(struct lorentz_conn *api)
 {
 	mz_zip_archive zip = { 0 };
 	void *ptr = NULL;
@@ -51,7 +51,7 @@ static int api_teleporter_GET(struct ftl_conn *api)
 	// teleporter.zip (rather than showing the binary data in the browser
 	// window). This client is free to ignore and do whatever it wants with this
 	// data stream.
-	snprintf(pi_hole_extra_headers, sizeof(pi_hole_extra_headers),
+	snprintf(lorentz_extra_headers, sizeof(lorentz_extra_headers),
 	         "Content-Disposition: attachment; filename=\"%s\"",
 	         filename);
 
@@ -59,7 +59,7 @@ static int api_teleporter_GET(struct ftl_conn *api)
 	mg_send_http_ok(api->conn, "application/zip", size);
 
 	// Clear extra headers
-	pi_hole_extra_headers[0] = '\0';
+	lorentz_extra_headers[0] = '\0';
 
 	// Send raw (binary) ZIP content
 	mg_write(api->conn, ptr, size);
@@ -247,10 +247,10 @@ static int free_upload_data(struct upload_data *data)
 }
 
 // Private function prototypes
-static int process_received_zip(struct ftl_conn *api, struct upload_data *data);
-static int process_received_tar_gz(struct ftl_conn *api, struct upload_data *data);
+static int process_received_zip(struct lorentz_conn *api, struct upload_data *data);
+static int process_received_tar_gz(struct lorentz_conn *api, struct upload_data *data);
 
-static int api_teleporter_POST(struct ftl_conn *api)
+static int api_teleporter_POST(struct lorentz_conn *api)
 {
 	// Check if this is an app session and reject the request if app sudo
 	// mode is disabled
@@ -259,7 +259,7 @@ static int api_teleporter_POST(struct ftl_conn *api)
 		return send_json_error(api, 403,
 		                       "forbidden",
 		                       "Unable to change configuration (read-only)",
-		                       "The current app session is not allowed to modify Pi-hole config settings (webserver.api.app_sudo is false)");
+		                       "The current app session is not allowed to modify Lorentz config settings (webserver.api.app_sudo is false)");
 	}
 
 	// Check if this is a CLI session and reject the request
@@ -268,7 +268,7 @@ static int api_teleporter_POST(struct ftl_conn *api)
 		return send_json_error(api, 403,
 		                       "forbidden",
 		                       "Unable to change configuration (read-only)",
-		                       "The current CLI session is not allowed to modify Pi-hole config settings");
+		                       "The current CLI session is not allowed to modify Lorentz config settings");
 	}
 
 	struct upload_data data;
@@ -351,10 +351,10 @@ static int api_teleporter_POST(struct ftl_conn *api)
 	return send_json_error(api, 400,
 	                       "bad_request",
 	                       "Invalid file",
-	                       "The uploaded file does not appear to be a valid Pi-hole Teleporter archive");
+	                       "The uploaded file does not appear to be a valid Lorentz Teleporter archive");
 }
 
-static int process_received_zip(struct ftl_conn *api, struct upload_data *data)
+static int process_received_zip(struct lorentz_conn *api, struct upload_data *data)
 {
 	char hint[ERRBUF_SIZE];
 	memset(hint, 0, sizeof(hint));
@@ -382,9 +382,9 @@ static int process_received_zip(struct ftl_conn *api, struct upload_data *data)
 	// Free allocated memory
 	free_upload_data(data);
 
-	// Signal FTL we want to restart for re-import
-	api->ftl.restart_reason = "Teleporter (ZIP) import";
-	api->ftl.restart = true;
+	// Signal Lorentz we want to restart for re-import
+	api->lorentz.restart_reason = "Teleporter (ZIP) import";
+	api->lorentz.restart = true;
 
 	// Send response
 	cJSON *json = JSON_NEW_OBJECT();
@@ -404,7 +404,7 @@ static struct teleporter_files {
 		.table_name = "adlist",
 		.listtype = -1,
 		.num_columns = 10,
-		.columns = { "id", "address", "enabled", "date_added", "date_modified", "comment", "date_updated", "number", "invalid_domains", "status" } // abp_entries and type are not defined in Pi-hole v5.x
+		.columns = { "id", "address", "enabled", "date_added", "date_modified", "comment", "date_updated", "number", "invalid_domains", "status" } // abp_entries and type are not defined in Lorentz v5.x
 	},{
 		.filename = "adlist_by_group.json",
 		.table_name = "adlist_by_group",
@@ -710,7 +710,7 @@ static bool import_json_table(cJSON *json, struct teleporter_files *file)
 	return true;
 }
 
-static int process_received_tar_gz(struct ftl_conn *api, struct upload_data *data)
+static int process_received_tar_gz(struct lorentz_conn *api, struct upload_data *data)
 {
 	// Try to decompress the received data
 	uint8_t *archive = NULL;
@@ -804,17 +804,17 @@ static int process_received_tar_gz(struct ftl_conn *api, struct upload_data *dat
 			.destination = DHCPLEASESFILE
 		},{
 			// i = 2
-			.archive_name = "pihole-FTL.conf",
+			.archive_name = "lorentz.conf",
 			.destination = GLOBALCONFFILE_LEGACY
 		},{
 			// i = 3
 			.archive_name = "setupVars.conf",
 			.destination = SETUPVARS_CONF
 		},{
-			.archive_name = "dnsmasq.d/04-pihole-static-dhcp.conf",
+			.archive_name = "dnsmasq.d/04-lorentz-static-dhcp.conf",
 			.destination = DNSMASQ_STATIC_LEASES
 		},{
-			.archive_name = "dnsmasq.d/05-pihole-custom-cname.conf",
+			.archive_name = "dnsmasq.d/05-lorentz-custom-cname.conf",
 			.destination = DNSMASQ_CNAMES
 		}
 	};
@@ -883,11 +883,11 @@ static int process_received_tar_gz(struct ftl_conn *api, struct upload_data *dat
 		fclose(fp);
 	}
 
-	// Remove pihole.toml to prevent it from being imported on restart
+	// Remove lorentz.toml to prevent it from being imported on restart
 	if(remove(GLOBALTOMLPATH) != 0)
 		log_err("Unable to remove file \"%s\": %s", GLOBALTOMLPATH, strerror(errno));
 
-	// Remove all rotated pihole.toml files to avoid automatic config
+	// Remove all rotated lorentz.toml files to avoid automatic config
 	// restore on restart
 	for(unsigned int i = MAX_ROTATIONS; i > 0; i--)
 	{
@@ -913,9 +913,9 @@ static int process_received_tar_gz(struct ftl_conn *api, struct upload_data *dat
 	// Migrate the config to v6
 	migrate_config_v6();
 
-	// Signal FTL we want to restart for re-import
-	api->ftl.restart_reason = "Teleporter (TAR.GZ) import";
-	api->ftl.restart = true;
+	// Signal Lorentz we want to restart for re-import
+	api->lorentz.restart_reason = "Teleporter (TAR.GZ) import";
+	api->lorentz.restart = true;
 
 	// Send response
 	cJSON *json = JSON_NEW_OBJECT();
@@ -923,7 +923,7 @@ static int process_received_tar_gz(struct ftl_conn *api, struct upload_data *dat
 	JSON_SEND_OBJECT(json);
 }
 
-int api_teleporter(struct ftl_conn *api)
+int api_teleporter(struct lorentz_conn *api)
 {
 	if(api->method == HTTP_GET)
 		return api_teleporter_GET(api);

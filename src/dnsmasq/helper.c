@@ -124,14 +124,14 @@ int create_helper(int event_fd, int err_fd, uid_t uid, gid_t gid, long max_fd)
 	      /* return error */
 	      send_event(err_fd, EVENT_USER_ERR, errno, daemon->scriptuser);
 	    }
-	  /**** Pi-hole modification ****/
+	  /**** Lorentz modification ****/
 	  log_err("Starting script helper FAILED");
 	  /******************************/
 	  _exit(0);
 	}
     }
 
-  /**** Pi-hole modification ****/
+  /**** Lorentz modification ****/
   log_info("Started script helper");
   /******************************/
 
@@ -249,8 +249,8 @@ int create_helper(int event_fd, int err_fd, uid_t uid, gid_t gid, long max_fd)
        else
 	 continue;
 
-      /************************** Pi-hole modification **************************/
-      FTL_log_helper(1, action_str);
+      /************************** Lorentz modification **************************/
+      Lorentz_log_helper(1, action_str);
       /**************************************************************************/
       	
       /* stringify MAC into dhcp_buff */
@@ -681,8 +681,8 @@ int create_helper(int event_fd, int err_fd, uid_t uid, gid_t gid, long max_fd)
       if (data.action == ACTION_RELAY_SNOOP)
 	strcpy(daemon->packet, data.interface);
       
-      /**************************** Pi-hole modification ****************************/
-      FTL_log_helper(5, daemon->lease_change_command, action_str,
+      /**************************** Lorentz modification ****************************/
+      Lorentz_log_helper(5, daemon->lease_change_command, action_str,
 		     (is6 && data.action != ACTION_ARP) ? daemon->packet : daemon->dhcp_buff,
 		     daemon->addrbuff, hostname);
       /******************************************************************************/
@@ -697,8 +697,8 @@ int create_helper(int event_fd, int err_fd, uid_t uid, gid_t gid, long max_fd)
 	  err = errno;
 	}
       /* failed, send event so the main process logs the problem */
-      /**************************** Pi-hole modification ****************************/
-      FTL_log_helper(2, daemon->lease_change_command, strerror(err));
+      /**************************** Lorentz modification ****************************/
+      Lorentz_log_helper(2, daemon->lease_change_command, strerror(err));
       /******************************************************************************/
       send_event(event_fd, EVENT_EXEC_ERR, err, NULL);
       _exit(0); 

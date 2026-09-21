@@ -746,7 +746,7 @@ static int pmain (lua_State *L) {
 }
 
 
-/******* Pi-hole modification ********/
+/******* Lorentz modification ********/
 int lua_main (int argc, char **argv) {
 /*************************************/
   int status, result;

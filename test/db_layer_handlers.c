@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2026 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Regression harness for the API handlers that read the query databases
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -12,7 +12,7 @@
 // through send_http() and friends, which are replaced here by functions that
 // keep the response body for inspection (this translation unit is linked with
 // --allow-multiple-definition, the definitions below win over the webserver's).
-// The handlers are included so that this file and the FTL object set do not
+// The handlers are included so that this file and the Lorentz object set do not
 // need a running webserver.
 #include "api/stats_database.c"
 #include "api/queries.c"
@@ -22,7 +22,7 @@ static char response[256 * 1024];
 static int response_code;
 static char response_error[256];
 
-int send_http(struct ftl_conn *api, const char *mime, const char *msg)
+int send_http(struct lorentz_conn *api, const char *mime, const char *msg)
 {
 	(void)api; (void)mime;
 	snprintf(response, sizeof(response), "%s", msg != NULL ? msg : "");
@@ -31,7 +31,7 @@ int send_http(struct ftl_conn *api, const char *mime, const char *msg)
 	return 200;
 }
 
-int send_http_code(struct ftl_conn *api, const char *mime, int code, const char *msg)
+int send_http_code(struct lorentz_conn *api, const char *mime, int code, const char *msg)
 {
 	(void)api; (void)mime;
 	snprintf(response, sizeof(response), "%s", msg != NULL ? msg : "");
@@ -39,7 +39,7 @@ int send_http_code(struct ftl_conn *api, const char *mime, int code, const char 
 	return code;
 }
 
-int send_http_internal_error(struct ftl_conn *api)
+int send_http_internal_error(struct lorentz_conn *api)
 {
 	(void)api;
 	response[0] = '\0';
@@ -47,7 +47,7 @@ int send_http_internal_error(struct ftl_conn *api)
 	return 500;
 }
 
-int send_json_error(struct ftl_conn *api, const int code, const char *key, const char *message, const char *hint)
+int send_json_error(struct lorentz_conn *api, const int code, const char *key, const char *message, const char *hint)
 {
 	(void)api; (void)hint;
 	response[0] = '\0';
@@ -56,7 +56,7 @@ int send_json_error(struct ftl_conn *api, const int code, const char *key, const
 	return code;
 }
 
-int send_json_success(struct ftl_conn *api)
+int send_json_success(struct lorentz_conn *api)
 {
 	(void)api;
 	response_code = 200;
@@ -64,12 +64,12 @@ int send_json_success(struct ftl_conn *api)
 }
 
 // Run a handler and parse its answer. The caller frees the returned object
-static cJSON *call(int (*handler)(struct ftl_conn*), const char *query, enum api_flags flags)
+static cJSON *call(int (*handler)(struct lorentz_conn*), const char *query, enum api_flags flags)
 {
 	struct mg_request_info info;
 	memset(&info, 0, sizeof(info));
 	info.query_string = query;
-	struct ftl_conn api = { .request = &info, .method = HTTP_GET, .now = double_time() };
+	struct lorentz_conn api = { .request = &info, .method = HTTP_GET, .now = double_time() };
 	api.opts.flags = flags;
 
 	response[0] = '\0';
@@ -131,7 +131,7 @@ static void fill_queries(db_conn *db)
 
 static void test_stats_database(void)
 {
-	db_test_fresh_ftl_db("handlers-disk.db");
+	db_test_fresh_lorentz_db("handlers-disk.db");
 	db_conn *db = dbopen(false, false);
 	CHECK(db != NULL);
 	fill_queries(db);
@@ -208,7 +208,7 @@ static void test_stats_database(void)
 
 static void test_queries(void)
 {
-	db_test_fresh_ftl_db("handlers-mem.db");
+	db_test_fresh_lorentz_db("handlers-mem.db");
 	CHECK(init_memory_database());
 	fill_queries(get_memdb());
 

@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  SQLite3 database engine extensions
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -51,8 +51,8 @@ static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value 
 	// Analyze input supplied to our SQLite subroutine
 	// From the DB side (first argument) ...
 	const char *addrDBcidr = (const char*)sqlite3_value_text(argv[0]);
-	// ... and from FTL's side (second argument)
-	const char *addrFTL = (const char*)sqlite3_value_text(argv[1]);
+	// ... and from Lorentz's side (second argument)
+	const char *addrLorentz = (const char*)sqlite3_value_text(argv[1]);
 
 	// Return early (no match) if database entry is a MAC address
 	// We can skip all computations in this case
@@ -65,8 +65,8 @@ static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value 
 	// Return early (no match) if IP types are different
 	// We can skip all computations in this case
 	bool isIPv6_DB = strchr(addrDBcidr, ':') != NULL;
-	bool isIPv6_FTL = strchr(addrFTL, ':') != NULL;
-	if(isIPv6_DB != isIPv6_FTL)
+	bool isIPv6_Lorentz = strchr(addrLorentz, ':') != NULL;
+	if(isIPv6_DB != isIPv6_Lorentz)
 	{
 		sqlite3_result_int(context, 0);
 		return;
@@ -99,7 +99,7 @@ static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value 
 	// Convert the Internet host address into binary form in network byte order
 	// We use in6_addr as variable type here as it is guaranteed to be large enough
 	// for both, IPv4 and IPv6 addresses (128 bits variable size).
-	struct in6_addr saddrDB = {}, saddrFTL = {};
+	struct in6_addr saddrDB = {}, saddrLorentz = {};
 	if (inet_pton(isIPv6_DB ? AF_INET6 : AF_INET, addrDB, &saddrDB) == 0)
 	{
 		// This may happen when trying to analyze a hostname, skip this entry and return NO MATCH (= 0)
@@ -112,12 +112,12 @@ static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value 
 	free(addrDB);
 	addrDB = NULL;
 
-	// Check and convert client IP address as seen by FTL
-	if (inet_pton(isIPv6_FTL ? AF_INET6 : AF_INET, addrFTL, &saddrFTL) == 0)
+	// Check and convert client IP address as seen by Lorentz
+	if (inet_pton(isIPv6_Lorentz ? AF_INET6 : AF_INET, addrLorentz, &saddrLorentz) == 0)
 	{
-		//sqlite3_result_error(context, "Passed a malformed IP address (FTL)", -1);
+		//sqlite3_result_error(context, "Passed a malformed IP address (Lorentz)", -1);
 		// Return non-fatal "NO MATCH" if address is invalid
-		log_err("Malformed FTL IP address: %s", addrFTL);
+		log_err("Malformed Lorentz IP address: %s", addrLorentz);
 		sqlite3_result_int(context, 0);
 		return;
 	}
@@ -135,10 +135,10 @@ static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value 
 	for(unsigned int i = 0u; i < 16u; i++)
 	{
 		saddrDB.s6_addr[i] &= bitmask[i];
-		saddrFTL.s6_addr[i] &= bitmask[i];
+		saddrLorentz.s6_addr[i] &= bitmask[i];
 
 		// Are the addresses different given the applied mask?
-		if(saddrDB.s6_addr[i] != saddrFTL.s6_addr[i])
+		if(saddrDB.s6_addr[i] != saddrLorentz.s6_addr[i])
 		{
 			match = 0;
 			break;
@@ -149,9 +149,9 @@ static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value 
 	if(config.debug.database.v.b)
 	{
 		char subnet[INET6_ADDRSTRLEN];
-		inet_ntop(isIPv6_FTL ? AF_INET6 : AF_INET, &bitmask, subnet, sizeof(subnet));
+		inet_ntop(isIPv6_Lorentz ? AF_INET6 : AF_INET, &bitmask, subnet, sizeof(subnet));
 		log_debug(DEBUG_DATABASE, "SQL: Comparing %s vs. %s (subnet %s) - %s",
-		          addrFTL, addrDBcidr, subnet,
+		          addrLorentz, addrDBcidr, subnet,
 		          match == 1 ? "!! MATCH !!" : "NO MATCH");
 	}
 
@@ -199,8 +199,8 @@ static void isIPv6_impl(sqlite3_context *context, int argc, sqlite3_value **argv
 	sqlite3_result_int(context, 0);
 }
 
-// Initialize Pi-hole SQLite3 extension
-static int sqlite3_pihole_extensions_init(sqlite3 *db, char **pzErrMsg, const struct sqlite3_api_routines *pApi)
+// Initialize Lorentz SQLite3 extension
+static int sqlite3_lorentz_extensions_init(sqlite3 *db, char **pzErrMsg, const struct sqlite3_api_routines *pApi)
 {
 	// Register new sqlite function subnet_match taking 2 arguments in UTF8 format.
 	// The function is deterministic in the sense of always returning the same output for the same input.
@@ -329,12 +329,12 @@ static sqlite3_mem_methods ersatzMethods = {
 };
 
 /**
- * @brief Initializes the Pi-hole SQLite3 extensions and the SQLite3 engine.
+ * @brief Initializes the Lorentz SQLite3 extensions and the SQLite3 engine.
  *
- * This function registers the Pi-hole provided SQLite3 extensions and initializes
+ * This function registers the Lorentz provided SQLite3 extensions and initializes
  * the SQLite3 engine. It should be called before any SQLite3 operations are performed.
  */
-void pihole_sqlite3_initalize(void)
+void lorentz_sqlite3_initalize(void)
 {
 	// Set up memory allocation tracing
 	int rc = sqlite3_config(SQLITE_CONFIG_GETMALLOC, &memtraceBase);
@@ -354,11 +354,11 @@ void pihole_sqlite3_initalize(void)
 		         sqlite3_errstr(rc));
 	}
 
-	// Register Pi-hole provided SQLite3 extensions
+	// Register Lorentz provided SQLite3 extensions
 	// This may also initialize the database engine. It is, nonetheless,
 	// safe to call sqlite3_initialize() again afterwards and actually
 	// recommended as auto-init may be removed in future SQLite3 versions.
-	sqlite3_auto_extension((void (*)(void))sqlite3_pihole_extensions_init);
+	sqlite3_auto_extension((void (*)(void))sqlite3_lorentz_extensions_init);
 
 	// Initialize the SQLite3 engine
 	sqlite3_initialize();

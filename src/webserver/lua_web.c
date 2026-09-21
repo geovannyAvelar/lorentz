@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Lua-related webserver routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/lua_web.h"
 #include "api/api.h"
 
@@ -20,7 +20,7 @@
 #include "log.h"
 // directory_exists()
 #include "files.h"
-// ftl_http_redirect()
+// lorentz_http_redirect()
 #include "webserver.h"
 
 static char *login_uri = NULL, *admin_api_uri = NULL, *prefix_webhome = NULL;
@@ -80,7 +80,7 @@ int request_handler(struct mg_connection *conn, void *cbdata)
 	}
 
 	// Build minimal api struct to check authentication
-	struct ftl_conn api = { 0 };
+	struct lorentz_conn api = { 0 };
 	api.conn = conn;
 	api.request = req_info;
 	api.now = double_time();
@@ -140,7 +140,7 @@ int request_handler(struct mg_connection *conn, void *cbdata)
 			// the log file (and exhaust the disk).
 			log_debug(DEBUG_API, "Authentication required, redirecting to %s%slogin",
 			          config.webserver.paths.prefix.v.s, config.webserver.paths.webhome.v.s);
-			ftl_http_redirect(conn, 302, "%s%slogin",
+			lorentz_http_redirect(conn, 302, "%s%slogin",
 			                  config.webserver.paths.prefix.v.s,
 			                  config.webserver.paths.webhome.v.s);
 			return 302;
@@ -154,7 +154,7 @@ int request_handler(struct mg_connection *conn, void *cbdata)
 			// User is already authenticated, redirecting to index page
 			log_web("User is already authenticated, redirecting to %s%s",
 			        config.webserver.paths.prefix.v.s, config.webserver.paths.webhome.v.s);
-			ftl_http_redirect(conn, 302, "%s%s",
+			lorentz_http_redirect(conn, 302, "%s%s",
 			                  config.webserver.paths.prefix.v.s,
 			                  config.webserver.paths.webhome.v.s);
 			return 302;

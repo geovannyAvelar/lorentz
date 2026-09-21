@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2022 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  dnsmasq config writer routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "dnsmasq_config.h"
 // logging routines
 #include "log.h"
@@ -248,7 +248,7 @@ static void write_config_header(FILE *fp, const char *description)
 	const time_t now = time(NULL);
 	char timestring[TIMESTR_SIZE];
 	get_timestr(timestring, now, false, false);
-	fputs("# Pi-hole: A black hole for Internet advertisements\n", fp);
+	fputs("# Lorentz: A black hole for Internet advertisements\n", fp);
 	fprintf(fp, "# (c) %u Pi-hole, LLC (https://pi-hole.net)\n", get_year(now));
 	fputs("# Network-wide ad blocking via your own hardware.\n", fp);
 	fputs("#\n", fp);
@@ -258,19 +258,19 @@ static void write_config_header(FILE *fp, const char *description)
 	fputs("#\n", fp);
 	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "################################################################################");
 	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "");
-	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "FILE AUTOMATICALLY POPULATED BY PI-HOLE");
+	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "FILE AUTOMATICALLY POPULATED BY LORENTZ");
 	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "ANY CHANGES MADE TO THIS FILE WILL BE LOST WHEN THE CONFIGURATION CHANGES");
 	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "");
 	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "IF YOU WISH TO CHANGE ANY OF THESE VALUES, CHANGE THEM IN");
-	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "/etc/pihole/pihole.toml");
-	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "and restart pihole-FTL");
+	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "/etc/lorentz/lorentz.toml");
+	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "and restart lorentz");
 	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "");
 	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "ANY OTHER CHANGES SHOULD BE MADE IN A SEPARATE CONFIG FILE");
 	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "WITHIN /etc/dnsmasq.d/yourname.conf");
-	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "(make sure misc.etc_dnsmasq_d is set to true in /etc/pihole/pihole.toml)");
+	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "(make sure misc.etc_dnsmasq_d is set to true in /etc/lorentz/lorentz.toml)");
 	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "");
 	CONFIG_CENTER(fp, HEADER_WIDTH, "Last updated: %s", timestring);
-	CONFIG_CENTER(fp, HEADER_WIDTH, "by FTL version %s", get_FTL_version());
+	CONFIG_CENTER(fp, HEADER_WIDTH, "by Lorentz version %s", get_Lorentz_version());
 	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "");
 	CONFIG_CENTER(fp, HEADER_WIDTH, "%s", "################################################################################");
 }
@@ -388,134 +388,134 @@ bool __attribute__((nonnull(1,3))) write_dnsmasq_config(struct config *conf, enu
 	}
 
 	log_debug(DEBUG_CONFIG, "Opening "DNSMASQ_TEMP_CONF" for writing");
-	FILE *pihole_conf = fopen(DNSMASQ_TEMP_CONF, "w");
+	FILE *lorentz_conf = fopen(DNSMASQ_TEMP_CONF, "w");
 	// Return early if opening failed
-	if(!pihole_conf)
+	if(!lorentz_conf)
 	{
 		log_err("Cannot open "DNSMASQ_TEMP_CONF" for writing, unable to update dnsmasq configuration: %s", strerror(errno));
 		return false;
 	}
 
 	// Lock file, may block if the file is currently opened
-	const bool locked = lock_file(pihole_conf, DNSMASQ_TEMP_CONF);
+	const bool locked = lock_file(lorentz_conf, DNSMASQ_TEMP_CONF);
 
-	write_config_header(pihole_conf, "Dnsmasq config for Pi-hole's FTLDNS");
-	fputs("hostsdir="DNSMASQ_HOSTSDIR"\n", pihole_conf);
-	fputs("\n", pihole_conf);
-	fputs("# Don't read /etc/resolv.conf. Get upstream servers only from the configuration\n", pihole_conf);
-	fputs("no-resolv\n", pihole_conf);
-	fputs("\n", pihole_conf);
-	fputs("# DNS port to be used\n", pihole_conf);
-	fprintf(pihole_conf, "port=%u\n", conf->dns.port.v.u16);
-	fputs("\n", pihole_conf);
+	write_config_header(lorentz_conf, "Dnsmasq config for Lorentz's");
+	fputs("hostsdir="DNSMASQ_HOSTSDIR"\n", lorentz_conf);
+	fputs("\n", lorentz_conf);
+	fputs("# Don't read /etc/resolv.conf. Get upstream servers only from the configuration\n", lorentz_conf);
+	fputs("no-resolv\n", lorentz_conf);
+	fputs("\n", lorentz_conf);
+	fputs("# DNS port to be used\n", lorentz_conf);
+	fprintf(lorentz_conf, "port=%u\n", conf->dns.port.v.u16);
+	fputs("\n", lorentz_conf);
 	if(cJSON_GetArraySize(conf->dns.upstreams.v.json) > 0)
 	{
-		fputs("# List of upstream DNS server\n", pihole_conf);
+		fputs("# List of upstream DNS server\n", lorentz_conf);
 		cJSON *server = NULL;
 		cJSON_ArrayForEach(server, conf->dns.upstreams.v.json)
 		{
 			if(server != NULL && cJSON_IsString(server))
-				fprintf(pihole_conf, "server=%s\n", server->valuestring);
+				fprintf(lorentz_conf, "server=%s\n", server->valuestring);
 		}
-		fputs("\n", pihole_conf);
+		fputs("\n", lorentz_conf);
 	}
-	fputs("# Set the size of dnsmasq's cache. The default is 150 names. Setting the cache\n", pihole_conf);
-	fputs("# size to zero disables caching. Note: huge cache size impacts performance\n", pihole_conf);
-	fprintf(pihole_conf, "cache-size=%u\n", conf->dns.cache.size.v.ui);
-	fputs("\n", pihole_conf);
+	fputs("# Set the size of dnsmasq's cache. The default is 150 names. Setting the cache\n", lorentz_conf);
+	fputs("# size to zero disables caching. Note: huge cache size impacts performance\n", lorentz_conf);
+	fprintf(lorentz_conf, "cache-size=%u\n", conf->dns.cache.size.v.ui);
+	fputs("\n", lorentz_conf);
 
 	if(conf->dns.localise.v.b)
 	{
-		fputs("# Return answers to DNS queries from /etc/hosts and interface-name and\n", pihole_conf);
-		fputs("# dynamic-host which depend on the interface over which the query was\n", pihole_conf);
-		fputs("# received. If a name has more than one address associated with it, and\n", pihole_conf);
-		fputs("# at least one of those addresses is on the same subnet as the interface\n", pihole_conf);
-		fputs("# to which the query was sent, then return only the address(es) on that\n", pihole_conf);
-		fputs("# subnet and return all the available addresses otherwise.\n", pihole_conf);
-		fputs("localise-queries\n", pihole_conf);
-		fputs("\n", pihole_conf);
+		fputs("# Return answers to DNS queries from /etc/hosts and interface-name and\n", lorentz_conf);
+		fputs("# dynamic-host which depend on the interface over which the query was\n", lorentz_conf);
+		fputs("# received. If a name has more than one address associated with it, and\n", lorentz_conf);
+		fputs("# at least one of those addresses is on the same subnet as the interface\n", lorentz_conf);
+		fputs("# to which the query was sent, then return only the address(es) on that\n", lorentz_conf);
+		fputs("# subnet and return all the available addresses otherwise.\n", lorentz_conf);
+		fputs("localise-queries\n", lorentz_conf);
+		fputs("\n", lorentz_conf);
 	}
 
 	if(conf->dns.queryLogging.v.b)
 	{
-		fputs("# Enable query logging\n", pihole_conf);
+		fputs("# Enable query logging\n", lorentz_conf);
 		if(conf->misc.extraLogging.v.b)
-			fputs("log-queries=proto\n", pihole_conf);
+			fputs("log-queries=proto\n", lorentz_conf);
 		else
-			fputs("log-queries\n", pihole_conf);
-		fputs("log-async\n", pihole_conf);
-		fputs("\n", pihole_conf);
+			fputs("log-queries\n", lorentz_conf);
+		fputs("log-async\n", lorentz_conf);
+		fputs("\n", lorentz_conf);
 	}
 	else
 	{
-		fputs("# Disable query logging\n", pihole_conf);
-		fputs("#log-queries\n", pihole_conf);
-		fputs("#log-async\n", pihole_conf);
-		fputs("\n", pihole_conf);
+		fputs("# Disable query logging\n", lorentz_conf);
+		fputs("#log-queries\n", lorentz_conf);
+		fputs("#log-async\n", lorentz_conf);
+		fputs("\n", lorentz_conf);
 	}
 
 	if(strlen(conf->files.log.dnsmasq.v.s) > 0)
 	{
-		fputs("# Specify the log file to use\n", pihole_conf);
-		fputs("# We set this even if logging is disabled to store warnings\n", pihole_conf);
-		fputs("# and errors in this file. This is useful for debugging.\n", pihole_conf);
-		fprintf(pihole_conf, "log-facility=%s\n", conf->files.log.dnsmasq.v.s);
-		fputs("\n", pihole_conf);
+		fputs("# Specify the log file to use\n", lorentz_conf);
+		fputs("# We set this even if logging is disabled to store warnings\n", lorentz_conf);
+		fputs("# and errors in this file. This is useful for debugging.\n", lorentz_conf);
+		fprintf(lorentz_conf, "log-facility=%s\n", conf->files.log.dnsmasq.v.s);
+		fputs("\n", lorentz_conf);
 	}
 
 	if(conf->dns.bogusPriv.v.b)
 	{
-		fputs("# Bogus private reverse lookups. All reverse lookups for private IP\n", pihole_conf);
-		fputs("# ranges (ie 192.168.x.x, etc) which are not found in /etc/hosts or the\n", pihole_conf);
-		fputs("# DHCP leases file are answered with NXDOMAIN rather than being forwarded\n", pihole_conf);
-		fputs("bogus-priv\n", pihole_conf);
-		fputs("\n", pihole_conf);
+		fputs("# Bogus private reverse lookups. All reverse lookups for private IP\n", lorentz_conf);
+		fputs("# ranges (ie 192.168.x.x, etc) which are not found in /etc/hosts or the\n", lorentz_conf);
+		fputs("# DHCP leases file are answered with NXDOMAIN rather than being forwarded\n", lorentz_conf);
+		fputs("bogus-priv\n", lorentz_conf);
+		fputs("\n", lorentz_conf);
 	}
 
 	if(conf->dns.domainNeeded.v.b)
 	{
-		fputs("# Never forward A or AAAA queries for plain names, without dots or\n", pihole_conf);
-		fputs("# domain parts, to upstream nameservers\n", pihole_conf);
-		fputs("domain-needed\n", pihole_conf);
-		fputs("\n", pihole_conf);
+		fputs("# Never forward A or AAAA queries for plain names, without dots or\n", lorentz_conf);
+		fputs("# domain parts, to upstream nameservers\n", lorentz_conf);
+		fputs("domain-needed\n", lorentz_conf);
+		fputs("\n", lorentz_conf);
 	}
 
 	if(conf->dns.expandHosts.v.b)
 	{
-		fputs("# Add the domain to simple names (without a period) in /etc/hosts in\n", pihole_conf);
-		fputs("# the same way as for DHCP-derived names\n", pihole_conf);
-		fputs("expand-hosts\n", pihole_conf);
-		fputs("\n", pihole_conf);
+		fputs("# Add the domain to simple names (without a period) in /etc/hosts in\n", lorentz_conf);
+		fputs("# the same way as for DHCP-derived names\n", lorentz_conf);
+		fputs("expand-hosts\n", lorentz_conf);
+		fputs("\n", lorentz_conf);
 	}
 
 	if(conf->dns.dnssec.v.b)
 	{
-		fputs("# Use DNNSEC\n", pihole_conf);
-		fputs("dnssec\n", pihole_conf);
-		fputs("# 2017-02-02 root zone trust anchor\n", pihole_conf);
-		fputs("# https://www.iana.org/reports/2017/root-ksk-2017.pdf\n", pihole_conf);
+		fputs("# Use DNNSEC\n", lorentz_conf);
+		fputs("dnssec\n", lorentz_conf);
+		fputs("# 2017-02-02 root zone trust anchor\n", lorentz_conf);
+		fputs("# https://www.iana.org/reports/2017/root-ksk-2017.pdf\n", lorentz_conf);
 		fputs("trust-anchor=.,20326,8,2,E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D\n",
-		      pihole_conf);
-		fputs("# 2024-07-26 root zone trust anchor\n", pihole_conf);
-		fputs("# https://www.iana.org/reports/2024/root-ksk-2024.pdf\n", pihole_conf);
+		      lorentz_conf);
+		fputs("# 2024-07-26 root zone trust anchor\n", lorentz_conf);
+		fputs("# https://www.iana.org/reports/2024/root-ksk-2024.pdf\n", lorentz_conf);
 		fputs("trust-anchor=.,38696,8,2,683D2D0ACB8C9B712A1948B27F741219298D0A450D612C483AF444A4C0FB2B16\n",
-		      pihole_conf);
-		fputs("\n", pihole_conf);
+		      lorentz_conf);
+		fputs("\n", lorentz_conf);
 	}
 
 	if(strlen(conf->dns.hostRecord.v.s) > 0)
 	{
-		fputs("# Add A, AAAA and PTR records to the DNS\n", pihole_conf);
-		fprintf(pihole_conf, "host-record=%s\n", conf->dns.hostRecord.v.s);
-		fputs("\n", pihole_conf);
+		fputs("# Add A, AAAA and PTR records to the DNS\n", lorentz_conf);
+		fprintf(lorentz_conf, "host-record=%s\n", conf->dns.hostRecord.v.s);
+		fputs("\n", lorentz_conf);
 	}
 
 	if(conf->dns.cache.optimizer.v.i > -1)
 	{
-		fputs("# Use stale cache entries for a given number of seconds to optimize cache utilization\n", pihole_conf);
-		fputs("# Setting the time to zero will serve stale cache data regardless how long it has expired.\n", pihole_conf);
-		fprintf(pihole_conf, "use-stale-cache=%i\n", conf->dns.cache.optimizer.v.i);
-		fputs("\n", pihole_conf);
+		fputs("# Use stale cache entries for a given number of seconds to optimize cache utilization\n", lorentz_conf);
+		fputs("# Setting the time to zero will serve stale cache data regardless how long it has expired.\n", lorentz_conf);
+		fprintf(lorentz_conf, "use-stale-cache=%i\n", conf->dns.cache.optimizer.v.i);
+		fputs("\n", lorentz_conf);
 	}
 
 	// Check if an explicit interface is configured
@@ -532,30 +532,30 @@ bool __attribute__((nonnull(1,3))) write_dnsmasq_config(struct config *conf, enu
 	{
 		case LISTEN_LOCAL:
 			fputs("# Only respond to queries from devices that are at most one hop away (local devices)\n",
-			      pihole_conf);
-			fputs("local-service\n", pihole_conf);
+			      lorentz_conf);
+			fputs("local-service\n", lorentz_conf);
 			break;
 		case LISTEN_ALL:
-			fputs("# Listen on all interfaces, permit all origins\n", pihole_conf);
-			fputs("except-interface=nonexisting\n", pihole_conf);
+			fputs("# Listen on all interfaces, permit all origins\n", lorentz_conf);
+			fputs("except-interface=nonexisting\n", lorentz_conf);
 			break;
 		case LISTEN_SINGLE:
-			fputs("# Listen on one interface\n", pihole_conf);
-			fprintf(pihole_conf, "interface=%s\n", interface);
+			fputs("# Listen on one interface\n", lorentz_conf);
+			fprintf(lorentz_conf, "interface=%s\n", interface);
 			break;
 		case LISTEN_BIND:
-			fputs("# Bind to one interface\n", pihole_conf);
-			fprintf(pihole_conf, "interface=%s\n", interface);
-			fputs("bind-interfaces\n", pihole_conf);
+			fputs("# Bind to one interface\n", lorentz_conf);
+			fprintf(lorentz_conf, "interface=%s\n", interface);
+			fputs("bind-interfaces\n", lorentz_conf);
 			break;
 		case LISTEN_NONE:
-			fputs("# No interface configuration applied, make sure to cover this yourself\n", pihole_conf);
+			fputs("# No interface configuration applied, make sure to cover this yourself\n", lorentz_conf);
 			break;
 		case LISTEN_MAX:
 		default:
 			log_err("Unknown listening mode %d, unable to update dnsmasq configuration", conf->dns.listeningMode.v.listeningMode);
 	}
-	fputs("\n", pihole_conf);
+	fputs("\n", lorentz_conf);
 
 	// Add upstream DNS servers for reverse lookups
 	bool revServer_domain = false, revServer_homearpa = false, revServer_internal = false;
@@ -599,15 +599,15 @@ bool __attribute__((nonnull(1,3))) write_dnsmasq_config(struct config *conf, enu
 			continue;
 		}
 
-		fprintf(pihole_conf, "# Reverse server setting (%u%s server)\n",
+		fprintf(lorentz_conf, "# Reverse server setting (%u%s server)\n",
 		        idx+1, get_ordinal_suffix(idx+1));
-		fprintf(pihole_conf, "rev-server=%s,%s\n", cidr, target);
+		fprintf(lorentz_conf, "rev-server=%s,%s\n", cidr, target);
 
 		// If we have a reverse domain, we forward all queries to this domain to
 		// the same destination
 		if(domain != NULL && strlen(domain) > 0)
 		{
-			fprintf(pihole_conf, "server=/%s/%s\n", domain, target);
+			fprintf(lorentz_conf, "server=/%s/%s\n", domain, target);
 
 			// Check if the configured domain is the same as the main domain
 			if(strlen(conf->dns.domain.name.v.s) > 0 &&
@@ -626,8 +626,8 @@ bool __attribute__((nonnull(1,3))) write_dnsmasq_config(struct config *conf, enu
 		// Forward unqualified names to the target only when the "never forward
 		// non-FQDN" option is NOT ticked
 		if(!conf->dns.domainNeeded.v.b)
-			fprintf(pihole_conf, "server=//%s\n", target);
-		fputs("\n", pihole_conf);
+			fprintf(lorentz_conf, "server=//%s\n", target);
+		fputs("\n", lorentz_conf);
 
 		// Free copy of string
 		free(copy);
@@ -637,10 +637,10 @@ bool __attribute__((nonnull(1,3))) write_dnsmasq_config(struct config *conf, enu
 	// that non-FQDNs queries should never be sent to any upstream servers
 	if(conf->dns.domainNeeded.v.b)
 	{
-		fputs("# Never forward queries for plain names, without\n",pihole_conf);
-		fputs("# dots or domain parts, to upstream nameservers. If the name\n", pihole_conf);
-		fputs("# is not known from /etc/hosts or DHCP, NXDOMAIN is returned\n", pihole_conf);
-		fputs("local=//\n\n", pihole_conf);
+		fputs("# Never forward queries for plain names, without\n",lorentz_conf);
+		fputs("# dots or domain parts, to upstream nameservers. If the name\n", lorentz_conf);
+		fputs("# is not known from /etc/hosts or DHCP, NXDOMAIN is returned\n", lorentz_conf);
+		fputs("local=//\n\n", lorentz_conf);
 	}
 
 	// Ensure that home.arpa domains (RFC 8375) are not forwarded to
@@ -654,20 +654,20 @@ bool __attribute__((nonnull(1,3))) write_dnsmasq_config(struct config *conf, enu
 	                             strcasecmp(conf->dns.domain.name.v.s, "home.arpa") == 0;
 	if(revServer_homearpa)
 	{
-		fputs("# A reverse server is configured for \"home.arpa\".\n", pihole_conf);
-		fputs("# All queries for this domain will be forwarded to this\n", pihole_conf);
-		fputs("# upstream server\n\n", pihole_conf);
+		fputs("# A reverse server is configured for \"home.arpa\".\n", lorentz_conf);
+		fputs("# All queries for this domain will be forwarded to this\n", lorentz_conf);
+		fputs("# upstream server\n\n", lorentz_conf);
 	}
 	else if(domain_homearpa && !conf->dns.domain.local.v.b)
 	{
-		fputs("# The configured DNS domain is \"home.arpa\" and is explicitly\n", pihole_conf);
-		fputs("# marked non-local. Pi-hole will be forwarding queries for this\n", pihole_conf);
-		fputs("# domain to upstream servers.\n\n", pihole_conf);
+		fputs("# The configured DNS domain is \"home.arpa\" and is explicitly\n", lorentz_conf);
+		fputs("# marked non-local. Lorentz will be forwarding queries for this\n", lorentz_conf);
+		fputs("# domain to upstream servers.\n\n", lorentz_conf);
 	}
 	else
 	{
-		fputs("# Do not forward .home.arpa domains to upstream servers\n",pihole_conf);
-		fputs("local=/home.arpa/\n\n",pihole_conf);
+		fputs("# Do not forward .home.arpa domains to upstream servers\n",lorentz_conf);
+		fputs("local=/home.arpa/\n\n",lorentz_conf);
 	}
 
 	// Ensure that internal domains (Internet-Draft
@@ -681,90 +681,90 @@ bool __attribute__((nonnull(1,3))) write_dnsmasq_config(struct config *conf, enu
 	                             strcasecmp(conf->dns.domain.name.v.s, "internal") == 0;
 	if(revServer_internal)
 	{
-		fputs("# A reverse server is configured for \"internal\".\n", pihole_conf);
-		fputs("# All queries for this domain will be forwarded to this\n", pihole_conf);
-		fputs("# upstream server\n\n", pihole_conf);
+		fputs("# A reverse server is configured for \"internal\".\n", lorentz_conf);
+		fputs("# All queries for this domain will be forwarded to this\n", lorentz_conf);
+		fputs("# upstream server\n\n", lorentz_conf);
 	}
 	else if(domain_internal && !conf->dns.domain.local.v.b)
 	{
-		fputs("# The configured DNS domain is \"internal\" and is explicitly\n", pihole_conf);
-		fputs("# marked non-local. Pi-hole will be forwarding queries for this\n", pihole_conf);
-		fputs("# domain to upstream servers.\n\n", pihole_conf);
+		fputs("# The configured DNS domain is \"internal\" and is explicitly\n", lorentz_conf);
+		fputs("# marked non-local. Lorentz will be forwarding queries for this\n", lorentz_conf);
+		fputs("# domain to upstream servers.\n\n", lorentz_conf);
 	}
 	else
 	{
-		fputs("# Do not forward .internal domains to upstream servers\n",pihole_conf);
-		fputs("local=/internal/\n\n",pihole_conf);
+		fputs("# Do not forward .internal domains to upstream servers\n",lorentz_conf);
+		fputs("local=/internal/\n\n",lorentz_conf);
 	}
 
 	// Add domain to DNS server. It will also be used for DHCP if the DHCP
 	// server is enabled below
 	if(strlen(conf->dns.domain.name.v.s) > 0)
 	{
-		fputs("# DNS domain for both the DNS and DHCP server\n", pihole_conf);
+		fputs("# DNS domain for both the DNS and DHCP server\n", lorentz_conf);
 		if(revServer_domain || !conf->dns.domain.local.v.b)
 		{
 			if(revServer_domain)
 			{
-				fputs("# This DNS domain is also used for reverse lookups\n", pihole_conf);
-				fputs("# It is forwarded to the upstream servers configured above\n", pihole_conf);
+				fputs("# This DNS domain is also used for reverse lookups\n", lorentz_conf);
+				fputs("# It is forwarded to the upstream servers configured above\n", lorentz_conf);
 			}
 			else // !conf->dns.domain.local.v.b
 			{
-				fputs("# This domain is explicitly configured to *not* be local. Ensure\n", pihole_conf);
-				fputs("# that you have configured at least one upstream server for this\n", pihole_conf);
-				fputs("# domain elsewhere to prevent it from being forwarded to the general\n", pihole_conf);
-				fputs("# (probably public) upstream servers\n", pihole_conf);
+				fputs("# This domain is explicitly configured to *not* be local. Ensure\n", lorentz_conf);
+				fputs("# that you have configured at least one upstream server for this\n", lorentz_conf);
+				fputs("# domain elsewhere to prevent it from being forwarded to the general\n", lorentz_conf);
+				fputs("# (probably public) upstream servers\n", lorentz_conf);
 			}
-			fputs("# (see server=/<domain>/target above)\n", pihole_conf);
-			fprintf(pihole_conf, "domain=%s\n\n", conf->dns.domain.name.v.s);
+			fputs("# (see server=/<domain>/target above)\n", lorentz_conf);
+			fprintf(lorentz_conf, "domain=%s\n\n", conf->dns.domain.name.v.s);
 		}
 		else
 		{
-			fputs("# This DNS domain is purely local. FTL may answer queries from\n", pihole_conf);
-			fputs("# /etc/hosts or DHCP but should never forward queries on that\n", pihole_conf);
-			fputs("# domain to any upstream servers\n", pihole_conf);
-			fprintf(pihole_conf, "domain=%s\n", conf->dns.domain.name.v.s);
-			fprintf(pihole_conf, "local=/%s/\n\n", conf->dns.domain.name.v.s);
+			fputs("# This DNS domain is purely local. Lorentz may answer queries from\n", lorentz_conf);
+			fputs("# /etc/hosts or DHCP but should never forward queries on that\n", lorentz_conf);
+			fputs("# domain to any upstream servers\n", lorentz_conf);
+			fprintf(lorentz_conf, "domain=%s\n", conf->dns.domain.name.v.s);
+			fprintf(lorentz_conf, "local=/%s/\n\n", conf->dns.domain.name.v.s);
 		}
 	}
 
-	// The domain "pi.hole" is purely local, never forward it to upstream servers
-	fputs("# Local domain for Pi-hole\n", pihole_conf);
-	fputs("# This domain is purely local and should never be forwarded to any\n", pihole_conf);
-	fputs("# upstream servers. We add a false A-record to this domain to prevent\n", pihole_conf);
-	fputs("# NXDOMAIN responses for queries on this domain. The actual response\n", pihole_conf);
-	fputs("# is handled by FTL at runtime\n", pihole_conf);
-	fputs("local=/pi.hole/\n", pihole_conf);
-	fputs("host-record=pi.hole,0.0.0.0,::\n", pihole_conf);
+	// The domain "lorentz.lan" is purely local, never forward it to upstream servers
+	fputs("# Local domain for Lorentz\n", lorentz_conf);
+	fputs("# This domain is purely local and should never be forwarded to any\n", lorentz_conf);
+	fputs("# upstream servers. We add a false A-record to this domain to prevent\n", lorentz_conf);
+	fputs("# NXDOMAIN responses for queries on this domain. The actual response\n", lorentz_conf);
+	fputs("# is handled by Lorentz at runtime\n", lorentz_conf);
+	fputs("local=/lorentz.lan/\n", lorentz_conf);
+	fputs("host-record=lorentz.lan,0.0.0.0,::\n", lorentz_conf);
 
 	if(conf->dhcp.active.v.b)
 	{
-		fputs("# DHCP server setting\n", pihole_conf);
-		fputs("dhcp-authoritative\n", pihole_conf);
-		fputs("dhcp-leasefile="DHCPLEASESFILE"\n", pihole_conf);
+		fputs("# DHCP server setting\n", lorentz_conf);
+		fputs("dhcp-authoritative\n", lorentz_conf);
+		fputs("dhcp-leasefile="DHCPLEASESFILE"\n", lorentz_conf);
 		char start[INET_ADDRSTRLEN] = { 0 },
 		     end[INET_ADDRSTRLEN] = { 0 },
 		     router[INET_ADDRSTRLEN] = { 0 };
 		inet_ntop(AF_INET, &conf->dhcp.start.v.in_addr, start, INET_ADDRSTRLEN);
 		inet_ntop(AF_INET, &conf->dhcp.end.v.in_addr, end, INET_ADDRSTRLEN);
 		inet_ntop(AF_INET, &conf->dhcp.router.v.in_addr, router, INET_ADDRSTRLEN);
-		fprintf(pihole_conf, "dhcp-range=%s,%s", start, end);
+		fprintf(lorentz_conf, "dhcp-range=%s,%s", start, end);
 		// Net mask is optional, only add if it is not 0.0.0.0
 		const struct in_addr inaddr_empty = {0};
 		if(memcmp(&conf->dhcp.netmask.v.in_addr, &inaddr_empty, sizeof(inaddr_empty)) != 0)
 		{
 			char netmask[INET_ADDRSTRLEN] = { 0 };
 			inet_ntop(AF_INET, &conf->dhcp.netmask.v.in_addr, netmask, INET_ADDRSTRLEN);
-			fprintf(pihole_conf, ",%s", netmask);
+			fprintf(lorentz_conf, ",%s", netmask);
 		}
 		// Lease time is optional, only add it if it is set
 		if(strlen(conf->dhcp.leaseTime.v.s) > 0)
-			fprintf(pihole_conf, ",%s", conf->dhcp.leaseTime.v.s);
-		fprintf(pihole_conf, "\ndhcp-option=option:router,%s\n", router);
+			fprintf(lorentz_conf, ",%s", conf->dhcp.leaseTime.v.s);
+		fprintf(lorentz_conf, "\ndhcp-option=option:router,%s\n", router);
 
 		if(conf->dhcp.rapidCommit.v.b)
-			fputs("dhcp-rapid-commit\n", pihole_conf);
+			fputs("dhcp-rapid-commit\n", lorentz_conf);
 
 		if(conf->dhcp.multiDNS.v.b)
 		{
@@ -775,128 +775,128 @@ bool __attribute__((nonnull(1,3))) write_dnsmasq_config(struct config *conf, enu
 			// on which the DHCP request was received for IPv6,
 			// whilst [fd00::] is replaced with the ULA, if it
 			// exists, and [fe80::] with the link-local address.
-			fputs("# Advertise the DNS server multiple times to work around\n", pihole_conf);
-			fputs("# issues with some clients adding their own servers if only\n", pihole_conf);
-			fputs("# one DNS server is advertised by the DHCP server.\n", pihole_conf);
-			fputs("dhcp-option=option:dns-server,0.0.0.0,0.0.0.0,0.0.0.0\n", pihole_conf);
+			fputs("# Advertise the DNS server multiple times to work around\n", lorentz_conf);
+			fputs("# issues with some clients adding their own servers if only\n", lorentz_conf);
+			fputs("# one DNS server is advertised by the DHCP server.\n", lorentz_conf);
+			fputs("dhcp-option=option:dns-server,0.0.0.0,0.0.0.0,0.0.0.0\n", lorentz_conf);
 		}
 
 		if(conf->dhcp.ipv6.v.b)
 		{
 			// Add dns-server option only if not already done above (dhcp.multiDNS)
 			if(conf->dhcp.multiDNS.v.b)
-				fputs("dhcp-option=option6:dns-server,[::],[::],[fd00::],[fd00::],[fe80::],[fe80::]\n", pihole_conf);
+				fputs("dhcp-option=option6:dns-server,[::],[::],[fd00::],[fd00::],[fe80::],[fe80::]\n", lorentz_conf);
 			else
-				fputs("dhcp-option=option6:dns-server,[::]\n", pihole_conf);
-			fputs("# Enable IPv6 DHCP variant\n", pihole_conf);
-			fprintf(pihole_conf, "dhcp-range=::,constructor:%s,ra-names,ra-stateless,64\n", interface);
+				fputs("dhcp-option=option6:dns-server,[::]\n", lorentz_conf);
+			fputs("# Enable IPv6 DHCP variant\n", lorentz_conf);
+			fprintf(lorentz_conf, "dhcp-range=::,constructor:%s,ra-names,ra-stateless,64\n", interface);
 		}
-		fputs("\n", pihole_conf);
+		fputs("\n", lorentz_conf);
 
 		// Enable DHCP logging if requested
 		if(conf->dhcp.logging.v.b)
 		{
-			fputs("# Enable DHCP logging\n", pihole_conf);
-			fputs("log-dhcp\n\n", pihole_conf);
+			fputs("# Enable DHCP logging\n", lorentz_conf);
+			fputs("log-dhcp\n\n", lorentz_conf);
 		}
 
 		// Check if IPv4 NTP server is active and broadcast it as DHCP option
 		if(conf->ntp.ipv4.active.v.b)
 		{
-			fputs("# Add NTP server to DHCP\n", pihole_conf);
+			fputs("# Add NTP server to DHCP\n", lorentz_conf);
 			// The special address 0.0.0.0 is taken to mean "the
 			// address of the machine running the DHCP server"
-			fputs("dhcp-option=option:ntp-server,0.0.0.0\n\n", pihole_conf);
+			fputs("dhcp-option=option:ntp-server,0.0.0.0\n\n", lorentz_conf);
 		}
 
 		// Add option to ignore unknown clients if enabled
 		if(conf->dhcp.ignoreUnknownClients.v.b)
 		{
-			fputs("# Ignore clients not configured below\n", pihole_conf);
-			fputs("dhcp-ignore=tag:!known\n\n", pihole_conf);
+			fputs("# Ignore clients not configured below\n", lorentz_conf);
+			fputs("dhcp-ignore=tag:!known\n\n", lorentz_conf);
 		}
 
 		// Add per-host parameters
 		if(cJSON_GetArraySize(conf->dhcp.hosts.v.json) > 0)
 		{
-			fputs("# Per host parameters for the DHCP server\n", pihole_conf);
+			fputs("# Per host parameters for the DHCP server\n", lorentz_conf);
 			cJSON *server = NULL;
 			cJSON_ArrayForEach(server, conf->dhcp.hosts.v.json)
 			{
 				if(server != NULL && cJSON_IsString(server))
-					fprintf(pihole_conf, "dhcp-host=%s\n", server->valuestring);
+					fprintf(lorentz_conf, "dhcp-host=%s\n", server->valuestring);
 			}
-			fputs("\n", pihole_conf);
+			fputs("\n", lorentz_conf);
 		}
 	}
 
 	if(cJSON_GetArraySize(conf->dns.cnameRecords.v.json) > 0)
 	{
-		fputs("# User-defined custom CNAMEs\n", pihole_conf);
+		fputs("# User-defined custom CNAMEs\n", lorentz_conf);
 		cJSON *server = NULL;
 		cJSON_ArrayForEach(server, conf->dns.cnameRecords.v.json)
 		{
 			if(server != NULL && cJSON_IsString(server))
-				fprintf(pihole_conf, "cname=%s\n", server->valuestring);
+				fprintf(lorentz_conf, "cname=%s\n", server->valuestring);
 		}
-		fputs("\n", pihole_conf);
+		fputs("\n", lorentz_conf);
 	}
 
-	fputs("# RFC 6761: Caching DNS servers SHOULD recognize\n", pihole_conf);
-	fputs("#     test, & invalid\n", pihole_conf);
-	fputs("# names as special and SHOULD NOT attempt to look up NS records for them, or\n", pihole_conf);
-	fputs("# otherwise query authoritative DNS servers in an attempt to resolve these\n", pihole_conf);
-	fputs("# names.\n", pihole_conf);
-	fputs("server=/test/\n", pihole_conf);
-	fputs("server=/invalid/\n", pihole_conf);
-	fputs("#     localhost\n", pihole_conf);
-	fputs("# Instead, caching DNS servers SHOULD, for all such address queries, generate\n", pihole_conf);
-	fputs("# an immediate positive response giving the IP loopback address\n", pihole_conf);
-	fputs("address=/localhost/127.0.0.1\n", pihole_conf);
-	fputs("address=/localhost/::1\n", pihole_conf);
-	fputs("\n", pihole_conf);
-	fputs("# The same RFC requests something similar for\n", pihole_conf);
-	fputs("#     10.in-addr.arpa.      21.172.in-addr.arpa.  27.172.in-addr.arpa.\n", pihole_conf);
-	fputs("#     16.172.in-addr.arpa.  22.172.in-addr.arpa.  28.172.in-addr.arpa.\n", pihole_conf);
-	fputs("#     17.172.in-addr.arpa.  23.172.in-addr.arpa.  29.172.in-addr.arpa.\n", pihole_conf);
-	fputs("#     18.172.in-addr.arpa.  24.172.in-addr.arpa.  30.172.in-addr.arpa.\n", pihole_conf);
-	fputs("#     19.172.in-addr.arpa.  25.172.in-addr.arpa.  31.172.in-addr.arpa.\n", pihole_conf);
-	fputs("#     20.172.in-addr.arpa.  26.172.in-addr.arpa.  168.192.in-addr.arpa.\n", pihole_conf);
-	fputs("# Pi-hole implements this via the dnsmasq option \"bogus-priv\" above\n", pihole_conf);
-	fputs("# (if enabled!) as this option also covers IPv6.\n", pihole_conf);
-	fputs("\n", pihole_conf);
-	fputs("# OpenWRT furthermore blocks bind, local, onion domains\n", pihole_conf);
-	fputs("# see https://git.openwrt.org/?p=openwrt/openwrt.git;a=blob_plain;f=package/network/services/dnsmasq/files/rfc6761.conf;hb=HEAD\n", pihole_conf);
-	fputs("# and https://www.iana.org/assignments/special-use-domain-names/special-use-domain-names.xhtml\n", pihole_conf);
-	fputs("# We do not include the \".local\" rule ourselves, see https://github.com/pi-hole/pi-hole/pull/4282#discussion_r689112972\n", pihole_conf);
-	fputs("server=/bind/\n", pihole_conf);
-	fputs("server=/onion/\n", pihole_conf);
-	fputs("\n", pihole_conf);
+	fputs("# RFC 6761: Caching DNS servers SHOULD recognize\n", lorentz_conf);
+	fputs("#     test, & invalid\n", lorentz_conf);
+	fputs("# names as special and SHOULD NOT attempt to look up NS records for them, or\n", lorentz_conf);
+	fputs("# otherwise query authoritative DNS servers in an attempt to resolve these\n", lorentz_conf);
+	fputs("# names.\n", lorentz_conf);
+	fputs("server=/test/\n", lorentz_conf);
+	fputs("server=/invalid/\n", lorentz_conf);
+	fputs("#     localhost\n", lorentz_conf);
+	fputs("# Instead, caching DNS servers SHOULD, for all such address queries, generate\n", lorentz_conf);
+	fputs("# an immediate positive response giving the IP loopback address\n", lorentz_conf);
+	fputs("address=/localhost/127.0.0.1\n", lorentz_conf);
+	fputs("address=/localhost/::1\n", lorentz_conf);
+	fputs("\n", lorentz_conf);
+	fputs("# The same RFC requests something similar for\n", lorentz_conf);
+	fputs("#     10.in-addr.arpa.      21.172.in-addr.arpa.  27.172.in-addr.arpa.\n", lorentz_conf);
+	fputs("#     16.172.in-addr.arpa.  22.172.in-addr.arpa.  28.172.in-addr.arpa.\n", lorentz_conf);
+	fputs("#     17.172.in-addr.arpa.  23.172.in-addr.arpa.  29.172.in-addr.arpa.\n", lorentz_conf);
+	fputs("#     18.172.in-addr.arpa.  24.172.in-addr.arpa.  30.172.in-addr.arpa.\n", lorentz_conf);
+	fputs("#     19.172.in-addr.arpa.  25.172.in-addr.arpa.  31.172.in-addr.arpa.\n", lorentz_conf);
+	fputs("#     20.172.in-addr.arpa.  26.172.in-addr.arpa.  168.192.in-addr.arpa.\n", lorentz_conf);
+	fputs("# Lorentz implements this via the dnsmasq option \"bogus-priv\" above\n", lorentz_conf);
+	fputs("# (if enabled!) as this option also covers IPv6.\n", lorentz_conf);
+	fputs("\n", lorentz_conf);
+	fputs("# OpenWRT furthermore blocks bind, local, onion domains\n", lorentz_conf);
+	fputs("# see https://git.openwrt.org/?p=openwrt/openwrt.git;a=blob_plain;f=package/network/services/dnsmasq/files/rfc6761.conf;hb=HEAD\n", lorentz_conf);
+	fputs("# and https://www.iana.org/assignments/special-use-domain-names/special-use-domain-names.xhtml\n", lorentz_conf);
+	fputs("# We do not include the \".local\" rule ourselves, see https://github.com/pi-hole/pi-hole/pull/4282#discussion_r689112972\n", lorentz_conf);
+	fputs("server=/bind/\n", lorentz_conf);
+	fputs("server=/onion/\n", lorentz_conf);
+	fputs("\n", lorentz_conf);
 
 	if(directory_exists("/etc/dnsmasq.d") && conf->misc.etc_dnsmasq_d.v.b)
 	{
 		// Load additional user configs from /etc/dnsmasq.d if the
 		// directory exists (it may not, e.g., in a container)
 		// Load only files ending in .conf
-		fputs("# Load additional user configs\n", pihole_conf);
-		fputs("conf-dir=/etc/dnsmasq.d,*.conf\n", pihole_conf);
-		fputs("\n", pihole_conf);
+		fputs("# Load additional user configs\n", lorentz_conf);
+		fputs("conf-dir=/etc/dnsmasq.d,*.conf\n", lorentz_conf);
+		fputs("\n", lorentz_conf);
 	}
 
 	// Add option for which DNS records types to cache
-	fputs("# Cache all DNS records\n", pihole_conf);
-	fprintf(pihole_conf, "cache-rr=%s\n\n", conf->dns.cache.rrtype.v.s);
-	fputs("\n", pihole_conf);
+	fputs("# Cache all DNS records\n", lorentz_conf);
+	fprintf(lorentz_conf, "cache-rr=%s\n\n", conf->dns.cache.rrtype.v.s);
+	fputs("\n", lorentz_conf);
 
 	// Add option for PCAP file recording
 	if(strlen(conf->files.pcap.v.s) > 0)
 	{
 		if(file_writeable(conf->files.pcap.v.s))
 		{
-			fputs("# PCAP network traffic recording\n", pihole_conf);
-			fprintf(pihole_conf, "dumpmask=0xFFFF\n");
-			fprintf(pihole_conf, "dumpfile=%s\n", conf->files.pcap.v.s);
-			fputs("\n", pihole_conf);
+			fputs("# PCAP network traffic recording\n", lorentz_conf);
+			fprintf(lorentz_conf, "dumpmask=0xFFFF\n");
+			fprintf(lorentz_conf, "dumpfile=%s\n", conf->files.pcap.v.s);
+			fputs("\n", lorentz_conf);
 		}
 		else
 		{
@@ -905,29 +905,29 @@ bool __attribute__((nonnull(1,3))) write_dnsmasq_config(struct config *conf, enu
 	}
 
 	// Add ANY filtering
-	fputs("# RFC 8482: Providing Minimal-Sized Responses to DNS Queries That Have QTYPE=ANY\n", pihole_conf);
-	fputs("# Filters replies to queries for type ANY. Everything other than A, AAAA, MX and CNAME\n", pihole_conf);
-	fputs("# records are removed. Since ANY queries with forged source addresses can be used in DNS amplification attacks\n", pihole_conf);
-	fputs("# replies to ANY queries can be large) this defangs such attacks, whilst still supporting the\n", pihole_conf);
-	fputs("# one remaining possible use of ANY queries. See RFC 8482 para 4.3 for details.\n", pihole_conf);
-	fputs("filter-rr=ANY\n", pihole_conf);
-	fputs("\n", pihole_conf);
+	fputs("# RFC 8482: Providing Minimal-Sized Responses to DNS Queries That Have QTYPE=ANY\n", lorentz_conf);
+	fputs("# Filters replies to queries for type ANY. Everything other than A, AAAA, MX and CNAME\n", lorentz_conf);
+	fputs("# records are removed. Since ANY queries with forged source addresses can be used in DNS amplification attacks\n", lorentz_conf);
+	fputs("# replies to ANY queries can be large) this defangs such attacks, whilst still supporting the\n", lorentz_conf);
+	fputs("# one remaining possible use of ANY queries. See RFC 8482 para 4.3 for details.\n", lorentz_conf);
+	fputs("filter-rr=ANY\n", lorentz_conf);
+	fputs("\n", lorentz_conf);
 
 	// Add additional config lines to disk (if present)
 	if(conf->misc.dnsmasq_lines.v.json != NULL &&
 	   cJSON_GetArraySize(conf->misc.dnsmasq_lines.v.json) > 0)
 	{
-		fputs("#### Additional user configuration - START ####\n", pihole_conf);
+		fputs("#### Additional user configuration - START ####\n", lorentz_conf);
 		cJSON *line = NULL;
 		cJSON_ArrayForEach(line, conf->misc.dnsmasq_lines.v.json)
 		{
 			if(line != NULL && cJSON_IsString(line))
 			{
-				fputs(line->valuestring, pihole_conf);
-				fputc('\n', pihole_conf);
+				fputs(line->valuestring, lorentz_conf);
+				fputc('\n', lorentz_conf);
 			}
 		}
-		fputs("#### Additional user configuration - END ####\n\n", pihole_conf);
+		fputs("#### Additional user configuration - END ####\n\n", lorentz_conf);
 	}
 
 	// Flush config file to disk and make sure all of it got there. Every
@@ -935,17 +935,17 @@ bool __attribute__((nonnull(1,3))) write_dnsmasq_config(struct config *conf, enu
 	// success after a short write, so without this a disk that filled up
 	// part-way through would be renamed over the live dnsmasq config as a
 	// truncated file that dnsmasq would happily start from
-	const bool write_failed = fflush(pihole_conf) != 0 || ferror(pihole_conf) != 0 ||
-	                          fsync(fileno(pihole_conf)) != 0;
+	const bool write_failed = fflush(lorentz_conf) != 0 || ferror(lorentz_conf) != 0 ||
+	                          fsync(fileno(lorentz_conf)) != 0;
 	if(write_failed)
 		log_err("Cannot write dnsmasq config file: %s", strerror(errno));
 
 	// Unlock file
 	if(locked)
-		unlock_file(pihole_conf, DNSMASQ_TEMP_CONF);
+		unlock_file(lorentz_conf, DNSMASQ_TEMP_CONF);
 
 	// Close file
-	if(fclose(pihole_conf) != 0)
+	if(fclose(lorentz_conf) != 0)
 	{
 		log_err("Cannot close dnsmasq config file: %s", strerror(errno));
 		return false;
@@ -962,7 +962,7 @@ bool __attribute__((nonnull(1,3))) write_dnsmasq_config(struct config *conf, enu
 
 	// Chown file if we are root
 	if(geteuid() == 0)
-		chown_pihole(DNSMASQ_TEMP_CONF, NULL);
+		chown_lorentz(DNSMASQ_TEMP_CONF, NULL);
 
 	log_debug(DEBUG_CONFIG, "Testing "DNSMASQ_TEMP_CONF);
 	if(mode != DNSMASQ_INSTALL && !test_dnsmasq_config(errbuf))

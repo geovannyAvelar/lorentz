@@ -1,9 +1,9 @@
 """
-Pi-hole FTL API integration tests — stats, lists, search, history,
+Lorentz API integration tests — stats, lists, search, history,
 config validation (API-side), HTTP errors, and Lua server pages.
 
 These tests replace the equivalent curl-based BATS tests with native
-Python assertions against a live FTL instance.
+Python assertions against a live Lorentz instance.
 
 Usage:
     pytest test/api/test_api.py -v
@@ -15,7 +15,7 @@ from urllib.parse import quote
 
 import pytest
 
-FTL_URL = "http://127.0.0.1"
+LORENTZ_URL = "http://127.0.0.1"
 
 
 # ---------------------------------------------------------------------------
@@ -43,14 +43,14 @@ def _j(response, dump=None):
     """Return parsed JSON, stripping the volatile ``took`` field.
 
     If *dump* is given, write the full response to
-    ``/tmp/ftl_test_<dump>.json`` (best-effort, ignored on failure)
+    ``/tmp/lorentz_test_<dump>.json`` (best-effort, ignored on failure)
     so the expected values can be inspected after a test run.
     """
     data = response.json()
     data.pop("took", None)
     if dump:
         try:
-            with open(f"/tmp/ftl_test_{dump}.json", "w") as f:
+            with open(f"/tmp/lorentz_test_{dump}.json", "w") as f:
                 json.dump(data, f, indent=2)
         except OSError:
             pass
@@ -58,7 +58,7 @@ def _j(response, dump=None):
 
 
 def set_config(api_session, dotted_key, value):
-    """Set a FTL config item via the API.
+    """Set a Lorentz config item via the API.
 
     Builds the nested JSON payload from a dotted key, e.g.
     ``set_config(s, "webserver.serve_all", True)`` sends
@@ -66,7 +66,7 @@ def set_config(api_session, dotted_key, value):
     with ``{"config": {"webserver": {"serve_all": true}}}``.
     """
     parts = dotted_key.split(".")
-    api_path = f"{FTL_URL}/api/config/" + "/".join(parts)
+    api_path = f"{LORENTZ_URL}/api/config/" + "/".join(parts)
 
     payload = value
     for part in reversed(parts):
@@ -87,7 +87,7 @@ class TestHTTPErrors:
 
     def test_api_404_returns_json(self, api_session):
         """HTTP server responds with JSON error 404 to unknown API path."""
-        data = _j(api_session.get(f"{FTL_URL}/api/undefined", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/undefined", timeout=5))
         assert data["error"] == {
             "key": "not_found",
             "message": "Not found",
@@ -96,7 +96,7 @@ class TestHTTPErrors:
 
     def test_non_admin_path_returns_404(self, api_session):
         """HTTP server responds with 404 to path outside /admin."""
-        r = api_session.head(f"{FTL_URL}/undefined", timeout=5)
+        r = api_session.head(f"{LORENTZ_URL}/undefined", timeout=5)
         assert r.status_code == 404
 
 
@@ -107,7 +107,7 @@ class TestHTTPErrors:
 class TestConfigValidationAPIType:
 
     def test_blockESNI_rejects_float(self, api_session):
-        data = _j(api_session.patch(f"{FTL_URL}/api/config",
+        data = _j(api_session.patch(f"{LORENTZ_URL}/api/config",
                                     json={"config": {"dns": {"blockESNI": 15.5}}}, timeout=20))
         assert data["error"] == {
             "key": "bad_request",
@@ -115,13 +115,13 @@ class TestConfigValidationAPIType:
             "hint": "dns.blockESNI: not of type bool",
         }, json.dumps(data, indent=2)
 
-    def test_piholePTR_rejects_invalid_option(self, api_session):
-        data = _j(api_session.patch(f"{FTL_URL}/api/config",
-                                    json={"config": {"dns": {"piholePTR": "something_else"}}}, timeout=20))
+    def test_lorentzPTR_rejects_invalid_option(self, api_session):
+        data = _j(api_session.patch(f"{LORENTZ_URL}/api/config",
+                                    json={"config": {"dns": {"lorentzPTR": "something_else"}}}, timeout=20))
         assert data["error"] == {
             "key": "bad_request",
             "message": "Config item is invalid",
-            "hint": "dns.piholePTR: invalid option",
+            "hint": "dns.lorentzPTR: invalid option",
         }, json.dumps(data, indent=2)
 
 
@@ -132,7 +132,7 @@ class TestConfigValidationAPIType:
 class TestConfigValidationAPIValidator:
 
     def test_files_pcap_rejects_invalid_path(self, api_session):
-        data = _j(api_session.patch(f"{FTL_URL}/api/config",
+        data = _j(api_session.patch(f"{LORENTZ_URL}/api/config",
                                     json={"config": {"files": {"pcap": "%gh4b"}}}, timeout=20))
         assert data["error"] == {
             "key": "bad_request",
@@ -141,7 +141,7 @@ class TestConfigValidationAPIValidator:
         }, json.dumps(data, indent=2)
 
     def test_cnameRecords_rejects_too_few_elements(self, api_session):
-        data = _j(api_session.patch(f"{FTL_URL}/api/config",
+        data = _j(api_session.patch(f"{LORENTZ_URL}/api/config",
                                     json={"config": {"dns": {"cnameRecords": ["a"]}}}, timeout=20))
         assert data["error"] == {
             "key": "bad_request",
@@ -150,7 +150,7 @@ class TestConfigValidationAPIValidator:
         }, json.dumps(data, indent=2)
 
     def test_cnameRecords_rejects_empty_string_position(self, api_session):
-        data = _j(api_session.patch(f"{FTL_URL}/api/config",
+        data = _j(api_session.patch(f"{LORENTZ_URL}/api/config",
                                     json={"config": {"dns": {"cnameRecords": ["a,b,c", "a,b,c,,c"]}}}, timeout=20))
         assert data["error"] == {
             "key": "bad_request",
@@ -159,7 +159,7 @@ class TestConfigValidationAPIValidator:
         }, json.dumps(data, indent=2)
 
     def test_cnameRecords_rejects_non_string_element(self, api_session):
-        data = _j(api_session.patch(f"{FTL_URL}/api/config",
+        data = _j(api_session.patch(f"{LORENTZ_URL}/api/config",
                                     json={"config": {"dns": {"cnameRecords": ["a,b,c", "a,b,c", 5]}}}, timeout=20))
         assert data["error"] == {
             "key": "bad_request",
@@ -175,8 +175,8 @@ class TestConfigValidationAPIValidator:
 class TestEnvvarProtectedConfig:
 
     def test_api_rejects_envvar_override(self, api_session):
-        """API cannot change misc.nice when set via FTLCONF_misc_nice."""
-        data = _j(api_session.patch(f"{FTL_URL}/api/config/misc/nice",
+        """API cannot change misc.nice when set via LORENTZCONF_misc_nice."""
+        data = _j(api_session.patch(f"{LORENTZ_URL}/api/config/misc/nice",
                                     json={"config": {"misc": {"nice": -12}}}, timeout=20))
         assert data["error"] == {
             "key": "bad_request",
@@ -192,7 +192,7 @@ class TestEnvvarProtectedConfig:
 class TestDomainSearch:
 
     def test_nonexistent_domain(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/search/non.existent", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/search/non.existent", timeout=5))
         search = data["search"]
         assert search["domains"] == []
         assert search["gravity"] == []
@@ -209,7 +209,7 @@ class TestDomainSearch:
         }, json.dumps(data, indent=2)
 
     def test_antigravity_domain(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/search/antigravity.ftl", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/search/antigravity.lorentz", timeout=5))
         search = data["search"]
         assert search["results"] == {
             "domains": {"exact": 0, "regex": 0},
@@ -223,7 +223,7 @@ class TestDomainSearch:
 
         # Block list match
         g0 = gravity[0]
-        assert g0["domain"] == "antigravity.ftl"
+        assert g0["domain"] == "antigravity.lorentz"
         assert g0["type"] == "block"
         assert g0["address"] == "https://pi-hole.net/block.txt"
         assert g0["comment"] == "Fake block-list"
@@ -235,7 +235,7 @@ class TestDomainSearch:
 
         # Allow list match (exact domain)
         g1 = gravity[1]
-        assert g1["domain"] == "antigravity.ftl"
+        assert g1["domain"] == "antigravity.lorentz"
         assert g1["type"] == "allow"
         assert g1["address"] == "https://pi-hole.net/allow.txt"
         assert g1["comment"] == "Fake allow-list"
@@ -244,13 +244,13 @@ class TestDomainSearch:
 
         # Allow list match (ABP-style antigravity entry)
         g2 = gravity[2]
-        assert g2["domain"] == "@@||antigravity.ftl^"
+        assert g2["domain"] == "@@||antigravity.lorentz^"
         assert g2["type"] == "allow"
         assert g2["id"] == 2
 
     def test_punycode_normalization(self, api_session):
         """Internationalized domain names should be normalized to punycode."""
-        data = _j(api_session.get(f"{FTL_URL}/api/search/\u00e4BC.com",
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/search/\u00e4BC.com",
                                   params={"debug": "true"}, timeout=5))
         assert data["search"]["debug"]["punycode"] == "xn--bc-uia.com", \
             json.dumps(data, indent=2)
@@ -264,7 +264,7 @@ class TestDomainSearch:
         but the ASCII punycode form is a perfectly valid DNS name.
         xn--4ca0bs45142c.com is the punycode encoding of äöü😀.com.
         """
-        data = _j(api_session.get(f"{FTL_URL}/api/search/xn--4ca0bs45142c.com",
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/search/xn--4ca0bs45142c.com",
                                   params={"debug": "true"}, timeout=5))
         assert data["search"]["debug"]["punycode"] == "xn--4ca0bs45142c.com", \
             json.dumps(data, indent=2)
@@ -273,7 +273,7 @@ class TestDomainSearch:
 
     def test_partial_matching(self, api_session):
         """Partial matching returns substring hits in gravity."""
-        data = _j(api_session.get(f"{FTL_URL}/api/search/gravity",
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/search/gravity",
                                   params={"partial": "true"}, timeout=5))
         search = data["search"]
         assert search["parameters"]["partial"] is True
@@ -288,7 +288,7 @@ class TestDomainSearch:
 class TestHistory:
 
     def test_history_returns_24h(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/history", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/history", timeout=5))
         assert len(data["history"]) == 145, \
             f"Expected 145 history entries (24h in 10-min slots), got {len(data['history'])}"
         # Verify each slot has the expected structure
@@ -297,7 +297,7 @@ class TestHistory:
             assert key in slot, f"Missing key '{key}' in history slot: {slot}"
 
     def test_history_clients_returns_24h(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/history/clients", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/history/clients", timeout=5))
         assert len(data["history"]) == 145, \
             f"Expected 145 history entries, got {len(data['history'])}"
         assert "clients" in data, f"Missing 'clients' key:\n{json.dumps(data, indent=2)}"
@@ -310,7 +310,7 @@ class TestHistory:
 class TestLists:
 
     def test_block_lists_only(self, api_session):
-        lists = _j(api_session.get(f"{FTL_URL}/api/lists?type=block", timeout=5))["lists"]
+        lists = _j(api_session.get(f"{LORENTZ_URL}/api/lists?type=block", timeout=5))["lists"]
         assert len(lists) == 1, f"Expected 1 block list:\n{json.dumps(lists, indent=2)}"
         bl = lists[0]
         assert bl["type"] == "block"
@@ -325,7 +325,7 @@ class TestLists:
         assert bl["groups"] == [0, 2]
 
     def test_allow_lists_only(self, api_session):
-        lists = _j(api_session.get(f"{FTL_URL}/api/lists?type=allow", timeout=5))["lists"]
+        lists = _j(api_session.get(f"{LORENTZ_URL}/api/lists?type=allow", timeout=5))["lists"]
         assert len(lists) == 1, f"Expected 1 allow list:\n{json.dumps(lists, indent=2)}"
         al = lists[0]
         assert al["type"] == "allow"
@@ -340,7 +340,7 @@ class TestLists:
         assert al["groups"] == [0]
 
     def test_all_lists_includes_both_types(self, api_session):
-        lists = _j(api_session.get(f"{FTL_URL}/api/lists", timeout=5))["lists"]
+        lists = _j(api_session.get(f"{LORENTZ_URL}/api/lists", timeout=5))["lists"]
         assert len(lists) == 2, f"Expected 2 lists:\n{json.dumps(lists, indent=2)}"
         types = {lst["type"] for lst in lists}
         assert types == {"block", "allow"}
@@ -353,12 +353,12 @@ class TestLists:
 class TestQueries:
 
     def test_no_unknown_reply(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/queries?reply=UNKNOWN", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/queries?reply=UNKNOWN", timeout=5))
         assert data["queries"] == []
         assert data["recordsFiltered"] == 0, json.dumps(data, indent=2)
 
     def test_no_unknown_status(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/queries?status=UNKNOWN", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/queries?status=UNKNOWN", timeout=5))
         assert data["queries"] == []
         assert data["recordsFiltered"] == 0, json.dumps(data, indent=2)
 
@@ -372,13 +372,13 @@ class TestLuaServerPages:
     def test_lua_page_outside_admin_not_served_by_default(self, api_session):
         """Lua server page outside /admin is not served when serve_all is off."""
         set_config(api_session, "webserver.serve_all", False)
-        r = api_session.head(f"{FTL_URL}/broken_lua", timeout=5)
+        r = api_session.head(f"{LORENTZ_URL}/broken_lua", timeout=5)
         assert r.status_code == 404
 
     def test_lua_page_generates_proper_backtrace(self, api_session):
         """Lua server page generates proper backtrace on error."""
         set_config(api_session, "webserver.serve_all", True)
-        r = api_session.get(f"{FTL_URL}/broken_lua", timeout=5)
+        r = api_session.get(f"{LORENTZ_URL}/broken_lua", timeout=5)
         lines = r.text.splitlines()
         assert lines[0] == "Hello, world 1!", f"Unexpected response:\n{r.text}"
         assert lines[1] == "Hello, world 2!"
@@ -387,7 +387,7 @@ class TestLuaServerPages:
 
     def test_lua_page_outside_webhome_served_without_login(self, api_session):
         """After serve_all is enabled, Lua pages are served without login."""
-        r = api_session.get(f"{FTL_URL}/broken_lua", timeout=5)
+        r = api_session.get(f"{LORENTZ_URL}/broken_lua", timeout=5)
         lines = r.text.splitlines()
         assert lines[0] == "Hello, world 1!", f"Unexpected response:\n{r.text}"
 
@@ -401,7 +401,7 @@ def _raw_http(request_bytes, host="127.0.0.1", port=80, timeout=5):
     """Send a raw HTTP request over a socket and return the raw response bytes.
 
     Used to smuggle bytes (e.g. a percent-encoded CR/LF in the path) that the
-    requests library would normalise away before they reach FTL.
+    requests library would normalise away before they reach Lorentz.
     """
     import socket
     with socket.create_connection((host, port), timeout=timeout) as sock:
@@ -424,7 +424,7 @@ class TestURIControlCharRejection:
 
     CivetWeb URL-decodes the path in place, so %0d%0a arrives as a literal
     CR/LF; the .lp redirect handler would otherwise copy it into the Location
-    header verbatim.  FTL rejects any request whose decoded URI contains
+    header verbatim.  Lorentz rejects any request whose decoded URI contains
     control characters with 400, before authentication and before any handler
     runs (see begin_request_handler in src/webserver/webserver.c).
     """
@@ -478,7 +478,7 @@ class TestURIControlCharRejection:
 class TestDNSBlocking:
 
     def test_blocking_enabled(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/dns/blocking", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/dns/blocking", timeout=5))
         assert data["blocking"] == "enabled"
         assert data["timer"] is None
 
@@ -490,18 +490,18 @@ class TestDNSBlocking:
 class TestDomains:
 
     def test_allow_exact(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/domains/allow/exact", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/domains/allow/exact", timeout=5))
         domains = data["domains"]
         names = [d["domain"] for d in domains]
-        assert "allowed.ftl" in names, json.dumps(domains, indent=2)
-        assert "regex1.ftl" in names
+        assert "allowed.lorentz" in names, json.dumps(domains, indent=2)
+        assert "regex1.lorentz" in names
         assert "mask.icloud.com" in names
         for d in domains:
             assert d["type"] == "allow"
             assert d["kind"] == "exact"
 
     def test_allow_regex(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/domains/allow/regex", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/domains/allow/regex", timeout=5))
         domains = data["domains"]
         assert len(domains) == 2, json.dumps(domains, indent=2)
         assert domains[0] == {
@@ -514,21 +514,21 @@ class TestDomains:
         assert domains[1]["id"] == 4
 
     def test_deny_exact(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/domains/deny/exact", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/domains/deny/exact", timeout=5))
         domains = data["domains"]
         names = [d["domain"] for d in domains]
-        assert "denied.ftl" in names, json.dumps(domains, indent=2)
+        assert "denied.lorentz" in names, json.dumps(domains, indent=2)
         assert "blacklisted-group-disabled.com" in names
         for d in domains:
             assert d["type"] == "deny"
             assert d["kind"] == "exact"
 
     def test_deny_regex(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/domains/deny/regex", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/domains/deny/regex", timeout=5))
         domains = data["domains"]
         assert len(domains) == 11, \
             f"Expected 11 deny regex, got {len(domains)}:\n{json.dumps(domains, indent=2)}"
-        assert domains[0]["domain"] == "regex[0-9].ftl"
+        assert domains[0]["domain"] == "regex[0-9].lorentz"
         assert domains[0]["id"] == 6
         assert domains[0]["groups"] == [0, 2]
         for d in domains:
@@ -536,7 +536,7 @@ class TestDomains:
             assert d["kind"] == "regex"
 
     def test_all_domains(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/domains", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/domains", timeout=5))
         domains = data["domains"]
         types = {d["type"] for d in domains}
         kinds = {d["kind"] for d in domains}
@@ -544,11 +544,11 @@ class TestDomains:
         assert kinds == {"exact", "regex"}
 
     def test_single_domain_lookup(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/domains/deny/exact/denied.ftl", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/domains/deny/exact/denied.lorentz", timeout=5))
         domains = data["domains"]
         assert len(domains) == 1, json.dumps(domains, indent=2)
-        assert domains[0]["domain"] == "denied.ftl"
-        assert domains[0]["comment"] == "Migrated from /etc/pihole/blacklist.txt"
+        assert domains[0]["domain"] == "denied.lorentz"
+        assert domains[0]["comment"] == "Migrated from /etc/lorentz/blacklist.txt"
 
 
 # ---------------------------------------------------------------------------
@@ -558,7 +558,7 @@ class TestDomains:
 class TestGroups:
 
     def test_all_groups(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/groups", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/groups", timeout=5))
         groups = data["groups"]
         assert len(groups) == 6, json.dumps(groups, indent=2)
         names = {g["name"] for g in groups}
@@ -576,7 +576,7 @@ class TestGroups:
         assert disabled["enabled"] is False
 
     def test_single_group_lookup(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/groups/Default", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/groups/Default", timeout=5))
         groups = data["groups"]
         assert len(groups) == 1, json.dumps(groups, indent=2)
         assert groups[0]["name"] == "Default"
@@ -590,7 +590,7 @@ class TestGroups:
 class TestStatsSummary:
 
     def test_summary_structure(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/stats/summary", timeout=5), dump="stats_summary")
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/stats/summary", timeout=5), dump="stats_summary")
         q = data["queries"]
         assert q["total"] == TOTAL, json.dumps(data, indent=2)
         assert q["blocked"] == 49
@@ -619,7 +619,7 @@ class TestStatsSummary:
 class TestStatsTopDomains:
 
     def test_top_domains_sorted_descending(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/stats/top_domains", timeout=5), dump="top_domains")
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/stats/top_domains", timeout=5), dump="top_domains")
         domains = data["domains"]
         assert len(domains) > 0
         counts = [d["count"] for d in domains]
@@ -629,18 +629,18 @@ class TestStatsTopDomains:
         assert data["blocked_queries"] == 49
 
     def test_top_domains_blocked(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/stats/top_domains?blocked=true", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/stats/top_domains?blocked=true", timeout=5))
         domains = data["domains"]
         names = [d["domain"] for d in domains]
-        assert "gravity.ftl" in names, json.dumps(domains, indent=2)
+        assert "gravity.lorentz" in names, json.dumps(domains, indent=2)
         counts = [d["count"] for d in domains]
         assert counts == sorted(counts, reverse=True)
 
     def test_top_domains_permitted_excludes_gravity(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/stats/top_domains?blocked=false", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/stats/top_domains?blocked=false", timeout=5))
         names = [d["domain"] for d in data["domains"]]
-        assert "gravity.ftl" not in names, \
-            f"gravity.ftl should not be in permitted domains:\n{json.dumps(data, indent=2)}"
+        assert "gravity.lorentz" not in names, \
+            f"gravity.lorentz should not be in permitted domains:\n{json.dumps(data, indent=2)}"
 
     def test_top_domains_small_count_is_true_prefix(self, api_session):
         # Regression for #2946: the bounded top-K heap selection must return
@@ -648,13 +648,13 @@ class TestStatsTopDomains:
         # domains. A small count reduces the heap capacity to count*4, so any
         # entry that wrongly occupies a slot would evict a genuine domain and
         # shorten the result below the requested count.
-        full = _j(api_session.get(f"{FTL_URL}/api/stats/top_domains?count=100", timeout=5),
+        full = _j(api_session.get(f"{LORENTZ_URL}/api/stats/top_domains?count=100", timeout=5),
                   dump="top_domains_full")["domains"]
         full_counts = [d["count"] for d in full]
         assert len(full) > 4, \
             f"test data must expose more than 4 domains to exercise heap eviction, got {len(full)}"
         for n in (1, 2, 3, 4):
-            data = _j(api_session.get(f"{FTL_URL}/api/stats/top_domains?count={n}", timeout=5))
+            data = _j(api_session.get(f"{LORENTZ_URL}/api/stats/top_domains?count={n}", timeout=5))
             counts = [d["count"] for d in data["domains"]]
             assert len(counts) == min(n, len(full)), \
                 f"count={n} returned {len(counts)} domains, expected {min(n, len(full))}"
@@ -670,7 +670,7 @@ class TestStatsTopDomains:
         # genuine domains, so the result ends up shorter than requested. At
         # count=1 the heap capacity is 4, so excluding the four top domains
         # would empty a broken (output-only) filter's result entirely.
-        full = _j(api_session.get(f"{FTL_URL}/api/stats/top_domains?count=100", timeout=5),
+        full = _j(api_session.get(f"{LORENTZ_URL}/api/stats/top_domains?count=100", timeout=5),
                   dump="top_domains_exclude_full")["domains"]
         names = [d["domain"] for d in full]
         full_counts = [d["count"] for d in full]
@@ -681,7 +681,7 @@ class TestStatsTopDomains:
         try:
             set_config(api_session, "webserver.api.excludeDomains",
                        [f"^{re.escape(n)}$" for n in excluded])
-            data = _j(api_session.get(f"{FTL_URL}/api/stats/top_domains?count=1", timeout=5))
+            data = _j(api_session.get(f"{LORENTZ_URL}/api/stats/top_domains?count=1", timeout=5))
             result = data["domains"]
             assert len(result) == 1, \
                 f"excluding the top domains must not empty the result: {result}"
@@ -700,7 +700,7 @@ class TestStatsTopDomains:
 class TestStatsTopClients:
 
     def test_top_clients_sorted_descending(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/stats/top_clients", timeout=5), dump="top_clients")
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/stats/top_clients", timeout=5), dump="top_clients")
         clients = data["clients"]
         assert len(clients) > 0
         assert clients[0]["ip"] == "127.0.0.1"
@@ -717,7 +717,7 @@ class TestStatsTopClients:
 class TestStatsUpstreams:
 
     def test_upstreams(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/stats/upstreams", timeout=5), dump="upstreams")
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/stats/upstreams", timeout=5), dump="upstreams")
         upstreams = data["upstreams"]
         assert len(upstreams) == 4, json.dumps(upstreams, indent=2)
         assert data["total_queries"] == TOTAL
@@ -739,7 +739,7 @@ class TestStatsUpstreams:
 class TestStatsQueryTypes:
 
     def test_query_types(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/stats/query_types", timeout=5), dump="query_types")
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/stats/query_types", timeout=5), dump="query_types")
         assert data["types"] == {
             "A": 69, "AAAA": 19, "ANY": 3, "SRV": 1, "SOA": 0,
             "PTR": 8, "TXT": 10, "NAPTR": 1, "MX": 1, "DS": 6,
@@ -755,8 +755,8 @@ class TestStatsQueryTypes:
 class TestStatsRecentBlocked:
 
     def test_recent_blocked(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/stats/recent_blocked", timeout=5))
-        assert "denied.ftl" in data["blocked"], json.dumps(data, indent=2)
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/stats/recent_blocked", timeout=5))
+        assert "denied.lorentz" in data["blocked"], json.dumps(data, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -770,7 +770,7 @@ class TestStatsDatabase:
         for endpoint in ("query_types", "summary", "top_clients",
                          "top_domains", "upstreams"):
             data = _j(api_session.get(
-                f"{FTL_URL}/api/stats/database/{endpoint}", timeout=5))
+                f"{LORENTZ_URL}/api/stats/database/{endpoint}", timeout=5))
             assert data["error"]["key"] == "bad_request", \
                 f"/api/stats/database/{endpoint}: {json.dumps(data, indent=2)}"
             assert "from" in data["error"]["message"]
@@ -778,7 +778,7 @@ class TestStatsDatabase:
 
     def test_database_summary_with_range(self, api_session):
         data = _j(api_session.get(
-            f"{FTL_URL}/api/stats/database/summary?from=1&until=9999999999",
+            f"{LORENTZ_URL}/api/stats/database/summary?from=1&until=9999999999",
             timeout=5))
         for key in ("sum_queries", "sum_blocked", "percent_blocked",
                      "total_clients"):
@@ -786,10 +786,10 @@ class TestStatsDatabase:
 
     def test_database_top_domains_with_range(self, api_session):
         data = _j(api_session.get(
-            f"{FTL_URL}/api/stats/database/top_domains?from=1&until=9999999999",
+            f"{LORENTZ_URL}/api/stats/database/top_domains?from=1&until=9999999999",
             timeout=5))
         summary = _j(api_session.get(
-            f"{FTL_URL}/api/stats/database/summary?from=1&until=9999999999",
+            f"{LORENTZ_URL}/api/stats/database/summary?from=1&until=9999999999",
             timeout=5))
         assert "domains" in data
         assert isinstance(data["domains"], list)
@@ -798,10 +798,10 @@ class TestStatsDatabase:
 
     def test_database_top_clients_with_range(self, api_session):
         data = _j(api_session.get(
-            f"{FTL_URL}/api/stats/database/top_clients?from=1&until=9999999999",
+            f"{LORENTZ_URL}/api/stats/database/top_clients?from=1&until=9999999999",
             timeout=5))
         summary = _j(api_session.get(
-            f"{FTL_URL}/api/stats/database/summary?from=1&until=9999999999",
+            f"{LORENTZ_URL}/api/stats/database/summary?from=1&until=9999999999",
             timeout=5))
         assert "clients" in data
         assert isinstance(data["clients"], list)
@@ -810,14 +810,14 @@ class TestStatsDatabase:
 
     def test_database_upstreams_with_range(self, api_session):
         data = _j(api_session.get(
-            f"{FTL_URL}/api/stats/database/upstreams?from=1&until=9999999999",
+            f"{LORENTZ_URL}/api/stats/database/upstreams?from=1&until=9999999999",
             timeout=5))
         assert "upstreams" in data
         assert isinstance(data["upstreams"], list)
 
     def test_database_query_types_with_range(self, api_session):
         data = _j(api_session.get(
-            f"{FTL_URL}/api/stats/database/query_types?from=1&until=9999999999",
+            f"{LORENTZ_URL}/api/stats/database/query_types?from=1&until=9999999999",
             timeout=5))
         assert "types" in data
         assert isinstance(data["types"], dict)
@@ -830,7 +830,7 @@ class TestStatsDatabase:
 class TestDHCPLeases:
 
     def test_no_leases(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/dhcp/leases", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/dhcp/leases", timeout=5))
         assert data["leases"] == []
 
 
@@ -841,7 +841,7 @@ class TestDHCPLeases:
 class TestEndpoints:
 
     def test_endpoints_has_all_methods(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/endpoints", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/endpoints", timeout=5))
         eps = data["endpoints"]
         for method in ("get", "post", "put", "patch", "delete"):
             assert method in eps, f"Missing method '{method}':\n{json.dumps(eps.keys(), indent=2)}"
@@ -861,7 +861,7 @@ class TestMethodNotAllowed:
 
     def test_wrong_method_returns_405_with_allow(self, api_session):
         """DELETE on a GET-only endpoint is a 405 naming the methods that work."""
-        r = api_session.delete(f"{FTL_URL}/api/stats/summary", timeout=5)
+        r = api_session.delete(f"{LORENTZ_URL}/api/stats/summary", timeout=5)
         assert r.status_code == 405, \
             f"Expected 405, got {r.status_code} {r.text}"
 
@@ -873,7 +873,7 @@ class TestMethodNotAllowed:
 
     def test_allow_lists_every_accepted_method(self, api_session):
         """An endpoint reached by several methods names all of them."""
-        r = api_session.patch(f"{FTL_URL}/api/dns/blocking", json={}, timeout=5)
+        r = api_session.patch(f"{LORENTZ_URL}/api/dns/blocking", json={}, timeout=5)
         assert r.status_code == 405, \
             f"Expected 405, got {r.status_code} {r.text}"
         assert self._allow(r) == ["GET", "OPTIONS", "POST"]
@@ -885,12 +885,12 @@ class TestMethodNotAllowed:
         applies, so DELETE - which needs /{type}/{kind}/{domain} - must not be
         advertised, and with two arguments POST must be.
         """
-        r = api_session.patch(f"{FTL_URL}/api/domains", json={}, timeout=5)
+        r = api_session.patch(f"{LORENTZ_URL}/api/domains", json={}, timeout=5)
         assert r.status_code == 405, \
             f"Expected 405, got {r.status_code} {r.text}"
         assert self._allow(r) == ["GET", "OPTIONS"]
 
-        r = api_session.patch(f"{FTL_URL}/api/domains/deny/exact", json={}, timeout=5)
+        r = api_session.patch(f"{LORENTZ_URL}/api/domains/deny/exact", json={}, timeout=5)
         assert r.status_code == 405, \
             f"Expected 405, got {r.status_code} {r.text}"
         assert self._allow(r) == ["GET", "OPTIONS", "POST"]
@@ -902,8 +902,8 @@ class TestMethodNotAllowed:
         has to advertise the same methods rather than those of the row one
         level deeper.
         """
-        plain = api_session.patch(f"{FTL_URL}/api/domains/deny", json={}, timeout=5)
-        slash = api_session.patch(f"{FTL_URL}/api/domains/deny/", json={}, timeout=5)
+        plain = api_session.patch(f"{LORENTZ_URL}/api/domains/deny", json={}, timeout=5)
+        slash = api_session.patch(f"{LORENTZ_URL}/api/domains/deny/", json={}, timeout=5)
         assert plain.status_code == 405, \
             f"Expected 405, got {plain.status_code} {plain.text}"
         assert slash.status_code == 405, \
@@ -918,17 +918,17 @@ class TestMethodNotAllowed:
         /{element} and /{element}/{value} rows for it, and only GET for an
         element that is a single component.
         """
-        r = api_session.post(f"{FTL_URL}/api/config/dns/cache/size", json={}, timeout=5)
+        r = api_session.post(f"{LORENTZ_URL}/api/config/dns/cache/size", json={}, timeout=5)
         assert r.status_code == 405, \
             f"Expected 405, got {r.status_code} {r.text}"
         assert self._allow(r) == ["DELETE", "GET", "OPTIONS", "PUT"]
 
-        r = api_session.options(f"{FTL_URL}/api/config/dns/cache/size", timeout=5)
+        r = api_session.options(f"{LORENTZ_URL}/api/config/dns/cache/size", timeout=5)
         assert r.status_code == 204, \
             f"Expected 204, got {r.status_code} {r.text}"
         assert self._allow(r) == ["DELETE", "GET", "OPTIONS", "PUT"]
 
-        r = api_session.post(f"{FTL_URL}/api/config/dns", json={}, timeout=5)
+        r = api_session.post(f"{LORENTZ_URL}/api/config/dns", json={}, timeout=5)
         assert r.status_code == 405, \
             f"Expected 405, got {r.status_code} {r.text}"
         assert self._allow(r) == ["GET", "OPTIONS"]
@@ -936,27 +936,27 @@ class TestMethodNotAllowed:
     def test_parameter_with_slashes_keeps_its_row(self, api_session):
         """A list address arrives decoded, its slashes are not path components."""
         address = quote("https://pytest.example.com/list.txt", safe="")
-        r = api_session.options(f"{FTL_URL}/api/lists/{address}", timeout=5)
+        r = api_session.options(f"{LORENTZ_URL}/api/lists/{address}", timeout=5)
         assert r.status_code == 204, \
             f"Expected 204, got {r.status_code} {r.text}"
         assert self._allow(r) == ["DELETE", "GET", "OPTIONS", "PUT"]
 
         # Only the row with the most parameters takes the rest of the URI
-        r = api_session.options(f"{FTL_URL}/api/domains/deny/regex/{quote('a/b', safe='')}", timeout=5)
+        r = api_session.options(f"{LORENTZ_URL}/api/domains/deny/regex/{quote('a/b', safe='')}", timeout=5)
         assert r.status_code == 204, \
             f"Expected 204, got {r.status_code} {r.text}"
         assert self._allow(r) == ["DELETE", "GET", "OPTIONS", "PUT"]
 
     def test_longer_endpoint_wins_over_a_parameter(self, api_session):
         """/api/info/messages/count is an endpoint, not the message ID "count"."""
-        r = api_session.options(f"{FTL_URL}/api/info/messages/count", timeout=5)
+        r = api_session.options(f"{LORENTZ_URL}/api/info/messages/count", timeout=5)
         assert r.status_code == 204, \
             f"Expected 204, got {r.status_code} {r.text}"
         assert self._allow(r) == ["GET", "OPTIONS"]
 
     def test_docs_path_names_get(self, api_session):
         """The documentation is served from any path below /api/docs."""
-        r = api_session.post(f"{FTL_URL}/api/docs/index.html", json={}, timeout=5)
+        r = api_session.post(f"{LORENTZ_URL}/api/docs/index.html", json={}, timeout=5)
         assert r.status_code == 405, \
             f"Expected 405, got {r.status_code} {r.text}"
         assert self._allow(r) == ["GET", "OPTIONS"]
@@ -967,14 +967,14 @@ class TestMethodNotAllowed:
         It must not be mistaken for "no method matched" and answered 405 with
         an Allow header naming the very method that was used.
         """
-        r = api_session.get(f"{FTL_URL}/api/docs/_pytest_no_such_file.html",
+        r = api_session.get(f"{LORENTZ_URL}/api/docs/_pytest_no_such_file.html",
                             timeout=5)
         assert r.status_code == 404, \
             f"Expected 404, got {r.status_code} {r.text}"
 
     def test_unknown_uri_is_still_404(self, api_session):
         """A URI that does not exist keeps its 404, no Allow header."""
-        r = api_session.delete(f"{FTL_URL}/api/_pytest_no_such_endpoint", timeout=5)
+        r = api_session.delete(f"{LORENTZ_URL}/api/_pytest_no_such_endpoint", timeout=5)
         assert r.status_code == 404, \
             f"Expected 404, got {r.status_code} {r.text}"
         assert "Allow" not in r.headers
@@ -986,10 +986,10 @@ class TestMethodNotAllowed:
 
 class TestInfo:
 
-    def test_info_ftl(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/info/ftl", timeout=5), dump="info_ftl")
-        ftl = data["ftl"]
-        db = ftl["database"]
+    def test_info_lorentz(self, api_session):
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/info/lorentz", timeout=5), dump="info_lorentz")
+        lorentz = data["lorentz"]
+        db = lorentz["database"]
         assert db["gravity"] == 8, json.dumps(db, indent=2)
         assert db["groups"] == 5
         assert db["lists"] == 2
@@ -998,57 +998,57 @@ class TestInfo:
         assert db["domains"]["denied"] == {"total": 2, "enabled": 2}
         assert db["regex"]["allowed"] == {"total": 2, "enabled": 2}
         assert db["regex"]["denied"] == {"total": 11, "enabled": 11}
-        assert ftl["privacy_level"] == 0
-        assert ftl["clients"]["total"] == 11
-        assert ftl["clients"]["active"] == 11
+        assert lorentz["privacy_level"] == 0
+        assert lorentz["clients"]["total"] == 11
+        assert lorentz["clients"]["active"] == 11
 
     def test_info_login(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/info/login", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/info/login", timeout=5))
         assert data["dns"] is True
         assert data["https_port"] == 443
 
     def test_info_version(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/info/version", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/info/version", timeout=5))
         v = data["version"]
-        assert "ftl" in v
-        assert "local" in v["ftl"]
-        assert v["ftl"]["local"]["version"].startswith("v")
-        assert "hash" in v["ftl"]["local"]
+        assert "lorentz" in v
+        assert "local" in v["lorentz"]
+        assert v["lorentz"]["local"]["version"].startswith("v")
+        assert "hash" in v["lorentz"]["local"]
 
     def test_info_messages(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/info/messages", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/info/messages", timeout=5))
         assert "messages" in data
         assert isinstance(data["messages"], list)
 
     def test_info_messages_count(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/info/messages/count", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/info/messages/count", timeout=5))
         assert "count" in data
         assert isinstance(data["count"], int)
 
     def test_info_client(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/info/client", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/info/client", timeout=5))
         assert data["remote_addr"] == "127.0.0.1"
         assert data["http_version"] == "1.1"
         assert data["method"] == "GET"
 
     def test_info_database(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/info/database", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/info/database", timeout=5))
         assert data["type"] == "Regular file"
         assert data["mode"] == "rw-r-----"
-        assert data["owner"]["user"]["name"] == "pihole"
-        assert data["owner"]["group"]["name"] == "pihole"
+        assert data["owner"]["user"]["name"] == "lorentz"
+        assert data["owner"]["group"]["name"] == "lorentz"
         assert data["queries"] > 0
         assert data["sqlite_version"].startswith("3.")
 
     def test_info_system(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/info/system", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/info/system", timeout=5))
         s = data["system"]
         assert "uptime" in s
         assert s["memory"]["ram"]["total"] > 0
         assert s["cpu"]["nprocs"] > 0
-        assert "ftl" in s
-        assert "%mem" in s["ftl"]
-        assert "%cpu" in s["ftl"]
+        assert "lorentz" in s
+        assert "%mem" in s["lorentz"]
+        assert "%cpu" in s["lorentz"]
 
 
 # ---------------------------------------------------------------------------
@@ -1059,7 +1059,7 @@ class TestAuthReadOnly:
 
     def test_totp_suggestion(self, api_session):
         """GET /api/auth/totp returns TOTP credential suggestions."""
-        data = _j(api_session.get(f"{FTL_URL}/api/auth/totp", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/auth/totp", timeout=5))
         totp = data["totp"]
         assert isinstance(totp["secret"], str)
         assert len(totp["secret"]) > 0
@@ -1076,14 +1076,14 @@ class TestAuthReadOnly:
 class TestNetwork:
 
     def test_network_devices(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/network/devices", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/network/devices", timeout=5))
         devices = data["devices"]
         hwaddrs = [d["hwaddr"] for d in devices]
         assert "aa:bb:cc:dd:ee:ff" in hwaddrs, json.dumps(hwaddrs, indent=2)
         assert "ip-127.0.0.1" in hwaddrs
 
     def test_network_interfaces(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/network/interfaces", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/network/interfaces", timeout=5))
         ifaces = data["interfaces"]
         names = [i["name"] for i in ifaces]
         assert "lo" in names, json.dumps(names, indent=2)
@@ -1096,14 +1096,14 @@ class TestNetwork:
 class TestLogs:
 
     def test_dnsmasq_log(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/logs/dnsmasq", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/logs/dnsmasq", timeout=5))
         assert len(data["log"]) > 0
         entry = data["log"][0]
         assert "timestamp" in entry
         assert "message" in entry
 
-    def test_ftl_log(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/logs/ftl", timeout=5))
+    def test_lorentz_log(self, api_session):
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/logs/lorentz", timeout=5))
         assert len(data["log"]) > 0
         entry = data["log"][0]
         assert "timestamp" in entry
@@ -1111,7 +1111,7 @@ class TestLogs:
         assert "prio" in entry
 
     def test_webserver_log(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/logs/webserver", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/logs/webserver", timeout=5))
         assert len(data["log"]) > 0
 
 
@@ -1122,12 +1122,12 @@ class TestLogs:
 class TestPADD:
 
     def test_padd(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/padd", timeout=5), dump="padd")
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/padd", timeout=5), dump="padd")
         assert data["blocking"] == "enabled"
         assert data["gravity_size"] == 8
         assert data["active_clients"] == 11
         assert data["top_domain"] == TOP_DOMAIN
-        assert data["top_blocked"] == "gravity.ftl"
+        assert data["top_blocked"] == "gravity.lorentz"
         assert data["top_client"] == "127.0.0.1"
         q = data["queries"]
         assert q["total"] == TOTAL, json.dumps(data, indent=2)
@@ -1143,7 +1143,7 @@ class TestPADD:
 class TestClients:
 
     def test_all_clients(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/clients", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/clients", timeout=5))
         clients = data["clients"]
         assert len(clients) == 5, \
             f"Expected 5 clients:\n{json.dumps(clients, indent=2)}"
@@ -1154,7 +1154,7 @@ class TestClients:
         assert ":enp0s123" in names
 
     def test_single_client_lookup(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/clients/127.0.0.1", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/clients/127.0.0.1", timeout=5))
         clients = data["clients"]
         assert len(clients) == 1, json.dumps(clients, indent=2)
         c = clients[0]
@@ -1162,7 +1162,7 @@ class TestClients:
         assert c["groups"] == [0]
 
     def test_client_suggestions(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/clients/_suggestions", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/clients/_suggestions", timeout=5))
         assert "clients" in data
         assert isinstance(data["clients"], list)
 
@@ -1174,7 +1174,7 @@ class TestClients:
 class TestConfigGet:
 
     def test_full_config(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/config", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/config", timeout=5))
         config = data["config"]
         assert "dns" in config
         assert "webserver" in config
@@ -1185,7 +1185,7 @@ class TestConfigGet:
         assert config["dns"]["blockESNI"] is True
 
     def test_config_element(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/config/dns/upstreams", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/config/dns/upstreams", timeout=5))
         config = data["config"]
         upstreams = config["dns"]["upstreams"]
         assert isinstance(upstreams, list)
@@ -1199,12 +1199,12 @@ class TestConfigGet:
 class TestNetworkAdditional:
 
     def test_network_gateway(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/network/gateway", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/network/gateway", timeout=5))
         assert "gateway" in data
         assert isinstance(data["gateway"], list)
 
     def test_network_routes(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/network/routes", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/network/routes", timeout=5))
         assert "routes" in data
         assert isinstance(data["routes"], list)
 
@@ -1216,7 +1216,7 @@ class TestNetworkAdditional:
 class TestInfoAdditional:
 
     def test_info_host(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/info/host", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/info/host", timeout=5))
         host = data["host"]
         uname = host["uname"]
         assert "sysname" in uname
@@ -1225,14 +1225,14 @@ class TestInfoAdditional:
         assert "machine" in uname
 
     def test_info_sensors(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/info/sensors", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/info/sensors", timeout=5))
         sensors = data["sensors"]
         assert "list" in sensors
         assert isinstance(sensors["list"], list)
         assert "unit" in sensors
 
     def test_info_metrics(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/info/metrics", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/info/metrics", timeout=5))
         m = data["metrics"]
         dns = m["dns"]
         assert dns["cache"]["size"] > 0
@@ -1249,7 +1249,7 @@ class TestQueriesAdditional:
 
     def test_queries_default(self, api_session):
         """Default query (no filters) returns up to 100 results."""
-        data = _j(api_session.get(f"{FTL_URL}/api/queries", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/queries", timeout=5))
         assert "queries" in data
         queries = data["queries"]
         assert isinstance(queries, list)
@@ -1268,7 +1268,7 @@ class TestQueriesAdditional:
         assert "type" in q["reply"]
 
     def test_queries_with_length(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/queries?length=5", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/queries?length=5", timeout=5))
         assert len(data["queries"]) == 5
 
     def test_queries_length_is_capped(self, api_session):
@@ -1284,10 +1284,10 @@ class TestQueriesAdditional:
         """
         CAP = 10000
         # A huge length must be accepted (not rejected) and stay bounded
-        huge = _j(api_session.get(f"{FTL_URL}/api/queries?length=999999999", timeout=10))
+        huge = _j(api_session.get(f"{LORENTZ_URL}/api/queries?length=999999999", timeout=10))
         assert len(huge["queries"]) <= CAP
         # length=-1 is the documented "all"; it must still return everything
-        all_rows = _j(api_session.get(f"{FTL_URL}/api/queries?length=-1", timeout=10))
+        all_rows = _j(api_session.get(f"{LORENTZ_URL}/api/queries?length=-1", timeout=10))
         assert len(all_rows["queries"]) <= CAP
         # An oversized length saturates to the same bounded result as "all" ...
         assert len(huge["queries"]) == len(all_rows["queries"])
@@ -1295,32 +1295,32 @@ class TestQueriesAdditional:
         assert len(all_rows["queries"]) == all_rows["recordsTotal"]
 
     def test_queries_filter_by_type(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/queries?type=AAAA", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/queries?type=AAAA", timeout=5))
         for q in data["queries"]:
             assert q["type"] == "AAAA", \
                 f"Expected type AAAA, got {q['type']}"
 
     def test_queries_filter_by_status(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/queries?status=GRAVITY", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/queries?status=GRAVITY", timeout=5))
         assert data["recordsFiltered"] > 0
         for q in data["queries"]:
             assert q["status"] == "GRAVITY"
 
     def test_queries_filter_by_domain(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/queries?domain=gravity.ftl", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/queries?domain=gravity.lorentz", timeout=5))
         assert data["recordsFiltered"] > 0
         for q in data["queries"]:
-            assert q["domain"] == "gravity.ftl"
+            assert q["domain"] == "gravity.lorentz"
 
     def test_queries_filter_by_client_ip(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/queries?client_ip=127.0.0.1", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/queries?client_ip=127.0.0.1", timeout=5))
         assert data["recordsFiltered"] > 0
         for q in data["queries"]:
             assert q["client"]["ip"] == "127.0.0.1"
 
     def test_queries_filter_by_upstream_blocklist(self, api_session):
         """upstream=blocklist is a pseudo-upstream that matches all blocked queries."""
-        data = _j(api_session.get(f"{FTL_URL}/api/queries?upstream=blocklist", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/queries?upstream=blocklist", timeout=5))
         assert data["recordsFiltered"] > 0
         blocked_statuses = {"GRAVITY", "REGEX", "DENYLIST", "SPECIAL_DOMAIN",
                             "GRAVITY_CNAME", "REGEX_CNAME", "DENYLIST_CNAME",
@@ -1334,21 +1334,21 @@ class TestQueriesAdditional:
     def test_queries_filter_by_upstream_address(self, api_session):
         """Filtering by an actual upstream address."""
         data = _j(api_session.get(
-            f"{FTL_URL}/api/queries?upstream=127.0.0.1%235555", timeout=5))
+            f"{LORENTZ_URL}/api/queries?upstream=127.0.0.1%235555", timeout=5))
         assert data["recordsFiltered"] > 0
         for q in data["queries"]:
             assert q["upstream"] == "127.0.0.1#5555"
 
     def test_queries_cursor_pagination(self, api_session):
         """Cursor + start offset returns non-overlapping pages."""
-        page1 = _j(api_session.get(f"{FTL_URL}/api/queries?length=5", timeout=5))
+        page1 = _j(api_session.get(f"{LORENTZ_URL}/api/queries?length=5", timeout=5))
         assert len(page1["queries"]) == 5
         cursor = page1["cursor"]
         assert isinstance(cursor, int)
 
         # Page 2: same cursor, offset by start=5
         page2 = _j(api_session.get(
-            f"{FTL_URL}/api/queries?length=5&cursor={cursor}&start=5", timeout=5))
+            f"{LORENTZ_URL}/api/queries?length=5&cursor={cursor}&start=5", timeout=5))
         assert len(page2["queries"]) == 5
 
         ids1 = {q["id"] for q in page1["queries"]}
@@ -1357,7 +1357,7 @@ class TestQueriesAdditional:
             f"Pages overlap: {ids1 & ids2}"
 
     def test_queries_suggestions(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/queries/suggestions", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/queries/suggestions", timeout=5))
         s = data["suggestions"]
         assert "domain" in s
         assert "client_ip" in s
@@ -1379,22 +1379,22 @@ class TestHistoryDatabase:
 
     def test_history_database_requires_params(self, api_session):
         """Database history endpoints return 400 without from/until."""
-        data = _j(api_session.get(f"{FTL_URL}/api/history/database", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/history/database", timeout=5))
         assert data["error"]["key"] == "bad_request"
 
     def test_history_database_with_range(self, api_session):
         data = _j(api_session.get(
-            f"{FTL_URL}/api/history/database?from=0&until=9999999999", timeout=5))
+            f"{LORENTZ_URL}/api/history/database?from=0&until=9999999999", timeout=5))
         assert "history" in data
         assert isinstance(data["history"], list)
 
     def test_history_database_clients_requires_params(self, api_session):
-        data = _j(api_session.get(f"{FTL_URL}/api/history/database/clients", timeout=5))
+        data = _j(api_session.get(f"{LORENTZ_URL}/api/history/database/clients", timeout=5))
         assert data["error"]["key"] == "bad_request"
 
     def test_history_database_clients_with_range(self, api_session):
         data = _j(api_session.get(
-            f"{FTL_URL}/api/history/database/clients?from=1&until=9999999999", timeout=5))
+            f"{LORENTZ_URL}/api/history/database/clients?from=1&until=9999999999", timeout=5))
         assert "history" in data
         assert "clients" in data
 
@@ -1406,7 +1406,7 @@ class TestHistoryDatabase:
 class TestNTP:
 
     def test_ntp_server_responds(self, api_session):
-        """FTL's built-in NTP server returns a valid NTPv4 response."""
+        """Lorentz's built-in NTP server returns a valid NTPv4 response."""
         import socket
         import struct
 

@@ -1,17 +1,17 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  dnsmasq interfacing routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#define FTLDNS
+#define LORENTZDNS
 #include "dnsmasq/dnsmasq.h"
 #undef __USE_XOPEN
-#include "FTL.h"
+#include "lorentz.h"
 #include "enums.h"
 #include "dnsmasq_interface.h"
 #include "shmem.h"
@@ -50,7 +50,7 @@
 #include "database/query-table.h"
 // reread_config()
 #include "config/config.h"
-// FTL_fork_and_bind_sockets()
+// Lorentz_fork_and_bind_sockets()
 #include "main.h"
 // ntp_server_start()
 #include "ntp/ntp.h"
@@ -60,22 +60,22 @@
 #include "api/api.h"
 
 // Public prototypes (defined in this file, called from other translation units)
-void FTL_dump_cache_stats(void);
+void Lorentz_dump_cache_stats(void);
 
 // Private prototypes
 static void print_flags(const unsigned int flags);
 #define query_set_reply(flags, reply, addr, query, now) _query_set_reply(flags, reply, addr, query, now, __FILE__, __LINE__)
 static void _query_set_reply(const unsigned int flags, const enum reply_type reply, const union all_addr *addr, queriesData *query,
                              const double now, const char *file, const int line);
-static bool FTL_check_blocking(const char *domainstr, queriesData *query, clientsData *client, domainsData *domain, DNSCacheData *dns_cache);
+static bool Lorentz_check_blocking(const char *domainstr, queriesData *query, clientsData *client, domainsData *domain, DNSCacheData *dns_cache);
 static void query_blocked(queriesData *query, domainsData *domain, clientsData *client, const enum query_status new_status);
-static void FTL_forwarded(const unsigned int flags, const char *name, const union all_addr *addr, unsigned short port, const int id, const char *file, const int line);
-static void FTL_reply(const unsigned int flags, const char *name, const union all_addr *addr, const char *arg, const int id, const char *file, const int line);
-static void FTL_upstream_error(const union all_addr *addr, const unsigned int flags, const int id, const char *file, const int line);
-static void FTL_dnssec(const char *result, const union all_addr *addr, const int id, const char *file, const int line);
+static void Lorentz_forwarded(const unsigned int flags, const char *name, const union all_addr *addr, unsigned short port, const int id, const char *file, const int line);
+static void Lorentz_reply(const unsigned int flags, const char *name, const union all_addr *addr, const char *arg, const int id, const char *file, const int line);
+static void Lorentz_upstream_error(const union all_addr *addr, const unsigned int flags, const int id, const char *file, const int line);
+static void Lorentz_dnssec(const char *result, const union all_addr *addr, const int id, const char *file, const int line);
 static void mysockaddr_extract_ip_port(const union mysockaddr *server, char ip[ADDRSTRLEN+1], in_port_t *port);
 static void alladdr_extract_ip(union all_addr *addr, const sa_family_t family, char ip[ADDRSTRLEN+1]);
-static void check_pihole_PTR(char *domain);
+static void check_lorentz_PTR(char *domain);
 #define query_set_dnssec(query, dnssec) _query_set_dnssec(query, dnssec, __FILE__, __LINE__)
 static void _query_set_dnssec(queriesData *query, const enum dnssec_status dnssec, const char *file, const int line);
 static char *get_ptrname(const struct in_addr *addr);
@@ -88,40 +88,40 @@ static const char *blockingreason = "";
 static enum reply_type force_next_DNS_reply = REPLY_UNKNOWN;
 static enum query_status cacheStatus = QUERY_UNKNOWN;
 static int last_regex_idx = -1;
-static char *pihole_suffix = NULL;
+static char *lorentz_suffix = NULL;
 static char *hostname_suffix = NULL;
-static size_t pihole_suffix_len = 0;
+static size_t lorentz_suffix_len = 0;
 static size_t hostname_suffix_len = 0;
 static size_t hostname_len = 0;
 static const char *cname_target = NULL;
 
-// FTL DNS cache hit/miss counters.
-// A "hit" means the (domain, client, query-type) tuple was already in FTL's
+// Lorentz DNS cache hit/miss counters.
+// A "hit" means the (domain, client, query-type) tuple was already in Lorentz's
 // cache so gravity.db was not queried at all. A "miss" triggers a full set of
-// gravity/denylist/allowlist lookups. Reset by FTL_dump_cache_stats().
-static uint64_t ftl_cache_hits = 0;
-static uint64_t ftl_cache_misses = 0;
+// gravity/denylist/allowlist lookups. Reset by Lorentz_dump_cache_stats().
+static uint64_t lorentz_cache_hits = 0;
+static uint64_t lorentz_cache_misses = 0;
 
 // Hot-path performance statistics (gated by debug.performance).
-// Tracks per-component latency within FTL_new_query() and FTL_reply().
+// Tracks per-component latency within Lorentz_new_query() and Lorentz_reply().
 // All updates happen under the SHM lock, so no atomics are needed.
-// Counters are reset each time FTL_dump_cache_stats() is called (every 5 min).
-#define PERF_STAT_NEW_QUERY      0  // Total FTL_new_query() under SHM lock
+// Counters are reset each time Lorentz_dump_cache_stats() is called (every 5 min).
+#define PERF_STAT_NEW_QUERY      0  // Total Lorentz_new_query() under SHM lock
 #define PERF_STAT_FIND_CLIENT    1  // findClientID() hash lookup
 #define PERF_STAT_FIND_DOMAIN    2  // findDomainID() hash lookup
-#define PERF_STAT_CHECK_BLOCKING 3  // FTL_check_blocking() from FTL_new_query (primary path)
-#define PERF_STAT_REPLY          4  // FTL_reply() under SHM lock
+#define PERF_STAT_CHECK_BLOCKING 3  // Lorentz_check_blocking() from Lorentz_new_query (primary path)
+#define PERF_STAT_REPLY          4  // Lorentz_reply() under SHM lock
 // The two sub-slots below only fire on the cache-miss path inside
-// check_blocking (i.e. a domain/client combination that FTL has not
+// check_blocking (i.e. a domain/client combination that Lorentz has not
 // yet classified). They let the 5-minute rollup localize rare
 // multi-millisecond outliers to either the allowlist or the
 // denylist/gravity stage without per-call log spam. They fire for
-// BOTH the primary and the CNAME-side callers of FTL_check_blocking,
+// BOTH the primary and the CNAME-side callers of Lorentz_check_blocking,
 // so their call counts cover the full workload while the two parent
 // slots above/below split primary vs CNAME amplification.
 #define PERF_STAT_CB_ALLOWLIST   5  // in_allowlist() + in_regex(ALLOW)
 #define PERF_STAT_CB_DENYLIST    6  // check_domain_blocked() (primary + _esni fallback)
-#define PERF_STAT_CB_CNAME       7  // FTL_check_blocking() from FTL_CNAME (per-hop)
+#define PERF_STAT_CB_CNAME       7  // Lorentz_check_blocking() from LORENTZ_CNAME (per-hop)
 // The three sub-slots below nest inside CB_DENYLIST and break
 // check_domain_blocked() into its three disjoint engines. Each one
 // has a different fix domain if it turns out to own the tail:
@@ -162,7 +162,7 @@ static struct {
 		if(_us > 1000u) query_perf[(slot)].slow++; \
 	}
 
-#define HOSTNAME "Pi-hole hostname"
+#define HOSTNAME "Lorentz hostname"
 
 // Fork-private copy of the interface data the most recent query came from
 static struct {
@@ -176,25 +176,25 @@ static struct {
 // Fork-private copy of the server data the most recent reply came from
 static union mysockaddr last_server = {};
 
-void FTL_dump_cache_stats(void)
+void Lorentz_dump_cache_stats(void)
 {
-	const uint64_t total = ftl_cache_hits + ftl_cache_misses;
+	const uint64_t total = lorentz_cache_hits + lorentz_cache_misses;
 	if(total == 0)
 	{
-		log_debug(DEBUG_PERFORMANCE, "FTL cache stats: no queries in last 5 minutes");
+		log_debug(DEBUG_PERFORMANCE, "Lorentz cache stats: no queries in last 5 minutes");
 	}
 	else
 	{
 		log_debug(DEBUG_PERFORMANCE,
-		          "FTL cache stats: %"PRIu64" queries, "
+		          "Lorentz cache stats: %"PRIu64" queries, "
 		          "%"PRIu64" hits (%.1f%%), %"PRIu64" misses (%.1f%%)",
 		          total,
-		          ftl_cache_hits,  100.0 * (double)ftl_cache_hits  / (double)total,
-		          ftl_cache_misses, 100.0 * (double)ftl_cache_misses / (double)total);
+		          lorentz_cache_hits,  100.0 * (double)lorentz_cache_hits  / (double)total,
+		          lorentz_cache_misses, 100.0 * (double)lorentz_cache_misses / (double)total);
 	}
 	// Reset counters for the next 5-minute window
-	ftl_cache_hits = 0;
-	ftl_cache_misses = 0;
+	lorentz_cache_hits = 0;
+	lorentz_cache_misses = 0;
 
 	// Dump per-component hot-path latency statistics
 	static const char * const perf_names[PERF_STAT_COUNT] = {
@@ -233,14 +233,14 @@ void FTL_dump_cache_stats(void)
 
 const char *flagnames[] = {"F_IMMORTAL ", "F_NAMEP ", "F_REVERSE ", "F_FORWARD ", "F_DHCP ", "F_NEG ", "F_HOSTS ", "F_IPV4 ", "F_IPV6 ", "F_BIGNAME ", "F_NXDOMAIN ", "F_CNAME ", "F_DNSKEY ", "F_CONFIG ", "F_DS ", "F_DNSSECOK ", "F_UPSTREAM ", "F_RRNAME ", "F_SERVER ", "F_QUERY ", "F_NOERR ", "F_AUTH ", "F_DNSSEC ", "F_KEYTAG ", "F_SECSTAT ", "F_NO_RR ", "F_IPSET ", "F_NOEXTRA ", "F_DOMAINSRV", "F_RCODE", "F_RR", "F_STALE" };
 
-void FTL_hook(unsigned int flags, const char *name, const union all_addr *addr, char *arg, int id, unsigned short type, const char *file, const int line)
+void Lorentz_hook(unsigned int flags, const char *name, const union all_addr *addr, char *arg, int id, unsigned short type, const char *file, const int line)
 {
 	// Extract filename from path
 	const char *path = short_path(file);
 	if(config.debug.flags.v.b)
 	{
 		const char *types = (flags & F_RR) ? querystr(arg, type) : "?";
-		log_debug(DEBUG_FLAGS, "Processing FTL hook from %s:%d (type: %s, name: \"%s\", id: %i)...", path, line, types, name, id);
+		log_debug(DEBUG_FLAGS, "Processing Lorentz hook from %s:%d (type: %s, name: \"%s\", id: %i)...", path, line, types, name, id);
 		print_flags(flags);
 	}
 
@@ -253,16 +253,16 @@ void FTL_hook(unsigned int flags, const char *name, const union all_addr *addr, 
 
 	// Note: The order matters here!
 	if((flags & F_QUERY) && (flags & F_FORWARD))
-		; // New query, handled by FTL_new_query via separate call
+		; // New query, handled by Lorentz_new_query via separate call
 	else if(flags & F_FORWARD && flags & F_SERVER)
 		// forwarded upstream (type is used to store the upstream port)
-		FTL_forwarded(flags, name, addr, type, id, path, line);
+		Lorentz_forwarded(flags, name, addr, type, id, path, line);
 	else if(flags == F_SECSTAT)
 		// DNSSEC validation result
-		FTL_dnssec(arg, addr, id, path, line);
+		Lorentz_dnssec(arg, addr, id, path, line);
 	else if(flags & F_RCODE && !(flags & F_CONFIG) && name && strcasecmp(name, "error") == 0)
 		// upstream sent something different than NOERROR or NXDOMAIN
-		FTL_upstream_error(addr, flags, id, path, line);
+		Lorentz_upstream_error(addr, flags, id, path, line);
 	else if(flags & F_NOEXTRA && flags & F_DNSSEC)
 	{
 		// This is a new DNSSEC query (dnssec-query[DS])
@@ -297,9 +297,9 @@ void FTL_hook(unsigned int flags, const char *name, const union all_addr *addr, 
 			arg = (char*)"dnssec-unknown";
 		}
 
-		_FTL_new_query(flags, name, NULL, arg, qtype, id, INTERNAL, file, line);
+		_Lorentz_new_query(flags, name, NULL, arg, qtype, id, INTERNAL, file, line);
 		// forwarded upstream (type is used to store the upstream port)
-		FTL_forwarded(flags, name, addr, type, id, path, line);
+		Lorentz_forwarded(flags, name, addr, type, id, path, line);
 	}
 	else if(flags & F_AUTH)
 		; // Ignored
@@ -314,11 +314,11 @@ void FTL_hook(unsigned int flags, const char *name, const union all_addr *addr, 
 		// otherwise, flags will be F_UPSTREAM and the type is not set
 		// (== 0)
 	else
-		FTL_reply(flags, name, addr, arg, id, path, line);
+		Lorentz_reply(flags, name, addr, arg, id, path, line);
 }
 
 // The blocking reason and the CNAME target describe one query, so they are
-// dropped on every way out of _FTL_make_answer() below, not only on the path
+// dropped on every way out of _Lorentz_make_answer() below, not only on the path
 // that answered
 static void unset_blocking_metadata(void)
 {
@@ -327,11 +327,11 @@ static void unset_blocking_metadata(void)
 }
 
 // This is inspired by make_local_answer()
-size_t _FTL_make_answer(struct dns_header *header, char *limit, const size_t len,
+size_t _Lorentz_make_answer(struct dns_header *header, char *limit, const size_t len,
                         unsigned char ede_data[MAX_EDE_DATA], size_t *ede_len,
                         const char *file, const int line)
 {
-	log_debug(DEBUG_FLAGS, "FTL_make_answer() called from %s:%d", short_path(file), line);
+	log_debug(DEBUG_FLAGS, "Lorentz_make_answer() called from %s:%d", short_path(file), line);
 	// Exit early if there are no questions in this query
 	if(ntohs(header->qdcount) == 0)
 	{
@@ -571,7 +571,7 @@ size_t _FTL_make_answer(struct dns_header *header, char *limit, const size_t len
 	setup_reply(header, flags, ede_code);
 
 	// Add NEG flag when replying with NXDOMAIN or NODATA. This is necessary
-	// to get proper logging in pihole.log At the same time, we cannot add
+	// to get proper logging in lorentz.log At the same time, we cannot add
 	// NEG before calling setup_reply() as it would, otherwise, result in an
 	// incorrect "nowhere to forward to" log entry (because setup_reply()
 	// checks for equality of flags instead of doing a bitmask comparison).
@@ -581,7 +581,7 @@ size_t _FTL_make_answer(struct dns_header *header, char *limit, const size_t len
 	// Add flags according to current blocking mode
 	// Set blocking_flags to F_HOSTS so dnsmasq logs blocked queries being answered from a specific source
 	// (it would otherwise assume it knew the blocking status from cache which would prevent us from
-	// printing the blocking source (blacklist, regex, gravity) in dnsmasq's log file, our pihole.log)
+	// printing the blocking source (blacklist, regex, gravity) in dnsmasq's log file, our lorentz.log)
 	if(flags != 0)
 		flags |= F_HOSTS;
 
@@ -592,7 +592,7 @@ size_t _FTL_make_answer(struct dns_header *header, char *limit, const size_t len
 		return 0;
 	}
 
-	// Are we replying to pi.hole / <hostname> / pi.hole.<local> / <hostname>.<local> ?
+	// Are we replying to lorentz.lan / <hostname> / lorentz.lan.<local> / <hostname>.<local> ?
 	const bool hostn = strcmp(blockingreason, HOSTNAME) == 0;
 
 	int trunc = 0;
@@ -734,21 +734,21 @@ size_t _FTL_make_answer(struct dns_header *header, char *limit, const size_t len
 	return p - (unsigned char *)header;
 }
 
-static bool is_pihole_domain(const char *domain)
+static bool is_lorentz_domain(const char *domain)
 {
 	// Cache plain hostname length on first call (independent of
 	// domain_suffix)
 	if(hostname_len == 0)
 		hostname_len = strlen(hostname());
 
-	// Build "pi.hole.<local suffix>" domain if not already built and if
+	// Build "lorentz.lan.<local suffix>" domain if not already built and if
 	// domain suffix is configured
-	if(!pihole_suffix && daemon->domain_suffix)
+	if(!lorentz_suffix && daemon->domain_suffix)
 	{
-		pihole_suffix = calloc(strlen(daemon->domain_suffix) + 9, sizeof(char));
-		strcpy(pihole_suffix, "pi.hole.");
-		strcat(pihole_suffix, daemon->domain_suffix);
-		pihole_suffix_len = strlen(pihole_suffix);
+		lorentz_suffix = calloc(strlen(daemon->domain_suffix) + 9, sizeof(char));
+		strcpy(lorentz_suffix, "lorentz.lan.");
+		strcat(lorentz_suffix, daemon->domain_suffix);
+		lorentz_suffix_len = strlen(lorentz_suffix);
 		log_debug(DEBUG_QUERIES, "Domain suffix is \"%s\"", daemon->domain_suffix);
 	}
 	// Build "<hostname>.<local suffix>" domain if not already built and if
@@ -763,16 +763,16 @@ static bool is_pihole_domain(const char *domain)
 	}
 
 	// Pre-filter with integer length comparison before any strcasecmp:
-	// in the common case (domain is not pi.hole/hostname), all four checks
+	// in the common case (domain is not lorentz.lan/hostname), all four checks
 	// short-circuit after a single strlen + four integer comparisons.
 	const size_t dlen = strlen(domain);
-	return (dlen == 7u           && strcasecmp(domain, "pi.hole") == 0) ||
+	return (dlen == 7u           && strcasecmp(domain, "lorentz.lan") == 0) ||
 	       (dlen == hostname_len && strcasecmp(domain, hostname()) == 0) ||
-	       (pihole_suffix   && dlen == pihole_suffix_len   && strcasecmp(domain, pihole_suffix) == 0) ||
+	       (lorentz_suffix   && dlen == lorentz_suffix_len   && strcasecmp(domain, lorentz_suffix) == 0) ||
 	       (hostname_suffix && dlen == hostname_suffix_len && strcasecmp(domain, hostname_suffix) == 0);
 }
 
-bool _FTL_new_query(const unsigned int flags, const char *name,
+bool _Lorentz_new_query(const unsigned int flags, const char *name,
                     union mysockaddr *addr, char *arg,
                     const unsigned short qtype, int id,
                     enum protocol proto,
@@ -816,9 +816,9 @@ bool _FTL_new_query(const unsigned int flags, const char *name,
 	// Check domain name received from dnsmasq
 	name = check_dnsmasq_name(name);
 
-	// If domain is "pi.hole" or the local hostname we skip analyzing this query
+	// If domain is "lorentz.lan" or the local hostname we skip analyzing this query
 	// and, instead, immediately reply with the IP address - these queries are not further analyzed
-	if(querytype != TYPE_NONE && is_pihole_domain(name))
+	if(querytype != TYPE_NONE && is_lorentz_domain(name))
 	{
 		if(querytype == TYPE_A || querytype == TYPE_AAAA || querytype == TYPE_ANY)
 		{
@@ -854,9 +854,9 @@ bool _FTL_new_query(const unsigned int flags, const char *name,
 	}
 
 	// Check if this is a PTR request for a local interface.
-	// If so, we inject a "pi.hole" reply here
-	if(querytype == TYPE_PTR && config.dns.piholePTR.v.ptr_type != PTR_NONE)
-		check_pihole_PTR((char*)name);
+	// If so, we inject a "lorentz.lan" reply here
+	if(querytype == TYPE_PTR && config.dns.lorentzPTR.v.ptr_type != PTR_NONE)
+		check_lorentz_PTR((char*)name);
 
 	// Convert domain to lower case (single-pass copy + lowercase)
 	char domainString[MAXDOMAINLEN];
@@ -945,7 +945,7 @@ bool _FTL_new_query(const unsigned int flags, const char *name,
 		force_next_DNS_reply = REPLY_REFUSED;
 		blockingreason = "Rate-limiting";
 
-		// Do not further process this query, Pi-hole has never seen it.
+		// Do not further process this query, Lorentz has never seen it.
 		// Undo the client count increment from findClientID() above:
 		// no query record is created for rate-limited queries, so GC
 		// will never decrement this counter — leaving it permanently
@@ -973,7 +973,7 @@ bool _FTL_new_query(const unsigned int flags, const char *name,
 	if(config.debug.queries.v.b)
 	{
 		const char *types = querystr(arg, qtype);
-		log_debug(DEBUG_QUERIES, "**** new %sIPv%d %s%s \"%s\" from %s/%s#%d (ID %i, FTL %i, %s:%i)",
+		log_debug(DEBUG_QUERIES, "**** new %sIPv%d %s%s \"%s\" from %s/%s#%d (ID %i, Lorentz %i, %s:%i)",
 		          proto == TCP ? "TCP " : proto == UDP ? "UDP " : "", family == AF_INET ? 4 : 6,
 		          types, querytype == TYPE_NONE ? "" : " query", name, interface,
 		          internal_query ? "<internal>" : clientIP, clientPort,
@@ -1194,7 +1194,7 @@ bool _FTL_new_query(const unsigned int flags, const char *name,
 	if(query != NULL && !internal_query && querytype != TYPE_NONE)
 	{
 		PERF_START(_pcb);
-		blockDomain = FTL_check_blocking(domainString, query, client, domain, dns_cache_entry);
+		blockDomain = Lorentz_check_blocking(domainString, query, client, domain, dns_cache_entry);
 		PERF_END(_pcb, PERF_STAT_CHECK_BLOCKING);
 	}
 
@@ -1209,7 +1209,7 @@ bool _FTL_new_query(const unsigned int flags, const char *name,
 	return blockDomain;
 }
 
-void _FTL_iface(struct irec *recviface, const union all_addr *addr, const sa_family_t addrfamily,
+void _Lorentz_iface(struct irec *recviface, const union all_addr *addr, const sa_family_t addrfamily,
                 const char *file, const int line)
 {
 	// Debug logging
@@ -1399,7 +1399,7 @@ void _FTL_iface(struct irec *recviface, const union all_addr *addr, const sa_fam
 	}
 }
 
-static void check_pihole_PTR(char *domain)
+static void check_lorentz_PTR(char *domain)
 {
 	// Iterate through the already configured PTR entries in dnsmasq's
 	// structure and check if we already have a PTR record for this address
@@ -1431,14 +1431,14 @@ static void check_pihole_PTR(char *domain)
 	if(flags == 0)
 		return;
 
-	// We do not want to reply with "pi.hole" to loopback PTRs
+	// We do not want to reply with "lorentz.lan" to loopback PTRs
 	if((flags == F_IPV4 && addr.addr4.s_addr == htonl(INADDR_LOOPBACK)) ||
 	   (flags == F_IPV6 && IN6_IS_ADDR_LOOPBACK(&addr.addr6)))
 		return;
 
 	// If we reached this point, addr contains the address the client requested
 	// a name for. We compare this address against all addresses of the local
-	// interfaces to see if we should reply with "pi.hole"
+	// interfaces to see if we should reply with "lorentz.lan"
 	for (struct irec *iface = daemon->interfaces; iface != NULL; iface = iface->next)
 	{
 		const sa_family_t family = iface->addr.sa.sa_family;
@@ -1448,19 +1448,19 @@ static void check_pihole_PTR(char *domain)
 			continue;
 
 		// If we reached this point, we have a match between the address the client
-		struct ptr_record *pihole_ptr = calloc(1, sizeof(struct ptr_record));
+		struct ptr_record *lorentz_ptr = calloc(1, sizeof(struct ptr_record));
 		// It is okay to use allocate heap memory here as this branch of
 		// the code is only ever called once per interface on demand
-		pihole_ptr->name = strdup(domain);
+		lorentz_ptr->name = strdup(domain);
 		if(family == AF_INET)
 		{
 			// IPv4 supports conditional domains
-			pihole_ptr->ptr = get_ptrname(&iface->addr.in.sin_addr);
+			lorentz_ptr->ptr = get_ptrname(&iface->addr.in.sin_addr);
 		}
 		else
 		{
 			// IPv6 does not support conditional domains
-			pihole_ptr->ptr = get_ptrname(NULL);
+			lorentz_ptr->ptr = get_ptrname(NULL);
 		}
 
 		// If we have a PTR record, we add it to the list
@@ -1471,17 +1471,17 @@ static void check_pihole_PTR(char *domain)
 			for(ptr = daemon->ptr; ptr && ptr->next; ptr = ptr->next);
 
 			// Add our record after the last existing ptr-record
-			ptr->next = pihole_ptr;
+			ptr->next = lorentz_ptr;
 		}
 		else
 		{
 			// We do not have any PTR records yet, so we add our
 			// record as the first one
-			daemon->ptr = pihole_ptr;
+			daemon->ptr = lorentz_ptr;
 		}
 
 		// Debug logging
-		log_debug(DEBUG_QUERIES, "Generating PTR record (%p): %s -> %s", pihole_ptr, pihole_ptr->name, pihole_ptr->ptr);
+		log_debug(DEBUG_QUERIES, "Generating PTR record (%p): %s -> %s", lorentz_ptr, lorentz_ptr->name, lorentz_ptr->ptr);
 
 		return;
 	}
@@ -1716,7 +1716,7 @@ static bool special_domain(const queriesData *query, const char *domain)
 	return false;
 }
 
-static bool FTL_check_blocking(const char *domainstr, queriesData *query, clientsData *client, domainsData *domain, DNSCacheData *dns_cache)
+static bool Lorentz_check_blocking(const char *domainstr, queriesData *query, clientsData *client, domainsData *domain, DNSCacheData *dns_cache)
 {
 	// Only check blocking conditions when global blocking is enabled
 	if(get_blockingstatus() == BLOCKING_DISABLED)
@@ -1759,9 +1759,9 @@ static bool FTL_check_blocking(const char *domainstr, queriesData *query, client
 	if(config.debug.performance.v.b)
 	{
 		if(blocking_status != QUERY_UNKNOWN)
-			ftl_cache_hits++;
+			lorentz_cache_hits++;
 		else
-			ftl_cache_misses++;
+			lorentz_cache_misses++;
 	}
 
 	// Skip the entire chain of tests if we already know the answer for this
@@ -1895,7 +1895,7 @@ static bool FTL_check_blocking(const char *domainstr, queriesData *query, client
 					// query as to get the address contained
 					// in the upstream reply being sent
 					// downstream to the client.
-					// Otherwise, Pi-hole's short-circuiting
+					// Otherwise, Lorentz's short-circuiting
 					// would reply to the client with the
 					// configured blocking mode (probably
 					// NULL)
@@ -1949,7 +1949,7 @@ static bool FTL_check_blocking(const char *domainstr, queriesData *query, client
 		return false;
 	}
 
-	// when we reach this point: the query is not in FTL's cache (for this client)
+	// when we reach this point: the query is not in Lorentz's cache (for this client)
 	
 	// Check exact whitelist for match
 	const char *blockedDomain = domainstr;
@@ -2050,20 +2050,20 @@ static bool FTL_check_blocking(const char *domainstr, queriesData *query, client
 }
 
 /**
- * @brief Updates the cache record for the "pi.hole" domain with the current interface addresses.
+ * @brief Updates the cache record for the "lorentz.lan" domain with the current interface addresses.
  *
- * This function searches the DNS cache for entries corresponding to the "pi.hole" domain,
+ * This function searches the DNS cache for entries corresponding to the "lorentz.lan" domain,
  * for both IPv4 and IPv6 address families. For each matching cache entry found, it updates
  * the stored address with the address from the next available network interface. It also
  * sets flags indicating the presence of IPv4 and/or IPv6 addresses in the interface structure.
  */
-static void update_pihole_cache_record(void)
+static void update_lorentz_cache_record(void)
 {
 	struct crec *lookup = NULL;
-	while ((lookup = cache_find_by_name(lookup, (char*)"pi.hole", 0, F_IPV4 | F_IPV6)))
+	while ((lookup = cache_find_by_name(lookup, (char*)"lorentz.lan", 0, F_IPV4 | F_IPV6)))
 	{
-		// We have a cache entry for "pi.hole", so we can use it
-		log_debug(DEBUG_NETWORKING, "Found cache entry for pi.hole: %p", lookup);
+		// We have a cache entry for "lorentz.lan", so we can use it
+		log_debug(DEBUG_NETWORKING, "Found cache entry for lorentz.lan: %p", lookup);
 		if(lookup->flags & F_IPV4)
 		{
 			if(config.dns.reply.host.force4.v.b)
@@ -2083,19 +2083,19 @@ static void update_pihole_cache_record(void)
 	}
 }
 
-bool FTL_CNAME(const char *dst, const char *src, const int id)
+bool LORENTZ_CNAME(const char *dst, const char *src, const int id)
 {
 	const double now = double_time();
-	log_debug(DEBUG_QUERIES, "FTL_CNAME called with: src = %s, dst = %s, id = %d", src, dst, id);
+	log_debug(DEBUG_QUERIES, "LORENTZ_CNAME called with: src = %s, dst = %s, id = %d", src, dst, id);
 
-	if((src != NULL && strcasecmp(src, "pi.hole") == 0) ||
-	   (dst != NULL && strcasecmp(dst, "pi.hole") == 0))
+	if((src != NULL && strcasecmp(src, "lorentz.lan") == 0) ||
+	   (dst != NULL && strcasecmp(dst, "lorentz.lan") == 0))
 	{
-		// If "pi.hole" occurs in the CNAME chain we need to make sure
-		// the "pi.hole" cache record is up-to-date with the current
+		// If "lorentz.lan" occurs in the CNAME chain we need to make sure
+		// the "lorentz.lan" cache record is up-to-date with the current
 		// interface addresses for interface-dependent replies
-		log_debug(DEBUG_QUERIES, "Updating pi.hole cache record as it is part of the CNAME chain");
-		update_pihole_cache_record();
+		log_debug(DEBUG_QUERIES, "Updating lorentz.lan cache record as it is part of the CNAME chain");
+		update_lorentz_cache_record();
 	}
 
 	// Does the user want to skip deep CNAME inspection?
@@ -2113,7 +2113,7 @@ bool FTL_CNAME(const char *dst, const char *src, const int id)
 	if(queryID < 0)
 	{
 		// This may happen e.g. if the original query was a PTR query
-		// or "pi.hole" and we ignored them altogether
+		// or "lorentz.lan" and we ignored them altogether
 		unlock_shm();
 		log_debug(DEBUG_QUERIES, "Skipping analysis as parent query is not found");
 		return false;
@@ -2175,7 +2175,7 @@ bool FTL_CNAME(const char *dst, const char *src, const int id)
 	// with a 5-hop CNAME chain drives 5 separate calls here, each capable
 	// of a full denylist/gravity lookup.
 	PERF_START(_pcbc);
-	const bool block = FTL_check_blocking(child_domain, query, client, child_domain_data, dns_cache);
+	const bool block = Lorentz_check_blocking(child_domain, query, client, child_domain_data, dns_cache);
 	PERF_END(_pcbc, PERF_STAT_CB_CNAME);
 
 	// If we find during a CNAME inspection that we want to block the entire chain,
@@ -2263,7 +2263,7 @@ bool FTL_CNAME(const char *dst, const char *src, const int id)
 	return block;
 }
 
-static void FTL_forwarded(const unsigned int flags, const char *name, const union all_addr *addr,
+static void Lorentz_forwarded(const unsigned int flags, const char *name, const union all_addr *addr,
                           unsigned short port, const int id, const char *file, const int line)
 {
 	// Save that this query got forwarded to an upstream server
@@ -2311,7 +2311,7 @@ static void FTL_forwarded(const unsigned int flags, const char *name, const unio
 	const int queryID = findQueryID(id);
 	if(queryID < 0)
 	{
-		// This may happen e.g. if the original query was a PTR query or "pi.hole"
+		// This may happen e.g. if the original query was a PTR query or "lorentz.lan"
 		// as we ignore them altogether
 		unlock_shm();
 		return;
@@ -2383,7 +2383,7 @@ static void FTL_forwarded(const unsigned int flags, const char *name, const unio
 		// If you now query a.com and then again after some time, you end
 		// up in a situation where dnsmasq can answer the first level of
 		// the DNS result (the CNAME) from cache, hence the status of this
-		// query is marked as "answered from cache" in FTLDNS. However, for
+		// query is marked as "answered from cache" in LORENTZDNS. However, for
 		// server.a.com with the much shorter TTL, we still have to forward
 		// something and ask the upstream server for the final IP address.
 
@@ -2420,7 +2420,7 @@ static void FTL_forwarded(const unsigned int flags, const char *name, const unio
 }
 
 static unsigned int reload = 0u;
-void FTL_dnsmasq_reload(void)
+void Lorentz_dnsmasq_reload(void)
 {
 	// This function is called by the dnsmasq code on receive of SIGHUP
 	// *before* clearing the cache and re-reading the lists
@@ -2432,15 +2432,15 @@ void FTL_dnsmasq_reload(void)
 	// - Get number of blocked domains
 	// - check adlist table for inaccessible adlists
 	// - Read and compile regex filters (incl. per-client)
-	// - Flush FTL's DNS cache
+	// - Flush Lorentz's DNS cache
 	set_event(RELOAD_GRAVITY);
 
-	// Re-read pihole.toml (incl. rewriting) on every but the first reload
+	// Re-read lorentz.toml (incl. rewriting) on every but the first reload
 	// (which is happening right after the start of dnsmasq)
 	if(reload > 1)
 		reread_config();
 
-	// Re-check capabilities: what FTL needs depends on the configuration,
+	// Re-check capabilities: what Lorentz needs depends on the configuration,
 	// so this has to see the config the reload just installed
 	check_capabilities();
 
@@ -2520,7 +2520,7 @@ static void update_upstream(queriesData *query, const int id)
 			}
 		}
 
-		// Move the count along with the attribution. FTL_forwarded()
+		// Move the count along with the attribution. Lorentz_forwarded()
 		// counted this query against the upstream it first picked and
 		// returns early for every further server of the same forward
 		// round, so the server that actually answered was never counted
@@ -2544,19 +2544,19 @@ static void update_upstream(queriesData *query, const int id)
 	}
 }
 
-static void FTL_reply(const unsigned int flags, const char *name, const union all_addr *addr,
+static void Lorentz_reply(const unsigned int flags, const char *name, const union all_addr *addr,
                       const char *arg, const int id, const char *file, const int line)
 {
-	// If domain is "pi.hole", we skip this query
+	// If domain is "lorentz.lan", we skip this query
 	// We compare case-insensitive here
 	// Hint: name can be NULL, e.g. for NODATA/NXDOMAIN replies
-	if(name != NULL && strcasecmp(name, "pi.hole") == 0)
+	if(name != NULL && strcasecmp(name, "lorentz.lan") == 0)
 	{
 		return;
 	}
-	// Defer double_time() until after the pi.hole early exit above: that
+	// Defer double_time() until after the lorentz.lan early exit above: that
 	// path returns immediately without using 'now', so computing it first
-	// would waste a clock_gettime vDSO call for every pi.hole reply
+	// would waste a clock_gettime vDSO call for every lorentz.lan reply
 	// (web interface, API, health checks).
 	const double now = double_time();
 
@@ -2568,8 +2568,8 @@ static void FTL_reply(const unsigned int flags, const char *name, const union al
 	const int queryID = findQueryID(id);
 	if(queryID < 0)
 	{
-		// This may happen e.g. if the original query was "pi.hole"
-		log_debug(DEBUG_QUERIES, "FTL_reply(): Query %i has not been found", id);
+		// This may happen e.g. if the original query was "lorentz.lan"
+		log_debug(DEBUG_QUERIES, "Lorentz_reply(): Query %i has not been found", id);
 		unlock_shm();
 		return;
 	}
@@ -3058,7 +3058,7 @@ static void query_blocked(queriesData *query, domainsData *domain, clientsData *
 	query->flags.database.changed = true;
 }
 
-static void FTL_dnssec(const char *arg, const union all_addr *addr, const int id, const char *file, const int line)
+static void Lorentz_dnssec(const char *arg, const union all_addr *addr, const int id, const char *file, const int line)
 {
 	// Process DNSSEC result for a domain
 	const double now = double_time();
@@ -3153,7 +3153,7 @@ static void get_rcode(const unsigned short rcode, const char **rcodestr, enum re
 	}
 }
 
-static void FTL_upstream_error(const union all_addr *addr, const unsigned int flags, const int id, const char *file, const int line)
+static void Lorentz_upstream_error(const union all_addr *addr, const unsigned int flags, const int id, const char *file, const int line)
 {
 	// Process local and upstream errors
 	// Queries with error are those where the RCODE
@@ -3258,7 +3258,7 @@ static void FTL_upstream_error(const union all_addr *addr, const unsigned int fl
 	unlock_shm();
 }
 
-static void FTL_blocked_upstream_by_header(const enum query_status new_status, const int id, const char *file, const int line)
+static void Lorentz_blocked_upstream_by_header(const enum query_status new_status, const int id, const char *file, const int line)
 {
 	// Get response time
 	const double now = double_time();
@@ -3298,7 +3298,7 @@ static void FTL_blocked_upstream_by_header(const enum query_status new_status, c
 	{
 		// Get domain name (domain cannot be NULL here)
 		const char *domainstr = getstr(domain->domainpos);
-		log_debug(DEBUG_QUERIES, "**** %s externally blocked by header (ID %i, FTL %i, %s:%i)", domainstr, id, queryID, file, line);
+		log_debug(DEBUG_QUERIES, "**** %s externally blocked by header (ID %i, Lorentz %i, %s:%i)", domainstr, id, queryID, file, line);
 	}
 
 	// Set blocking reason
@@ -3322,7 +3322,7 @@ static void FTL_blocked_upstream_by_header(const enum query_status new_status, c
 	unlock_shm();
 }
 
-static void FTL_blocked_upstream_by_addr(const enum query_status new_status, const int id, const char *file, const int line)
+static void Lorentz_blocked_upstream_by_addr(const enum query_status new_status, const int id, const char *file, const int line)
 {
 	// Lock shared memory
 	lock_shm();
@@ -3331,8 +3331,8 @@ static void FTL_blocked_upstream_by_addr(const enum query_status new_status, con
 	const int queryID = findQueryID(id);
 	if(queryID < 0)
 	{
-		// This may happen e.g. if the original query was "pi.hole"
-		log_debug(DEBUG_QUERIES, "FTL_check_reply(): Query %i has not been found", id);
+		// This may happen e.g. if the original query was "lorentz.lan"
+		log_debug(DEBUG_QUERIES, "Lorentz_check_reply(): Query %i has not been found", id);
 		unlock_shm();
 		return;
 	}
@@ -3342,7 +3342,7 @@ static void FTL_blocked_upstream_by_addr(const enum query_status new_status, con
 	if(query == NULL)
 	{
 		// Memory error, skip this query
-		log_debug(DEBUG_QUERIES, "FTL_check_reply(): Memory error (ID %i)", id);
+		log_debug(DEBUG_QUERIES, "Lorentz_check_reply(): Memory error (ID %i)", id);
 		unlock_shm();
 		return;
 	}
@@ -3356,7 +3356,7 @@ static void FTL_blocked_upstream_by_addr(const enum query_status new_status, con
 	{
 		// Get domain name (domain cannot be NULL here)
 		const char *domainName = domain ? getstr(domain->domainpos) : "<cannot access domain>";
-		log_debug(DEBUG_QUERIES, "**** %s externally blocked by address (ID %i, FTL %i, %s:%i)", domainName, id, queryID, file, line);
+		log_debug(DEBUG_QUERIES, "**** %s externally blocked by address (ID %i, Lorentz %i, %s:%i)", domainName, id, queryID, file, line);
 	}
 
 	// Mark query for updating in the database
@@ -3366,7 +3366,7 @@ static void FTL_blocked_upstream_by_addr(const enum query_status new_status, con
 	unlock_shm();
 }
 
-int _FTL_check_reply(const unsigned int rcode, const unsigned short flags,
+int _Lorentz_check_reply(const unsigned int rcode, const unsigned short flags,
                      const union all_addr *addr,
                      const int id, const char *file, const int line)
 {
@@ -3377,7 +3377,7 @@ int _FTL_check_reply(const unsigned int rcode, const unsigned short flags,
 	// If the response code (rcode) is NXDOMAIN, we may be seeing a response from
 	// an externally blocked query. As they are not always accompany a necessary
 	// SOA record, they are not getting added to our cache and, therefore,
-	// FTL_reply() is never getting called from within the cache routines.
+	// Lorentz_reply() is never getting called from within the cache routines.
 	// Hence, we have to store the necessary information about the NXDOMAIN
 	// reply already here.
 	// Alternatively, we also consider EDE15 as a blocking reason.
@@ -3386,7 +3386,7 @@ int _FTL_check_reply(const unsigned int rcode, const unsigned short flags,
 		// RA and AA bits are not set and rcode is NXDOMAIN
 		if(!rabit && !aabit && rcode == NXDOMAIN)
 		{
-			FTL_blocked_upstream_by_header(QUERY_EXTERNAL_BLOCKED_NXRA, id, file, line);
+			Lorentz_blocked_upstream_by_header(QUERY_EXTERNAL_BLOCKED_NXRA, id, file, line);
 
 			// Query is blocked
 			return 1;
@@ -3395,7 +3395,7 @@ int _FTL_check_reply(const unsigned int rcode, const unsigned short flags,
 		// EDE 15
 		if(edns != NULL && edns->ede == EDE_BLOCKED)
 		{
-			FTL_blocked_upstream_by_header(QUERY_EXTERNAL_BLOCKED_EDE15, id, file, line);
+			Lorentz_blocked_upstream_by_header(QUERY_EXTERNAL_BLOCKED_EDE15, id, file, line);
 
 			// Query is blocked
 			return 1;
@@ -3410,7 +3410,7 @@ int _FTL_check_reply(const unsigned int rcode, const unsigned short flags,
 		// Update status of this query if detected as external blocking
 		if(new_qstatus != QUERY_UNKNOWN)
 		{
-			FTL_blocked_upstream_by_addr(new_qstatus, id, file, line);
+			Lorentz_blocked_upstream_by_addr(new_qstatus, id, file, line);
 
 			// Query is blocked upstream
 
@@ -3425,7 +3425,7 @@ int _FTL_check_reply(const unsigned int rcode, const unsigned short flags,
 	return 0;
 }
 
-void _FTL_header_analysis(const struct dns_header *header, const struct server *server,
+void _Lorentz_header_analysis(const struct dns_header *header, const struct server *server,
                           const int id, const char *file, const int line)
 {
 	// Analyze DNS header bits
@@ -3434,7 +3434,7 @@ void _FTL_header_analysis(const struct dns_header *header, const struct server *
 	adbit = header->hb4 & HB4_AD;
 
 	// Check if RA and AA bit is set in DNS header. We do it here as it is it is
-	// forced by dnsmasq shortly after calling FTL_header_analysis()
+	// forced by dnsmasq shortly after calling Lorentz_header_analysis()
 	rabit = header->hb4 & HB4_RA;
 	aabit = header->hb3 & HB3_AA;
 
@@ -3489,7 +3489,7 @@ static void _query_set_reply(const unsigned int flags, const enum reply_type rep
 	}
 	// else: Iterate through possible values by analyzing both the flags and the addr bits
 	else if(flags & F_NEG ||
-	        (flags & F_NOERR && !(flags & (F_IPV4 | F_IPV6))) || // <-- FTL_make_answer() when no A or AAAA is added
+	        (flags & F_NOERR && !(flags & (F_IPV4 | F_IPV6))) || // <-- Lorentz_make_answer() when no A or AAAA is added
 	        force_next_DNS_reply == REPLY_NXDOMAIN ||
 	        force_next_DNS_reply == REPLY_NODATA)
 	{
@@ -3579,16 +3579,16 @@ static void _query_set_reply(const unsigned int flags, const enum reply_type rep
 	set_response_time(query, now);
 }
 
-void FTL_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start)
+void Lorentz_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start)
 {
 	// Going into daemon mode involves storing the
-	// PID of the generated child process. If FTL
+	// PID of the generated child process. If Lorentz
 	// is asked to stay in foreground, we just save
 	// the PID of the current process in the PID file
 	if(daemonmode)
 		go_daemon();
 
-	// Initialize query database (pihole-FTL.db)
+	// Initialize query database (lorentz.db)
 	db_init();
 
 	// Initialize in-memory databases
@@ -3599,7 +3599,7 @@ void FTL_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start)
 	// not corrupted and that the binary is not tampered with. We can only
 	// do this here as we need the database to be properly initialized
 	// in case we need to store the verification result
-	verify_FTL(false);
+	verify_Lorentz(false);
 
 	// Handle real-time signals in this process (and its children)
 	// Helper processes are already split from the main instance
@@ -3612,13 +3612,13 @@ void FTL_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start)
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 
-	// Deny CAP_CHOWN to anything FTL executes, before the worker threads below
+	// Deny CAP_CHOWN to anything Lorentz executes, before the worker threads below
 	// are created. Capability sets are per-thread and a new thread inherits a
 	// copy of its creator's, so this has to happen before the threads exist:
 	// clearing the ambient and inheritable sets on the main thread once they
 	// are already running would leave them - and the children they exec, such
 	// as a program a Lua page spawns - holding the systemd-granted ambient
-	// CAP_CHOWN. FTL keeps the capability in its permitted and effective sets
+	// CAP_CHOWN. Lorentz keeps the capability in its permitted and effective sets
 	// for the ownership changes it makes itself (startup, and the RTC device
 	// while ntp.sync.rtc.set is enabled); only the inheritance to children goes.
 	if(getuid() != 0)
@@ -3674,11 +3674,11 @@ void FTL_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start)
 		exit(EXIT_FAILURE);
 	}
 #else
-	// Initialize FTL HTTP server
+	// Initialize Lorentz HTTP server
 	http_init();
 #endif /* HAVE_MBEDTLS */
 
-	// Chown files if FTL started as user root but a dnsmasq config
+	// Chown files if Lorentz started as user root but a dnsmasq config
 	// option states to run as a different user/group (e.g. "nobody")
 	if(getuid() == 0)
 	{
@@ -3686,16 +3686,16 @@ void FTL_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start)
 		// we're actually dropping root (user/group may be set to root)
 		if(ent_pw != NULL && ent_pw->pw_uid != 0)
 		{
-			log_info("FTL is going to drop from root to user pihole");
+			log_info("Lorentz is going to drop from root to user lorentz");
 
 			// Change ownership of shared memory objects
 			chown_all_shmem(ent_pw);
 
-			// Configured FTL log file
-			chown_pihole(config.files.log.ftl.v.s, ent_pw);
+			// Configured Lorentz log file
+			chown_lorentz(config.files.log.lorentz.v.s, ent_pw);
 
-			// Configured FTL database file
-			chown_pihole(config.files.database.v.s, ent_pw);
+			// Configured Lorentz database file
+			chown_lorentz(config.files.database.v.s, ent_pw);
 
 			// Check if auxiliary files exist and change ownership
 			char *extrafile = calloc(strlen(config.files.database.v.s) + 5, sizeof(char));
@@ -3709,20 +3709,20 @@ void FTL_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start)
 			strcpy(extrafile, config.files.database.v.s);
 			strcat(extrafile, "-wal");
 			if(file_exists(extrafile))
-				chown_pihole(extrafile, ent_pw);
+				chown_lorentz(extrafile, ent_pw);
 
 			// Check <database>-shm file (mmapped shared memory)
 			strcpy(extrafile, config.files.database.v.s);
 			strcat(extrafile, "-shm");
 			if(file_exists(extrafile))
-				chown_pihole(extrafile, ent_pw);
+				chown_lorentz(extrafile, ent_pw);
 
 			// Free allocated memory
 			free(extrafile);
 		}
 		else
 		{
-			log_info("FTL is running as root");
+			log_info("Lorentz is running as root");
 		}
 	}
 	else
@@ -3730,19 +3730,19 @@ void FTL_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start)
 		uid_t uid;
 		struct passwd *current_user;
 		if ((current_user = getpwuid(uid = geteuid())) != NULL)
-			log_info("FTL is running as user %s (UID %d)",
+			log_info("Lorentz is running as user %s (UID %d)",
 			     current_user->pw_name, (int)current_user->pw_uid);
 		else
-			log_info("Failed to obtain information about FTL user");
+			log_info("Failed to obtain information about Lorentz user");
 
 		// The ambient and inheritable sets were cleared before the worker
-		// threads were created (see the deny above), so nothing FTL executes
-		// can inherit CAP_CHOWN, no matter which thread runs it. FTL keeps the
+		// threads were created (see the deny above), so nothing Lorentz executes
+		// can inherit CAP_CHOWN, no matter which thread runs it. Lorentz keeps the
 		// capability in its own permitted and effective sets while starting up;
 		// from here on it chowns files it created itself, which the owning user
-		// may do without any capability. When the RTC is not being set FTL has
+		// may do without any capability. When the RTC is not being set Lorentz has
 		// no further use for it and takes it out of use on the main thread as
-		// well. The permitted copy stays for FTL's own restart, see main().
+		// well. The permitted copy stays for Lorentz's own restart, see main().
 		// Setting the RTC changes ownership of the device repeatedly during
 		// runtime, so that path keeps it.
 		if(config.ntp.sync.rtc.set.v.b)
@@ -3760,24 +3760,24 @@ void FTL_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start)
 
 static char *get_ptrname(const struct in_addr *addr)
 {
-	// Determine the name Pi-hole should reply with to PTR queries for its own
+	// Determine the name Lorentz should reply with to PTR queries for its own
 	// interface addresses.
 	//
-	// PTR_PIHOLE and PTR_HOSTNAME are independent of the queried address and
+	// PTR_LORENTZ and PTR_HOSTNAME are independent of the queried address and
 	// return a stable string. PTR_HOSTNAMEFQDN, however, appends a domain
 	// suffix that may differ per address when conditional domains
 	// (domain=<domain>,<address range>) are configured. We must therefore not
 	// cache a single result across addresses: the caller stores the returned
 	// pointer in a persistent per-interface PTR record, so each address needs
-	// its own string. check_pihole_PTR() ensures we are called at most once
+	// its own string. check_lorentz_PTR() ensures we are called at most once
 	// per address, so the per-address allocation is bounded.
-	switch (config.dns.piholePTR.v.ptr_type)
+	switch (config.dns.lorentzPTR.v.ptr_type)
 	{
 		default:
 		case PTR_MAX:
 		case PTR_NONE:
-		case PTR_PIHOLE:
-			return (char*)"pi.hole";
+		case PTR_LORENTZ:
+			return (char*)"lorentz.lan";
 
 		case PTR_HOSTNAME:
 			return (char*)hostname();
@@ -3794,8 +3794,8 @@ static char *get_ptrname(const struct in_addr *addr)
 				suffix = (char*)domainname();
 
 			// If local suffix is still not available, we substitute
-			// "no_fqdn_available", see the comment about PIHOLE_PTR=HOSTNAMEFQDN
-			// in the Pi-hole docs for further details on why this was chosen
+			// "no_fqdn_available", see the comment about LORENTZ_PTR=HOSTNAMEFQDN
+			// in the Lorentz docs for further details on why this was chosen
 			if(!suffix || suffix[0] == '\0')
 				suffix = (char*)"no_fqdn_available";
 
@@ -3813,7 +3813,7 @@ static char *get_ptrname(const struct in_addr *addr)
 	}
 }
 
-void FTL_forwarding_retried(struct frec *forward, const int newID, const bool dnssec)
+void Lorentz_forwarding_retried(struct frec *forward, const int newID, const bool dnssec)
 {
 	// Forwarding to upstream server failed
 	const struct server *serv = forward->sentto;
@@ -3902,7 +3902,7 @@ void FTL_forwarding_retried(struct frec *forward, const int newID, const bool dn
 // We close the dedicated database connection this client had opened
 // to avoid dangling database locks
 volatile atomic_flag worker_already_terminating = ATOMIC_FLAG_INIT;
-void FTL_TCP_worker_terminating(bool finished)
+void Lorentz_TCP_worker_terminating(bool finished)
 {
 	if(!finished)
 	{
@@ -3956,12 +3956,12 @@ void FTL_TCP_worker_terminating(bool finished)
 }
 
 // Called when a (forked) TCP worker is created
-// FTL forked to handle TCP connections with dedicated (forked) workers
+// Lorentz forked to handle TCP connections with dedicated (forked) workers
 // SQLite3's mentions that carrying an open database connection across a
 // fork() can lead to all kinds of locking problems as SQLite3 was not
 // intended to work under such circumstances. Doing so may easily lead
 // to ending up with a corrupted database.
-void FTL_TCP_worker_created(const int confd)
+void Lorentz_TCP_worker_created(const int confd)
 {
 	if(get_dnsmasq_debug())
 	{
@@ -4023,7 +4023,7 @@ void FTL_TCP_worker_created(const int confd)
 	gravityDB_forked();
 }
 
-bool FTL_unlink_DHCP_lease(const char *ipaddr, const char **hint)
+bool Lorentz_unlink_DHCP_lease(const char *ipaddr, const char **hint)
 {
 	struct dhcp_lease *lease;
 	union all_addr addr;
@@ -4076,7 +4076,7 @@ bool FTL_unlink_DHCP_lease(const char *ipaddr, const char **hint)
 	return true;
 }
 
-void FTL_query_in_progress(const int id)
+void Lorentz_query_in_progress(const int id)
 {
 	// Query (possibly from new source), but the same query may be in
 	// progress from another source.
@@ -4123,7 +4123,7 @@ void FTL_query_in_progress(const int id)
 	unlock_shm();
 }
 
-void FTL_multiple_replies(const int id, int *firstID)
+void Lorentz_multiple_replies(const int id, int *firstID)
 {
 	// We are in the loop that iterates over all aggregated queries for the same
 	// type + domain. Every query will receive the reply here so we need to
@@ -4133,7 +4133,7 @@ void FTL_multiple_replies(const int id, int *firstID)
 	if(*firstID == id)
 		return;
 
-	// Skip if the original query was not found in FTL's memory
+	// Skip if the original query was not found in Lorentz's memory
 	if(*firstID == -2)
 		return;
 
@@ -4224,7 +4224,7 @@ static void _query_set_dnssec(queriesData *query, const enum dnssec_status dnsse
 }
 
 // Add dnsmasq log line to internal FIFO buffer (can be queried via the API)
-void FTL_dnsmasq_log(const char *payload, const int length)
+void Lorentz_dnsmasq_log(const char *payload, const int length)
 {
 	// Lock SHM
 	lock_shm();
@@ -4255,7 +4255,7 @@ void get_dnsmasq_metrics_obj(cJSON *json)
 		cJSON_AddNumberToObject(json, get_metric_name(i), daemon->metrics[i]);
 }
 
-void FTL_connection_error(const char *reason, const union mysockaddr *addr, const char where)
+void Lorentz_connection_error(const char *reason, const union mysockaddr *addr, const char where)
 {
 	// Backup errno
 	const int errnum = errno;
@@ -4293,13 +4293,13 @@ void FTL_connection_error(const char *reason, const union mysockaddr *addr, cons
 
 	// Get query ID, may be negative if this is a TCP query
 	const int id = daemon->log_display_id > 0 ? daemon->log_display_id : -daemon->log_display_id;
-	// Log to FTL.log
+	// Log to lorentz.log
 	log_debug(DEBUG_QUERIES, "Connection error (%s#%u, ID %d): %s (%s)%s", ip, port, id, reason, error, extra);
 
-	// Log to pihole.log
+	// Log to lorentz.log
 	my_syslog(priority, "%s: %s", reason, error);
 
-	// Add to Pi-hole diagnostics but do not add messages more often than
+	// Add to Lorentz diagnostics but do not add messages more often than
 	// once every five seconds to avoid hammering the database with errors
 	// on continuously failing connections
 	static time_t last = 0;

@@ -102,8 +102,8 @@ int send_from(int fd, int nowild, char *packet, size_t len,
       /* If interface is still in DAD, EINVAL results - ignore that. */
       if (errno != EINVAL)
 	{
-	  /********** Pi-hole modification **********/
-	  FTL_connection_error("failed to send UDP reply", to, -1);
+	  /********** Lorentz modification **********/
+	  Lorentz_connection_error("failed to send UDP reply", to, -1);
 	  /******************************************/
 	  my_syslog(LOG_ERR, _("failed to send packet: %s"), strerror(errno));
 	}
@@ -124,7 +124,7 @@ static void set_outgoing_mark(struct frec *forward, int fd)
 }
 #endif
 
-// Pi-hole modified
+// Lorentz modified
 #define log_query_mysockaddr(flags, name, addr, arg, type) _log_query_mysockaddr(flags, name, addr, arg, type, __LINE__)
 static void _log_query_mysockaddr(unsigned int flags, char *name, union mysockaddr *addr, char *arg, unsigned short type, const int line)
 {
@@ -328,7 +328,7 @@ static void forward_query(int udpfd, union mysockaddr *udpaddr,
 	     forwarding the second. */
 	  if (difftime(now, forward->time) < 2)
 	    {
-	      FTL_query_in_progress(daemon->log_display_id);
+	      Lorentz_query_in_progress(daemon->log_display_id);
 	      return;
 	    }
 	}
@@ -469,7 +469,7 @@ static void forward_query(int udpfd, union mysockaddr *udpaddr,
 	  /* get query for logging. */
 	  gotname = extract_request(header, plen, daemon->namebuff, NULL, NULL);
 
-	  FTL_forwarding_retried(forward, daemon->log_display_id, true);
+	  Lorentz_forwarding_retried(forward, daemon->log_display_id, true);
 	  
 	  /* Find suitable servers: should never fail. */
 	  if (!filter_servers(forward->sentto->arrayposn, F_DNSSECOK, &first, &last))
@@ -487,7 +487,7 @@ static void forward_query(int udpfd, union mysockaddr *udpaddr,
 	  else
 	    forward->sentto->retrys++;
 
-	  FTL_forwarding_retried(forward, daemon->log_display_id, false);
+	  Lorentz_forwarding_retried(forward, daemon->log_display_id, false);
 	  
 	  if (!filter_servers(forward->sentto->arrayposn, F_SERVER, &first, &last))
 	    goto reply;
@@ -583,9 +583,9 @@ static void forward_query(int udpfd, union mysockaddr *udpaddr,
 		break;
 	      forward->forwardall++;
 	    }
-	    /**** Pi-hole modification ****/
+	    /**** Lorentz modification ****/
 	    else
-	      FTL_connection_error("failed to send UDP request", &srv->addr, -1);
+	      Lorentz_connection_error("failed to send UDP request", &srv->addr, -1);
 	    /******************************/
 	}
       
@@ -721,7 +721,7 @@ static size_t process_reply(struct dns_header *header, time_t now, struct server
   int is_sign;
   unsigned int rcode = RCODE(header);
   size_t plen; 
-  /******** Pi-hole modification ********/
+  /******** Lorentz modification ********/
   unsigned char ede_data[MAX_EDE_DATA] = { 0 };
   size_t ede_len = 0;
   /**************************************/
@@ -747,9 +747,9 @@ static size_t process_reply(struct dns_header *header, time_t now, struct server
       /* Get extended RCODE. */
       rcode |= sizep[2] << 4;
 
-      // Pi-hole modification: Interpret the pseudoheader before
+      // Lorentz modification: Interpret the pseudoheader before
       // it might get stripped off below (added_pheader == true)
-      FTL_parse_pseudoheaders(pheader, (size_t)plen);
+      Lorentz_parse_pseudoheaders(pheader, (size_t)plen);
       
       if (option_bool(OPT_CLIENT_SUBNET) && !check_source(header, n, pheader, query_source))
 	{
@@ -786,7 +786,7 @@ static size_t process_reply(struct dns_header *header, time_t now, struct server
 	}
     }
   
-  FTL_header_analysis(header, server, daemon->log_display_id);
+  Lorentz_header_analysis(header, server, daemon->log_display_id);
   
   /* RFC 4035 sect 4.6 para 3 */
   if (!is_sign && !option_bool(OPT_DNSSEC_PROXY))
@@ -873,13 +873,13 @@ static size_t process_reply(struct dns_header *header, time_t now, struct server
 	      ede = EDE_OTHER;
 	    }
 
-	/* Pi-hole modification */
+	/* Lorentz modification */
 	if(rc == 99)
 	    {
 	      cache_secure = 0;
 	      // Generate DNS packet for reply, a possibly existing pseudo header
 	      // will be restored later inside resize_packet()
-	      n = FTL_make_answer(header, ((char *) header) + 65536, n, ede_data, &ede_len);
+	      n = Lorentz_make_answer(header, ((char *) header) + 65536, n, ede_data, &ede_len);
 	    }
 	}
       
@@ -913,7 +913,7 @@ static size_t process_reply(struct dns_header *header, time_t now, struct server
   /* the code above can elide sections of the packet. Find the new length here 
      and put back pseudoheader if it was removed. */
   n = resize_packet(header, n, pheader, plen);
-  /******** Pi-hole modification ********/
+  /******** Lorentz modification ********/
   if (pheader && (ede != EDE_UNSET || ede_len > 0))
     {
       if (ede_len > 0)
@@ -1267,7 +1267,7 @@ void reply_query(int fd, time_t now)
 
   server = daemon->serverarray[c];
 
-  FTL_header_analysis(header, server, daemon->log_display_id);
+  Lorentz_header_analysis(header, server, daemon->log_display_id);
 
   if (RCODE(header) != REFUSED)
     daemon->serverarray[first]->last_server = c;
@@ -1554,7 +1554,7 @@ void return_reply(time_t now, struct frec *forward, struct dns_header *header, s
 	  daemon->log_source_addr = &forward->frec_src.source;
 	  log_query(F_UPSTREAM, NULL, NULL, "truncated", 0);
 	  
-	  /* Pi-hole modification */
+	  /* Lorentz modification */
 	  int first_ID = -1;
 
 	  /* This gets the name back to the state it was in when we started. */
@@ -1575,8 +1575,8 @@ void return_reply(time_t now, struct frec *forward, struct dns_header *header, s
 #ifdef HAVE_DUMPFILE
 		  dump_packet_udp(DUMP_REPLY, daemon->packet, (size_t)new, NULL, &src->source, src->fd);
 #endif
-		  /* Pi-hole modification */
-		  FTL_multiple_replies(src->log_id, &first_ID);
+		  /* Lorentz modification */
+		  Lorentz_multiple_replies(src->log_id, &first_ID);
 		}
 	    }
 	}
@@ -1675,8 +1675,8 @@ void receive_query(struct listener *listen, time_t now)
    /* Can always get recvd interface for IPv6 */
   int check_dst = !option_bool(OPT_NOWILD) || family == AF_INET6;
 
-  /************ Pi-hole modification ************/
-  bool piholeblocked = false;
+  /************ Lorentz modification ************/
+  bool lorentzblocked = false;
   /**********************************************/
   
   /* packet buffer overwritten */
@@ -1876,9 +1876,9 @@ void receive_query(struct listener *listen, time_t now)
 	    dst_addr_4.s_addr = 0;
 	}
     }
-    /********************* Pi-hole modification ***********************/
+    /********************* Lorentz modification ***********************/
     // This gets the interface in all cases where this is possible here
-    FTL_iface(listen->iface, &dst_addr, family);
+    Lorentz_iface(listen->iface, &dst_addr, family);
     /****************************************************************/
    
   /* log_query gets called indirectly all over the place, so 
@@ -1894,16 +1894,16 @@ void receive_query(struct listener *listen, time_t now)
   if (option_bool(OPT_CMARK_ALST_EN))
     have_mark = get_incoming_mark(&source_addr, &dst_addr, /* istcp: */ 0, &mark);
 #endif
-  //********************** Pi-hole modification **********************//
+  //********************** Lorentz modification **********************//
   { size_t phlen = 0;
     pheader = find_pseudoheader(header, (size_t)n, &phlen, NULL, NULL, NULL);
-    FTL_parse_pseudoheaders(pheader, phlen); }
+    Lorentz_parse_pseudoheaders(pheader, phlen); }
   //******************************************************************//
 
   if (OPCODE(header) != QUERY)
   {
       log_query_mysockaddr((auth_dns ? F_NOERR : 0) | F_QUERY | F_FORWARD | F_CONFIG, NULL, &source_addr, NULL, OPCODE(header));
-      piholeblocked = FTL_new_query(F_QUERY | F_FORWARD , "opcode",
+      lorentzblocked = Lorentz_new_query(F_QUERY | F_FORWARD , "opcode",
 				    &source_addr, "non-query", 0, daemon->log_display_id, UDP);
   }
   else if (extract_request(header, (size_t)n, daemon->namebuff, &type, NULL))
@@ -1913,7 +1913,7 @@ void receive_query(struct listener *listen, time_t now)
 #endif
       log_query_mysockaddr((auth_dns ? F_NOERR | F_AUTH : 0 ) | F_QUERY | F_FORWARD, daemon->namebuff,
 			   &source_addr, NULL, type);
-      piholeblocked = FTL_new_query(F_QUERY | F_FORWARD , daemon->namebuff,
+      lorentzblocked = Lorentz_new_query(F_QUERY | F_FORWARD , daemon->namebuff,
 				    &source_addr, auth_dns ? "auth" : "query", type, daemon->log_display_id, UDP);
       
 #ifdef HAVE_AUTH
@@ -1980,13 +1980,13 @@ void receive_query(struct listener *listen, time_t now)
   if (header->hb4 & HB4_CD)
     fwd_flags |= FREC_CHECKING_DISABLED;
 
-  /************ Pi-hole modification ************/
-  if(piholeblocked)
+  /************ Lorentz modification ************/
+  if(lorentzblocked)
   {
     // Generate DNS packet for reply
     unsigned char ede_data[MAX_EDE_DATA] = { 0 };
     size_t ede_len = 0;
-    n = FTL_make_answer(header, ((char *) header) + udp_size, n, ede_data, &ede_len);
+    n = Lorentz_make_answer(header, ((char *) header) + udp_size, n, ede_data, &ede_len);
     // The pseudoheader may contain important information such as EDNS0 version important for
     // some DNS resolvers (such as systemd-resolved) to work properly. We should not discard them.    
     // Check if this query is to be dropped. If so, return immediately without sending anything
@@ -2142,7 +2142,7 @@ static ssize_t tcp_talk(int first, int last, int start, struct dns_header *heade
   unsigned char *p;
   struct timeval tv;
 
-  // Pi-hole
+  // Lorentz
   char where = 0;
   struct iovec sendio[2];
 #ifdef MSG_FASTOPEN
@@ -2240,8 +2240,8 @@ static ssize_t tcp_talk(int first, int last, int start, struct dns_header *heade
 	      int port;
 	      
 	    failed:
-	      /**** Pi-hole modification ****/
-	      FTL_connection_error("TCP connection failed", &serv->addr, where);
+	      /**** Lorentz modification ****/
+	      Lorentz_connection_error("TCP connection failed", &serv->addr, where);
 	      /******************************/
 
 	      port = prettyprint_addr(&serv->addr, daemon->addrbuff);
@@ -2391,7 +2391,7 @@ static int tcp_key_recurse(time_t now, int status, struct dns_header *header, si
   struct iovec new_packet;
   struct dns_header *query_header = NULL, *new_header;
 
-  FTL_header_analysis(header, server, daemon->log_display_id);
+  Lorentz_header_analysis(header, server, daemon->log_display_id);
 
   new_packet.iov_base = NULL;
   new_packet.iov_len = 0;
@@ -2497,8 +2497,8 @@ void tcp_request(int confd, time_t now, struct iovec *bigbuff,
   int have_mark = 0;
   int first, last, filtered, do_stale = 0;
       
-  /************ Pi-hole modification ************/
-  bool piholeblocked = false;
+  /************ Lorentz modification ************/
+  bool lorentzblocked = false;
   /**********************************************/
   struct iovec out_iov[2];
   
@@ -2605,10 +2605,10 @@ void tcp_request(int confd, time_t now, struct iovec *bigbuff,
 	  daemon->log_display_id = -(++daemon->log_id);
 	  daemon->log_source_addr = &peer_addr;
 
-	  //********************** Pi-hole modification **********************//
+	  //********************** Lorentz modification **********************//
 	  { size_t phlen = 0;
 	    pheader = find_pseudoheader(header, (size_t)size, &phlen, NULL, NULL, NULL);
-	    FTL_parse_pseudoheaders(pheader, phlen); }
+	    Lorentz_parse_pseudoheaders(pheader, phlen); }
 	  //******************************************************************//
 	  
 	  if (OPCODE(header) != QUERY)
@@ -2616,7 +2616,7 @@ void tcp_request(int confd, time_t now, struct iovec *bigbuff,
 	      log_query_mysockaddr((auth_dns ? F_NOERR : 0) |  F_QUERY | F_FORWARD | F_CONFIG, NULL, &peer_addr, NULL, OPCODE(header));
 	      gotname = 0;
 	      flags = F_RCODE;
-	      piholeblocked = FTL_new_query(F_QUERY | F_FORWARD , "opcode",
+	      lorentzblocked = Lorentz_new_query(F_QUERY | F_FORWARD , "opcode",
 					    &peer_addr, "non-query", 0, daemon->log_display_id, TCP);
 	    }
 	  else if (!(gotname = extract_request(header, (unsigned int)size, daemon->namebuff, &qtype, NULL)))
@@ -2640,7 +2640,7 @@ void tcp_request(int confd, time_t now, struct iovec *bigbuff,
 	      log_query_mysockaddr((auth_dns ? F_NOERR | F_AUTH : 0) | F_QUERY | F_FORWARD, daemon->namebuff,
 				   &peer_addr, NULL, qtype);
 	      
-	      piholeblocked = FTL_new_query(F_QUERY | F_FORWARD, daemon->namebuff,
+	      lorentzblocked = Lorentz_new_query(F_QUERY | F_FORWARD, daemon->namebuff,
 					    &peer_addr, auth_dns ? "auth" : "query", qtype, daemon->log_display_id, TCP);
 
 #ifdef HAVE_AUTH
@@ -2699,15 +2699,15 @@ void tcp_request(int confd, time_t now, struct iovec *bigbuff,
 	      else if (auth_dns)
 		m = answer_auth(out_header, ((char *) out_header) + 65536, (size_t)size, now, &peer_addr, local_auth);
 #endif
-	      /************ Pi-hole modification ************/
+	      /************ Lorentz modification ************/
 	      // Interface name is known from before forking
-	      else if(piholeblocked)
+	      else if(lorentzblocked)
 	      {
 		unsigned char ede_data[MAX_EDE_DATA] = { 0 };
 		size_t ede_len = 0;
 		stale = 0;
 		// Generate DNS packet for reply
-		m = FTL_make_answer(out_header, ((char *) out_header) + 65536, size, ede_data, &ede_len);
+		m = Lorentz_make_answer(out_header, ((char *) out_header) + 65536, size, ede_data, &ede_len);
 		// The pseudoheader may contain important information such as EDNS0 version important for
 		// some DNS resolvers (such as systemd-resolved) to work properly. We should not discard them.
 		if (have_pseudoheader && m > 0)
@@ -2872,7 +2872,7 @@ void tcp_request(int confd, time_t now, struct iovec *bigbuff,
 	break;
       
       /* In case of local answer or no connections made. */
-      if (m == 0 && !piholeblocked) // Pi-hole modified to ensure we don't provide local answers when dropping the reply
+      if (m == 0 && !lorentzblocked) // Lorentz modified to ensure we don't provide local answers when dropping the reply
 	{
 	  if (!(m = make_local_answer(flags, gotname, size, out_header, daemon->namebuff,
 				      65536, first, last, ede)))

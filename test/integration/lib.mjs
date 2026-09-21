@@ -1,4 +1,4 @@
-// Helpers of the pihole-FTL integration tests: image build, container start,
+// Helpers of the lorentz integration tests: image build, container start,
 // and thin wrappers around the API, DNS and the SQLite shell of the binary
 // under test.
 import { existsSync, mkdtempSync, copyFileSync, rmSync, statSync } from "node:fs";
@@ -10,32 +10,32 @@ import { GenericContainer, Wait } from "testcontainers";
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "..", "..");
 
-export const IMAGE_TAG = "ftl-integration-test:local";
+export const IMAGE_TAG = "lorentz-integration-test:local";
 
-// The binary under test: FTL_BINARY if set, otherwise the most recently built
+// The binary under test: LORENTZ_BINARY if set, otherwise the most recently built
 // of the one ./build.sh leaves in the repository root and the one in the CMake
 // build directory
 export function findBinary() {
-  if (process.env.FTL_BINARY) {
-    if (!existsSync(process.env.FTL_BINARY))
-      throw new Error(`FTL_BINARY does not exist: ${process.env.FTL_BINARY}`);
-    return process.env.FTL_BINARY;
+  if (process.env.LORENTZ_BINARY) {
+    if (!existsSync(process.env.LORENTZ_BINARY))
+      throw new Error(`LORENTZ_BINARY does not exist: ${process.env.LORENTZ_BINARY}`);
+    return process.env.LORENTZ_BINARY;
   }
-  const candidates = [join(repo, "pihole-FTL"), join(repo, "cmake", "pihole-FTL")].filter((path) => existsSync(path));
+  const candidates = [join(repo, "lorentz"), join(repo, "cmake", "lorentz")].filter((path) => existsSync(path));
   if (candidates.length === 0)
-    throw new Error("No pihole-FTL binary found, build it (./build.sh) or set FTL_BINARY");
+    throw new Error("No lorentz binary found, build it (./build.sh) or set LORENTZ_BINARY");
   candidates.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
   return candidates[0];
 }
 
 // Build the runtime image around the binary under test
 export async function buildImage() {
-  const context = mkdtempSync(join(tmpdir(), "ftl-integration-"));
+  const context = mkdtempSync(join(tmpdir(), "lorentz-integration-"));
   try {
     copyFileSync(join(here, "Dockerfile"), join(context, "Dockerfile"));
     const binary = findBinary();
-    console.log(`# pihole-FTL under test: ${binary}`);
-    copyFileSync(binary, join(context, "pihole-FTL"));
+    console.log(`# lorentz under test: ${binary}`);
+    copyFileSync(binary, join(context, "lorentz"));
     copyFileSync(join(repo, "test", "gravity.db.sql"), join(context, "gravity.db.sql"));
     copyFileSync(join(repo, "test", "versions"), join(context, "versions"));
     await GenericContainer.fromDockerfile(context).build(IMAGE_TAG, { deleteOnExit: false });
@@ -44,19 +44,19 @@ export async function buildImage() {
   }
 }
 
-// Start FTL in a fresh container. The API is open (empty password) unless
+// Start Lorentz in a fresh container. The API is open (empty password) unless
 // the environment says otherwise. The default upstream list is empty, so
-// every answer in these tests comes from FTL itself
-export async function startFtl(environment = {}, { command, files = [] } = {}) {
+// every answer in these tests comes from Lorentz itself
+export async function startLorentz(environment = {}, { command, files = [] } = {}) {
   let container = new GenericContainer(IMAGE_TAG);
   if (command) container = container.withCommand(command);
   if (files.length) container = container.withCopyFilesToContainer(files);
   return container
     .withEnvironment({
-      FTLCONF_webserver_api_password: "",
-      FTLCONF_dns_hosts: "1.2.3.4 local.example.com",
+      LORENTZCONF_webserver_api_password: "",
+      LORENTZCONF_dns_hosts: "1.2.3.4 local.example.com",
       // Store the network table and the long-term database quickly
-      FTLCONF_database_DBinterval: "2",
+      LORENTZCONF_database_DBinterval: "2",
       ...environment,
     })
     .withExposedPorts(80)
@@ -67,8 +67,8 @@ export async function startFtl(environment = {}, { command, files = [] } = {}) {
 
 // Restart the container. Mapped ports can change, so callers must not cache
 // the base URL across this call
-export async function restartFtl(container) {
-  // The timeout is in milliseconds. It has to be long enough for FTL to export
+export async function restartLorentz(container) {
+  // The timeout is in milliseconds. It has to be long enough for Lorentz to export
   // its queries and close the databases, or docker kills it
   await container.restart({ timeout: 30_000 });
   await waitForApi(container);
@@ -87,7 +87,7 @@ export async function waitForApi(container, timeoutMs = 60_000) {
     }
     await sleep(250);
   }
-  throw new Error(`FTL API did not come up: ${last}`);
+  throw new Error(`Lorentz API did not come up: ${last}`);
 }
 
 export const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
@@ -130,7 +130,7 @@ export async function run(container, command) {
   return result.output.trim();
 }
 
-// Ask FTL's own DNS server. Returns the answer lines (empty for no answer)
+// Ask Lorentz's own DNS server. Returns the answer lines (empty for no answer)
 export async function dig(container, name, type = "A") {
   const result = await container.exec([
     "dig", "+short", "+time=2", "+tries=1", type, name, "@127.0.0.1",
@@ -157,22 +157,22 @@ export async function eventually(description, check, { timeoutMs = 20_000, inter
 // The SQLite shell of the binary under test, so a database is read with the
 // same engine that wrote it
 export async function sqlite(container, database, sql) {
-  return run(container, ["pihole-FTL", "sqlite3", "-batch", database, sql]);
+  return run(container, ["lorentz", "sqlite3", "-batch", database, sql]);
 }
 
-export const FTL_DB = "/etc/pihole/pihole-FTL.db";
-export const GRAVITY_DB = "/etc/pihole/gravity.db";
+export const LORENTZ_DB = "/etc/lorentz/lorentz.db";
+export const GRAVITY_DB = "/etc/lorentz/gravity.db";
 
-export async function ftlLog(container) {
-  return run(container, ["cat", "/var/log/pihole/FTL.log"]);
+export async function lorentzLog(container) {
+  return run(container, ["cat", "/var/log/lorentz/lorentz.log"]);
 }
 
-// Wait until FTL has stopped logging for a moment, e.g. after it reloaded its
-// lists in the background. Writing to gravity.db from outside while FTL is
-// reopening it makes FTL report "database is locked" (it does not wait for a
-// busy database on purpose), which says nothing about FTL
+// Wait until Lorentz has stopped logging for a moment, e.g. after it reloaded its
+// lists in the background. Writing to gravity.db from outside while Lorentz is
+// reopening it makes Lorentz report "database is locked" (it does not wait for a
+// busy database on purpose), which says nothing about Lorentz
 export async function settle(container, quietMs = 2500, timeoutMs = 30_000) {
-  const lines = async () => (await ftlLog(container)).split("\n").length;
+  const lines = async () => (await lorentzLog(container)).split("\n").length;
   const deadline = Date.now() + timeoutMs;
   let count = await lines();
   let since = Date.now();

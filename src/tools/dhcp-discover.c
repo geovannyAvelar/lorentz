@@ -1,23 +1,23 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  DHCP discover routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#define FTLDNS
+#define LORENTZDNS
 #include "dnsmasq/dnsmasq.h"
 #undef __USE_XOPEN
-#include "FTL.h"
+#include "lorentz.h"
 #include "dhcp-discover.h"
 // dhcpv6_discover_iface()
 #include "dhcpv6-discover.h"
 // format_time()
 #include "log.h"
-// readFTLconf()
+// readLorentzconf()
 #include "config/config.h"
 // cli_bold(), etc.
 #include "args.h"
@@ -774,8 +774,8 @@ int run_dhcp_discover(void)
 
 	// Disable terminal output during config config file parsing
 	log_ctrl(false, false);
-	// Process pihole-FTL.conf to get gravity.db
-	readFTLconf(&config, false);
+	// Process lorentz.conf to get gravity.db
+	readLorentzconf(&config, false);
 	// Only print to terminal, disable log file
 	log_ctrl(false, true);
 

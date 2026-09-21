@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  HTTP server routines
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -34,7 +34,7 @@ struct api_options {
 	enum fifo_logs which;
 };
 
-struct ftl_conn {
+struct lorentz_conn {
 	struct mg_connection *conn;
 	const struct mg_request_info *request;
 	const enum http_method method;
@@ -53,7 +53,7 @@ struct ftl_conn {
 	struct {
 		bool restart :1;
 		const char *restart_reason;
-	} ftl;
+	} lorentz;
 	struct session session;
 
 	struct api_options opts;
@@ -62,24 +62,24 @@ struct ftl_conn {
 
 char *json_formatter(const cJSON *object);
 
-int send_http(struct ftl_conn *api, const char *mime_type, const char *msg);
-int send_http_code(struct ftl_conn *api, const char *mime_type, int code, const char *msg);
-int send_http_internal_error(struct ftl_conn *api);
-int send_json_unauthorized(struct ftl_conn *api);
-int send_json_error(struct ftl_conn *api, const int code,
+int send_http(struct lorentz_conn *api, const char *mime_type, const char *msg);
+int send_http_code(struct lorentz_conn *api, const char *mime_type, int code, const char *msg);
+int send_http_internal_error(struct lorentz_conn *api);
+int send_json_unauthorized(struct lorentz_conn *api);
+int send_json_error(struct lorentz_conn *api, const int code,
                     const char *key, const char* message,
                     const char *hint);
-int send_json_error_free(struct ftl_conn *api, const int code,
+int send_json_error_free(struct lorentz_conn *api, const int code,
                          const char *key, const char* message,
                          char *hint, bool free_hint, const bool log);
-int send_json_success(struct ftl_conn *api);
+int send_json_success(struct lorentz_conn *api);
 const char *get_http_method_str(const enum http_method method) __attribute__((const));
 
 void http_reread_index_html(void);
 
 // Cookie routines
-bool http_get_cookie_int(struct ftl_conn *api, const char *cookieName, int *i);
-bool http_get_cookie_str(struct ftl_conn *api, const char *cookieName, char *str, size_t str_size);
+bool http_get_cookie_int(struct lorentz_conn *api, const char *cookieName, int *i);
+bool http_get_cookie_str(struct lorentz_conn *api, const char *cookieName, char *str, size_t str_size);
 
 // HTTP parameter routines
 bool get_bool_var(const char *source, const char *var, bool *boolean);
@@ -98,11 +98,11 @@ int get_string_var(const char *source, const char *var, char *dest, size_t dest_
 
 // Utils
 enum http_method __attribute__((pure)) http_method(struct mg_connection *conn);
-const char* startsWith(const char *path, struct ftl_conn *api);
-void read_and_parse_payload(struct ftl_conn *api);
+const char* startsWith(const char *path, struct lorentz_conn *api);
+void read_and_parse_payload(struct lorentz_conn *api);
 char * __attribute__((malloc)) escape_html(const char *string);
-int check_json_payload(struct ftl_conn *api);
-int parse_groupIDs(struct ftl_conn *api, tablerow *table, cJSON *row);
+int check_json_payload(struct lorentz_conn *api);
+int parse_groupIDs(struct lorentz_conn *api, tablerow *table, cJSON *row);
 char * __attribute__((malloc)) escape_json(const char *string);
 void cJSON_unique_array(cJSON *array);
 

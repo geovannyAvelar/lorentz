@@ -50,7 +50,7 @@
 #define ETHERSFILE "/etc/ethers"
 #define DEFLEASE 3600 /* default DHCPv4 lease time, one hour */
 #define DEFLEASE6 (3600*24) /* default lease time for DHCPv6. One day. */
-/**** Pi-hole modification ****/
+/**** Lorentz modification ****/
 #define CHUSER "root"
 #define CHGRP "root"
 /******************************/
@@ -208,7 +208,7 @@ RESOLVFILE
 /* #define HAVE_DNSSEC */
 /* #define HAVE_NFTSET */
 
-/* Pi-hole definitions */
+/* Lorentz definitions */
 #define HAVE_LUASCRIPT
 #define HAVE_LIBIDN2
 #define HAVE_DNSSEC

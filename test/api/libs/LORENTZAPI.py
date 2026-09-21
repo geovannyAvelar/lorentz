@@ -1,9 +1,9 @@
 #!/bin/python3
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine - auxiliary files
+# Lorentz Engine - auxiliary files
 # API test script
 #
 # This file is copyright under the latest version of the EUPL.
@@ -17,7 +17,7 @@ import json
 from hashlib import sha256
 import urllib.parse
 
-url = "http://pi.hole/api/auth"
+url = "http://lorentz.lan/api/auth"
 
 class AuthenticationMethods(Enum):
 	RANDOM = 0
@@ -26,8 +26,8 @@ class AuthenticationMethods(Enum):
 	COOKIE = 3
 	QUERY_STR = 4
 
-# Class to query the FTL API
-class FTLAPI():
+# Class to query the Lorentz API
+class LORENTZAPI():
 
 	auth_method = "?"
 
@@ -44,11 +44,11 @@ class FTLAPI():
 		self.session = None
 		self.verbose = False
 
-		# Login to FTL API
+		# Login to Lorentz API
 		if password is not None:
 			self.login(password)
 			if self.session is None or 'valid' not in self.session or not self.session['valid']:
-				raise Exception("Could not login to FTL API")
+				raise Exception("Could not login to Lorentz API")
 
 	def login(self, password: str = None):
 		# Check if we even need to login
@@ -57,9 +57,9 @@ class FTLAPI():
 		# Check if we are already logged in or authentication is not
 		# required
 		if response is None:
-			raise Exception("No response from FTL API")
+			raise Exception("No response from Lorentz API")
 		if 'session' not in response:
-			raise Exception("FTL returned invalid challenge item")
+			raise Exception("Lorentz returned invalid challenge item")
 		if 'session' in response and response['session']['valid'] == True:
 			self.session = response["session"]
 			print(response)
@@ -69,9 +69,9 @@ class FTLAPI():
 
 		response = self.POST("/api/auth", {"password": password})
 		if "error" in response:
-			raise Exception("FTL returned error: " + json.dumps(response["error"]))
+			raise Exception("Lorentz returned error: " + json.dumps(response["error"]))
 		if 'session' not in response:
-			raise Exception("FTL returned invalid response item")
+			raise Exception("Lorentz returned invalid response item")
 		self.session = response["session"]
 
 
@@ -88,7 +88,7 @@ class FTLAPI():
 
 			# Add the session ID to the request
 			if authenticate == AuthenticationMethods.HEADER:
-				headers = {"X-FTL-SID": self.session['sid']}
+				headers = {"X-Lorentz-SID": self.session['sid']}
 			elif authenticate == AuthenticationMethods.BODY:
 				json_data = {"sid": self.session['sid'] }
 			elif authenticate == AuthenticationMethods.COOKIE:
@@ -101,7 +101,7 @@ class FTLAPI():
 		return json_data, headers, cookies
 
 
-	# Query the FTL API (GET) and return the response
+	# Query the Lorentz API (GET) and return the response
 	def GET(self, uri: str, params: List[str] = [], expected_mimetype: str = "application/json", authenticate: AuthenticationMethods = AuthenticationMethods.BODY):
 		self.errors = []
 		try:
@@ -129,11 +129,11 @@ class FTLAPI():
 				else:
 					return response.content
 		except Exception as e:
-			self.errors.append("Exception when GETing from FTL: " + str(e))
+			self.errors.append("Exception when GETing from Lorentz: " + str(e))
 			return None
 
 
-	# Query the FTL API (POST) and return the response
+	# Query the Lorentz API (POST) and return the response
 	def POST(self, uri: str, json_data: dict = {}, authenticate: AuthenticationMethods = AuthenticationMethods.HEADER, files = None):
 		self.errors = []
 		try:
@@ -149,14 +149,14 @@ class FTLAPI():
 					print(json.dumps(response.json(), indent=4))
 				return response.json()
 		except Exception as e:
-			self.errors.append("Exception when POSTing to FTL: " + str(e))
+			self.errors.append("Exception when POSTing to Lorentz: " + str(e))
 			return None
 
 
-	# Query the endpoints from FTL for comparison with the OpenAPI specs
+	# Query the endpoints from Lorentz for comparison with the OpenAPI specs
 	def get_endpoints(self):
 		try:
-			# Get all endpoints from FTL and sort them for comparison
+			# Get all endpoints from Lorentz and sort them for comparison
 			response = self.GET("/api/endpoints")
 			for method in response["endpoints"]:
 				for endpoint in response["endpoints"][method]:
@@ -164,7 +164,7 @@ class FTLAPI():
 			for method in self.endpoints:
 				self.endpoints[method] = sorted(self.endpoints[method])
 		except Exception as e:
-			print("Exception when pre-processing endpoints from FTL: " + str(e))
+			print("Exception when pre-processing endpoints from Lorentz: " + str(e))
 			exit(1)
 
 		return self.endpoints

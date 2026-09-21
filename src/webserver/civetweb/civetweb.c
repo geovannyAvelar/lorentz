@@ -2895,7 +2895,7 @@ mg_set_thread_name(const char *name)
 	(void)prctl(PR_SET_NAME, threadName, 0, 0, 0);
 #endif
 
-	// Pi-hole modification: Increase niceness of threads
+	// Lorentz modification: Increase niceness of threads
 	setpriority(PRIO_PROCESS, gettid(), 5);
 }
 #else /* !defined(NO_THREAD_NAME) */
@@ -4225,11 +4225,11 @@ send_additional_header(struct mg_connection *conn)
 		mg_response_header_add_lines(conn, header);
 	}
 
-	/*************** Pi-hole modification ****************/
-	if (pi_hole_extra_headers[0] != '\0') {
-		mg_response_header_add_lines(conn, pi_hole_extra_headers);
+	/*************** Lorentz modification ****************/
+	if (lorentz_extra_headers[0] != '\0') {
+		mg_response_header_add_lines(conn, lorentz_extra_headers);
 		// Invalidate extra headers after having sent them to avoid repetitions
-		pi_hole_extra_headers[0] = '\0';
+		lorentz_extra_headers[0] = '\0';
 	}
 	/*****************************************************/
 }
@@ -4698,7 +4698,7 @@ mg_send_http_error_impl(struct mg_connection *conn,
 }
 
 
-/************************************** Pi-hole method **************************************/
+/************************************** Lorentz method **************************************/
 CIVETWEB_API int
 my_send_http_error_headers(struct mg_connection *conn,
                            int status, const char* mime_type,
@@ -8063,7 +8063,7 @@ interpret_uri(struct mg_connection *conn, /* in/out: request (must be valid) */
 		            roots[i],
 		            uri);
 
-		FTL_rewrite_pattern(filename, filename_buf_len - 1);
+		Lorentz_rewrite_pattern(filename, filename_buf_len - 1);
 
 		if (truncated) {
 			goto interpret_cleanup;
@@ -18247,7 +18247,7 @@ reset_per_request_attributes(struct mg_connection *conn)
 	}
 	conn->request_info.local_uri = NULL;
 
-	/* Pi-hole addition */
+	/* Lorentz addition */
 	memset(conn->request_info.csrf_token, 0, sizeof(conn->request_info.csrf_token));
 
 #if defined(USE_SERVER_STATS)

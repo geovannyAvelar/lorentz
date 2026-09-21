@@ -5,7 +5,7 @@ components:
       get:
         summary: Get list of available API endpoints
         tags:
-          - "FTL information"
+          - "Lorentz information"
         operationId: "get_endpoints"
         description: |
           This API hook returns the list of all available API endpoints.

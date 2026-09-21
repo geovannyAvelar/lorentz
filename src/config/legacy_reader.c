@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Config routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "legacy_reader.h"
 #include "config.h"
 #include "config/setupVars.h"
@@ -26,7 +26,7 @@ static size_t size = 0;
 static pthread_mutex_t lock;
 
 // Private prototypes
-static char *parseFTLconf(FILE *fp, const char *key);
+static char *parseLorentzconf(FILE *fp, const char *key);
 static void releaseConfigMemory(void);
 static char *__attribute__((nonnull(1,2,3), malloc, warn_unused_result)) getPath(FILE* fp, const char *option, char *ptr);
 static bool parseBool(const char *option, bool *ptr);
@@ -34,11 +34,11 @@ static void readDebugingSettingsLegacy(FILE *fp);
 static void getBlockingModeLegacy(FILE *fp);
 static void getPrivacyLevelLegacy(FILE *fp);
 
-static FILE * __attribute__((nonnull(1), malloc, warn_unused_result)) openFTLconf(const char **path)
+static FILE * __attribute__((nonnull(1), malloc, warn_unused_result)) openLorentzconf(const char **path)
 {
 	FILE *fp;
 	// First check if there is a local file overwriting the global one
-	*path = "pihole-FTL.conf";
+	*path = "lorentz.conf";
 	if((fp = fopen(*path, "r")) != NULL)
 		return fp;
 
@@ -53,13 +53,13 @@ bool getLogFilePathLegacy(struct config *conf, FILE *fp)
 {
 	const char *path = NULL;
 	if(fp == NULL)
-		fp = openFTLconf(&path);
+		fp = openLorentzconf(&path);
 	if(fp == NULL)
 		return false;
 
 	// Read LOGFILE value if available
-	// defaults to: "/var/log/pihole/FTL.log"
-	char *buffer = parseFTLconf(fp, "LOGFILE");
+	// defaults to: "/var/log/lorentz/lorentz.log"
+	char *buffer = parseLorentzconf(fp, "LOGFILE");
 	char *val_buffer = NULL;
 
 	errno = 0;
@@ -67,17 +67,17 @@ bool getLogFilePathLegacy(struct config *conf, FILE *fp)
 	if(buffer == NULL)
 	{
 		// Free previously allocated memory (if any)
-		if(conf->files.log.ftl.t == CONF_STRING_ALLOCATED)
-			free(conf->files.log.ftl.v.s);
+		if(conf->files.log.lorentz.t == CONF_STRING_ALLOCATED)
+			free(conf->files.log.lorentz.v.s);
 
 		// Use standard path if no custom path was obtained from the config file
-		conf->files.log.ftl.v.s = strdup("/var/log/pihole/FTL.log");
-		conf->files.log.ftl.t = CONF_STRING_ALLOCATED;
+		conf->files.log.lorentz.v.s = strdup("/var/log/lorentz/lorentz.log");
+		conf->files.log.lorentz.t = CONF_STRING_ALLOCATED;
 
 		// Test if memory allocation was successful
-		if(conf->files.log.ftl.v.s == NULL)
+		if(conf->files.log.lorentz.v.s == NULL)
 		{
-			printf("FATAL: Allocating memory for conf->files.log.ftl.v.s failed (%s, %i). Exiting.",
+			printf("FATAL: Allocating memory for conf->files.log.lorentz.v.s failed (%s, %i). Exiting.",
 			       strerror(errno), errno);
 			exit(EXIT_FAILURE);
 		}
@@ -89,12 +89,12 @@ bool getLogFilePathLegacy(struct config *conf, FILE *fp)
 	else if((val_buffer = calloc(128, sizeof(char))) == NULL || sscanf(buffer, "%127s", val_buffer) == 0)
 	{
 		// Free previously allocated memory (if any)
-		if(conf->files.log.ftl.t == CONF_STRING_ALLOCATED)
-			free(conf->files.log.ftl.v.s);
+		if(conf->files.log.lorentz.t == CONF_STRING_ALLOCATED)
+			free(conf->files.log.lorentz.v.s);
 
 		// Set empty file string
-		conf->files.log.ftl.v.s = NULL;
-		conf->files.log.ftl.t = CONF_STRING;
+		conf->files.log.lorentz.v.s = NULL;
+		conf->files.log.lorentz.t = CONF_STRING;
 		log_info("Using syslog facility");
 
 		// Free buffer
@@ -106,12 +106,12 @@ bool getLogFilePathLegacy(struct config *conf, FILE *fp)
 	if(val_buffer != NULL && strlen(val_buffer) > 0)
 	{
 		// Free previously allocated memory (if any)
-		if(conf->files.log.ftl.t == CONF_STRING_ALLOCATED)
-			free(conf->files.log.ftl.v.s);
+		if(conf->files.log.lorentz.t == CONF_STRING_ALLOCATED)
+			free(conf->files.log.lorentz.v.s);
 
 		// Set string
-		conf->files.log.ftl.v.s = val_buffer;
-		conf->files.log.ftl.t = CONF_STRING_ALLOCATED;
+		conf->files.log.lorentz.v.s = val_buffer;
+		conf->files.log.lorentz.t = CONF_STRING_ALLOCATED;
 	}
 
 	fclose(fp);
@@ -119,14 +119,14 @@ bool getLogFilePathLegacy(struct config *conf, FILE *fp)
 }
 
 // Returns which file was read
-const char *readFTLlegacy(struct config *conf)
+const char *readLorentzlegacy(struct config *conf)
 {
 	char *buffer;
 	const char *path = NULL;
-	FILE *fp = openFTLconf(&path);
+	FILE *fp = openLorentzconf(&path);
 	if(fp == NULL)
 	{
-		log_warn("No readable FTL config file found, using default settings");
+		log_warn("No readable Lorentz config file found, using default settings");
 		return NULL;
 	}
 
@@ -134,7 +134,7 @@ const char *readFTLlegacy(struct config *conf)
 
 	// MAXDBDAYS
 	// defaults to: 365 days
-	buffer = parseFTLconf(fp, "MAXDBDAYS");
+	buffer = parseLorentzconf(fp, "MAXDBDAYS");
 
 	int value = 0;
 	const int maxdbdays_max = INT_MAX / 24 / 60 / 60;
@@ -151,19 +151,19 @@ const char *readFTLlegacy(struct config *conf)
 
 	// RESOLVE_IPV6
 	// defaults to: Yes
-	buffer = parseFTLconf(fp, "RESOLVE_IPV6");
+	buffer = parseLorentzconf(fp, "RESOLVE_IPV6");
 	parseBool(buffer, &conf->resolver.resolveIPv6.v.b);
 
 	// RESOLVE_IPV4
 	// defaults to: Yes
-	buffer = parseFTLconf(fp, "RESOLVE_IPV4");
+	buffer = parseLorentzconf(fp, "RESOLVE_IPV4");
 	parseBool(buffer, &conf->resolver.resolveIPv4.v.b);
 
 	// DBINTERVAL
-	// How often do we store queries in FTL's database [minutes]?
+	// How often do we store queries in Lorentz's database [minutes]?
 	// this value can be a floating point number, e.g. "DBINTERVAL=0.5"
 	// defaults to: once per minute
-	buffer = parseFTLconf(fp, "DBINTERVAL");
+	buffer = parseLorentzconf(fp, "DBINTERVAL");
 
 	float fvalue = 0;
 	if(buffer != NULL && sscanf(buffer, "%f", &fvalue))
@@ -174,8 +174,8 @@ const char *readFTLlegacy(struct config *conf)
 			conf->database.DBinterval.v.ui = (unsigned int)(fvalue * 60);
 
 	// DBFILE
-	// defaults to: "/etc/pihole/pihole-FTL.db"
-	buffer = parseFTLconf(fp, "DBFILE");
+	// defaults to: "/etc/lorentz/lorentz.db"
+	buffer = parseLorentzconf(fp, "DBFILE");
 
 	// Use sscanf() to obtain filename from config file parameter only if buffer != NULL
 	if(!(buffer != NULL && sscanf(buffer, "%127ms", &conf->files.database.v.s)))
@@ -194,8 +194,8 @@ const char *readFTLlegacy(struct config *conf)
 
 	// MAXLOGAGE
 	// Up to how many hours in the past should queries be imported from the database?
-	// defaults to: 24.0 via MAXLOGAGE defined in FTL.h
-	buffer = parseFTLconf(fp, "MAXLOGAGE");
+	// defaults to: 24.0 via MAXLOGAGE defined in lorentz.h
+	buffer = parseLorentzconf(fp, "MAXLOGAGE");
 
 	fvalue = 0;
 	if(buffer != NULL && sscanf(buffer, "%f", &fvalue))
@@ -218,7 +218,7 @@ const char *readFTLlegacy(struct config *conf)
 
 	// ignoreLocalhost
 	// defaults to: false
-	buffer = parseFTLconf(fp, "IGNORE_LOCALHOST");
+	buffer = parseLorentzconf(fp, "IGNORE_LOCALHOST");
 	parseBool(buffer, &conf->dns.ignoreLocalhost.v.b);
 
 	if(buffer != NULL && strcasecmp(buffer, "yes") == 0)
@@ -230,7 +230,7 @@ const char *readFTLlegacy(struct config *conf)
 
 	// ANALYZE_ONLY_A_AND_AAAA
 	// defaults to: false
-	buffer = parseFTLconf(fp, "ANALYZE_ONLY_A_AND_AAAA");
+	buffer = parseLorentzconf(fp, "ANALYZE_ONLY_A_AND_AAAA");
 	parseBool(buffer, &conf->dns.analyzeOnlyAandAAAA.v.b);
 
 	if(buffer != NULL && strcasecmp(buffer, "true") == 0)
@@ -238,7 +238,7 @@ const char *readFTLlegacy(struct config *conf)
 
 	// DBIMPORT
 	// defaults to: Yes
-	buffer = parseFTLconf(fp, "DBIMPORT");
+	buffer = parseLorentzconf(fp, "DBIMPORT");
 	parseBool(buffer, &conf->database.DBimport.v.b);
 
 	// MACVENDORDB
@@ -249,17 +249,17 @@ const char *readFTLlegacy(struct config *conf)
 
 	// PARSE_ARP_CACHE
 	// defaults to: true
-	buffer = parseFTLconf(fp, "PARSE_ARP_CACHE");
+	buffer = parseLorentzconf(fp, "PARSE_ARP_CACHE");
 	parseBool(buffer, &conf->database.network.parseARPcache.v.b);
 
 	// CNAME_DEEP_INSPECT
 	// defaults to: true
-	buffer = parseFTLconf(fp, "CNAME_DEEP_INSPECT");
+	buffer = parseLorentzconf(fp, "CNAME_DEEP_INSPECT");
 	parseBool(buffer, &conf->dns.CNAMEdeepInspect.v.b);
 
 	// DELAY_STARTUP
 	// defaults to: zero (seconds)
-	buffer = parseFTLconf(fp, "DELAY_STARTUP");
+	buffer = parseLorentzconf(fp, "DELAY_STARTUP");
 
 	unsigned int unum;
 	if(buffer != NULL && sscanf(buffer, "%u", &unum) == 1 && unum > 0 && unum <= 300)
@@ -267,16 +267,16 @@ const char *readFTLlegacy(struct config *conf)
 
 	// BLOCK_ESNI
 	// defaults to: true
-	buffer = parseFTLconf(fp, "BLOCK_ESNI");
+	buffer = parseLorentzconf(fp, "BLOCK_ESNI");
 	parseBool(buffer, &conf->dns.blockESNI.v.b);
 
 	// WEBROOT
 	conf->webserver.paths.webroot.v.s = getPath(fp, "WEBROOT", conf->webserver.paths.webroot.v.s);
 
 	// WEBPORT
-	// On which port should FTL's API be listening?
+	// On which port should Lorentz's API be listening?
 	// defaults to: 80
-	buffer = parseFTLconf(fp, "WEBPORT");
+	buffer = parseLorentzconf(fp, "WEBPORT");
 
 	value = 0;
 	if(buffer != NULL && strlen(buffer) > 0)
@@ -307,14 +307,14 @@ const char *readFTLlegacy(struct config *conf)
 	//            ---> deny all accesses, except from the
 	//                 192.168/16 subnet
 	//
-	buffer = parseFTLconf(fp, "WEBACL");
+	buffer = parseLorentzconf(fp, "WEBACL");
 	if(buffer != NULL)
 		conf->webserver.acl.v.s = strdup(buffer);
 
 	// API_SESSION_TIMEOUT
 	// How long should a session be considered valid after login?
 	// defaults to: 300 seconds
-	buffer = parseFTLconf(fp, "API_SESSION_TIMEOUT");
+	buffer = parseLorentzconf(fp, "API_SESSION_TIMEOUT");
 
 	value = 0;
 	if(buffer != NULL && sscanf(buffer, "%i", &value) && value > 0)
@@ -322,7 +322,7 @@ const char *readFTLlegacy(struct config *conf)
 
 	// API_PRETTY_JSON
 	// defaults to: false
-	buffer = parseFTLconf(fp, "API_PRETTY_JSON");
+	buffer = parseLorentzconf(fp, "API_PRETTY_JSON");
 	parseBool(buffer, &conf->webserver.api.prettyJSON.v.b);
 
 	// API_INFO_LOG
@@ -339,7 +339,7 @@ const char *readFTLlegacy(struct config *conf)
 	// the range is -20 (high priority) to +19 (low priority). On some other
 	// systems, the range is -20..20. Very early Linux kernels (Before Linux
 	// 2.0) had the range -infinity..15.
-	buffer = parseFTLconf(fp, "NICE");
+	buffer = parseLorentzconf(fp, "NICE");
 
 	value = 0;
 	if(buffer != NULL && sscanf(buffer, "%i", &value) && value >= -20 && value <= 19)
@@ -349,7 +349,7 @@ const char *readFTLlegacy(struct config *conf)
 	// IP addresses (and associated host names) older than the specified number
 	// of days are removed to avoid dead entries in the network overview table
 	// defaults to: the same value as MAXDBDAYS
-	buffer = parseFTLconf(fp, "MAXNETAGE");
+	buffer = parseLorentzconf(fp, "MAXNETAGE");
 
 	int ivalue = 0;
 	if(buffer != NULL &&
@@ -365,19 +365,19 @@ const char *readFTLlegacy(struct config *conf)
 	// we use the host name associated to the other address as this is the same
 	// device. This behavior can be disabled using NAMES_FROM_NETDB=false
 	// defaults to: true
-	buffer = parseFTLconf(fp, "NAMES_FROM_NETDB");
+	buffer = parseLorentzconf(fp, "NAMES_FROM_NETDB");
 	parseBool(buffer, &conf->resolver.networkNames.v.b);
 
 	// EDNS0_ECS
 	// Should we overwrite the query source when client information is
 	// provided through EDNS0 client subnet (ECS) information?
 	// defaults to: true
-	buffer = parseFTLconf(fp, "EDNS0_ECS");
+	buffer = parseLorentzconf(fp, "EDNS0_ECS");
 	parseBool(buffer, &conf->dns.EDNS0ECS.v.b);
 
 	// REFRESH_HOSTNAMES
 	// defaults to: IPV4
-	buffer = parseFTLconf(fp, "REFRESH_HOSTNAMES");
+	buffer = parseLorentzconf(fp, "REFRESH_HOSTNAMES");
 
 	if(buffer != NULL && strcasecmp(buffer, "ALL") == 0)
 		conf->resolver.refreshNames.v.refresh_hostnames = REFRESH_ALL;
@@ -393,7 +393,7 @@ const char *readFTLlegacy(struct config *conf)
 
 	// RATE_LIMIT
 	// defaults to: 1000 queries / 60 seconds
-	buffer = parseFTLconf(fp, "RATE_LIMIT");
+	buffer = parseLorentzconf(fp, "RATE_LIMIT");
 
 	unsigned int count = 0, interval = 0;
 	if(buffer != NULL && sscanf(buffer, "%u/%u", &count, &interval) == 2)
@@ -408,7 +408,7 @@ const char *readFTLlegacy(struct config *conf)
 	// defaults to: not set
 	conf->dns.reply.host.force4.v.b = false;
 	conf->dns.reply.host.v4.v.in_addr.s_addr = 0;
-	buffer = parseFTLconf(fp, "LOCAL_IPV4");
+	buffer = parseLorentzconf(fp, "LOCAL_IPV4");
 	if(buffer != NULL && strlen(buffer) > 0 && inet_pton(AF_INET, buffer, &conf->dns.reply.host.v4.v.in_addr))
 		conf->dns.reply.host.force4.v.b = true;
 
@@ -418,7 +418,7 @@ const char *readFTLlegacy(struct config *conf)
 	// defaults to: not set
 	conf->dns.reply.host.force6.v.b = false;
 	memset(&conf->dns.reply.host.v6.v.in6_addr, 0, sizeof(conf->dns.reply.host.v6.v.in6_addr));
-	buffer = parseFTLconf(fp, "LOCAL_IPV6");
+	buffer = parseLorentzconf(fp, "LOCAL_IPV6");
 	if(buffer != NULL && strlen(buffer) > 0 &&  inet_pton(AF_INET6, buffer, &conf->dns.reply.host.v6.v.in6_addr))
 		conf->dns.reply.host.force6.v.b = true;
 
@@ -427,7 +427,7 @@ const char *readFTLlegacy(struct config *conf)
 	// defaults to: REPLY_ADDR4 setting
 	conf->dns.reply.blocking.force4.v.b = false;
 	conf->dns.reply.blocking.v4.v.in_addr.s_addr = 0;
-	buffer = parseFTLconf(fp, "BLOCK_IPV4");
+	buffer = parseLorentzconf(fp, "BLOCK_IPV4");
 	if(buffer != NULL && strlen(buffer) > 0 &&  inet_pton(AF_INET, buffer, &conf->dns.reply.blocking.v4.v.in_addr))
 		conf->dns.reply.blocking.force4.v.b = true;
 
@@ -436,7 +436,7 @@ const char *readFTLlegacy(struct config *conf)
 	// defaults to: REPLY_ADDR6 setting
 	conf->dns.reply.blocking.force6.v.b = false;
 	memset(&conf->dns.reply.blocking.v6.v.in6_addr, 0, sizeof(conf->dns.reply.host.v6.v.in6_addr));
-	buffer = parseFTLconf(fp, "BLOCK_IPV6");
+	buffer = parseLorentzconf(fp, "BLOCK_IPV6");
 	if(buffer != NULL &&  strlen(buffer) > 0 && inet_pton(AF_INET6, buffer, &conf->dns.reply.blocking.v6.v.in6_addr))
 		conf->dns.reply.blocking.force6.v.b = true;
 
@@ -445,7 +445,7 @@ const char *readFTLlegacy(struct config *conf)
 	// IPv4 interface address a query arrived on A hostname and IP blocked queries
 	// defaults to: not set
 	struct in_addr reply_addr4;
-	buffer = parseFTLconf(fp, "REPLY_ADDR4");
+	buffer = parseLorentzconf(fp, "REPLY_ADDR4");
 	if(buffer != NULL && strlen(buffer) > 0 &&  inet_pton(AF_INET, buffer, &reply_addr4))
 	{
 		if(conf->dns.reply.host.force4.v.b || conf->dns.reply.blocking.force4.v.b)
@@ -466,7 +466,7 @@ const char *readFTLlegacy(struct config *conf)
 	// IPv4 interface address a query arrived on A hostname and IP blocked queries
 	// defaults to: not set
 	struct in6_addr reply_addr6;
-	buffer = parseFTLconf(fp, "REPLY_ADDR6");
+	buffer = parseLorentzconf(fp, "REPLY_ADDR6");
 	if(buffer != NULL && strlen(buffer) > 0 &&  inet_pton(AF_INET6, buffer, &reply_addr6))
 	{
 		if(conf->dns.reply.host.force6.v.b || conf->dns.reply.blocking.force6.v.b)
@@ -483,43 +483,43 @@ const char *readFTLlegacy(struct config *conf)
 	}
 
 	// SHOW_DNSSEC
-	// Should FTL analyze and include automatically generated DNSSEC queries in the Query Log?
+	// Should Lorentz analyze and include automatically generated DNSSEC queries in the Query Log?
 	// defaults to: true
-	buffer = parseFTLconf(fp, "SHOW_DNSSEC");
+	buffer = parseLorentzconf(fp, "SHOW_DNSSEC");
 	parseBool(buffer, &conf->dns.showDNSSEC.v.b);
 
 	// MOZILLA_CANARY
-	// Should FTL handle use-application-dns.net specifically and always return NXDOMAIN?
+	// Should Lorentz handle use-application-dns.net specifically and always return NXDOMAIN?
 	// defaults to: true
-	buffer = parseFTLconf(fp, "MOZILLA_CANARY");
+	buffer = parseLorentzconf(fp, "MOZILLA_CANARY");
 	parseBool(buffer, &conf->dns.specialDomains.mozillaCanary.v.b);
 
-	// PIHOLE_PTR
-	// Should FTL return "pi.hole" as name for PTR requests to local IP addresses?
+	// LORENTZ_PTR
+	// Should Lorentz return "lorentz.lan" as name for PTR requests to local IP addresses?
 	// defaults to: true
-	buffer = parseFTLconf(fp, "PIHOLE_PTR");
+	buffer = parseLorentzconf(fp, "LORENTZ_PTR");
 
 	if(buffer != NULL)
 	{
 		if(strcasecmp(buffer, "none") == 0 ||
 		   strcasecmp(buffer, "false") == 0)
-			conf->dns.piholePTR.v.ptr_type = PTR_NONE;
+			conf->dns.lorentzPTR.v.ptr_type = PTR_NONE;
 		else if(strcasecmp(buffer, "hostname") == 0)
-			conf->dns.piholePTR.v.ptr_type = PTR_HOSTNAME;
+			conf->dns.lorentzPTR.v.ptr_type = PTR_HOSTNAME;
 		else if(strcasecmp(buffer, "hostnamefqdn") == 0)
-			conf->dns.piholePTR.v.ptr_type = PTR_HOSTNAMEFQDN;
+			conf->dns.lorentzPTR.v.ptr_type = PTR_HOSTNAMEFQDN;
 	}
 
 	// ADDR2LINE
-	// Should FTL try to call addr2line when generating backtraces?
+	// Should Lorentz try to call addr2line when generating backtraces?
 	// defaults to: true
-	buffer = parseFTLconf(fp, "ADDR2LINE");
+	buffer = parseLorentzconf(fp, "ADDR2LINE");
 	parseBool(buffer, &conf->misc.addr2line.v.b);
 
 	// REPLY_WHEN_BUSY
-	// How should FTL handle queries when the gravity database is not available?
+	// How should Lorentz handle queries when the gravity database is not available?
 	// defaults to: BLOCK
-	buffer = parseFTLconf(fp, "REPLY_WHEN_BUSY");
+	buffer = parseLorentzconf(fp, "REPLY_WHEN_BUSY");
 
 	if(buffer != NULL)
 	{
@@ -534,48 +534,48 @@ const char *readFTLlegacy(struct config *conf)
 	// BLOCK_TTL
 	// defaults to: 2 seconds
 	conf->dns.blockTTL.v.ui = 2;
-	buffer = parseFTLconf(fp, "BLOCK_TTL");
+	buffer = parseLorentzconf(fp, "BLOCK_TTL");
 
 	unsigned int uval = 0;
 	if(buffer != NULL && sscanf(buffer, "%u", &uval))
 		conf->dns.blockTTL.v.ui = uval;
 
 	// BLOCK_ICLOUD_PR
-	// Should FTL handle the iCloud privacy relay domains specifically and
+	// Should Lorentz handle the iCloud privacy relay domains specifically and
 	// always return NXDOMAIN??
 	// defaults to: true
-	buffer = parseFTLconf(fp, "BLOCK_ICLOUD_PR");
+	buffer = parseLorentzconf(fp, "BLOCK_ICLOUD_PR");
 	parseBool(buffer, &conf->dns.specialDomains.iCloudPrivateRelay.v.b);
 
 	// CHECK_LOAD
-	// Should FTL check the 15 min average of CPU load and complain if the
+	// Should Lorentz check the 15 min average of CPU load and complain if the
 	// load is larger than the number of available CPU cores?
 	// defaults to: true
-	buffer = parseFTLconf(fp, "CHECK_LOAD");
+	buffer = parseLorentzconf(fp, "CHECK_LOAD");
 	parseBool(buffer, &conf->misc.check.load.v.b);
 
 	// CHECK_SHMEM
-	// Limit above which FTL should complain about a shared-memory shortage
+	// Limit above which Lorentz should complain about a shared-memory shortage
 	// defaults to: 90%
 	unsigned int uvalue = 0;
 	conf->misc.check.shmem.v.ui = 90;
-	buffer = parseFTLconf(fp, "CHECK_SHMEM");
+	buffer = parseLorentzconf(fp, "CHECK_SHMEM");
 
 	if(buffer != NULL && sscanf(buffer, "%u", &uvalue) &&
 	   uvalue <= 100)
 		conf->misc.check.shmem.v.ui = uvalue;
 
 	// CHECK_DISK
-	// Limit above which FTL should complain about disk shortage for checked files
+	// Limit above which Lorentz should complain about disk shortage for checked files
 	// defaults to: 90%
 	conf->misc.check.disk.v.ui = 90;
-	buffer = parseFTLconf(fp, "CHECK_DISK");
+	buffer = parseLorentzconf(fp, "CHECK_DISK");
 
 	if(buffer != NULL && sscanf(buffer, "%u", &uvalue) &&
 	   uvalue <= 100)
 			conf->misc.check.disk.v.ui = uvalue;
 
-	// Read DEBUG_... setting from pihole-FTL.conf
+	// Read DEBUG_... setting from lorentz.conf
 	// This option should be the last one as it causes
 	// some rather verbose output into the log when
 	// listing all the enabled/disabled debugging options
@@ -592,11 +592,11 @@ const char *readFTLlegacy(struct config *conf)
 
 static char *__attribute__((nonnull(1,2,3), malloc, warn_unused_result)) getPath(FILE* fp, const char *option, char *path_default)
 {
-	// This subroutine is used to read paths from pihole-FTL.conf
+	// This subroutine is used to read paths from lorentz.conf
 	// fp:           File path to opened and readable config file
 	// option:       Option string ("key") to try to read
 	// path_default: Location where read (or default) parameter is stored
-	char *buffer = parseFTLconf(fp, option);
+	char *buffer = parseLorentzconf(fp, option);
 
 	errno = 0;
 	// Use sscanf() to obtain filename from config file parameter only if buffer != NULL
@@ -624,7 +624,7 @@ static char *__attribute__((nonnull(1,2,3), malloc, warn_unused_result)) getPath
 	return val_ptr;
 }
 
-static char *parseFTLconf(FILE *fp, const char * key)
+static char *parseLorentzconf(FILE *fp, const char * key)
 {
 	// Return NULL if fp is an invalid file pointer
 	if(fp == NULL)
@@ -633,7 +633,7 @@ static char *parseFTLconf(FILE *fp, const char * key)
 	char *keystr = calloc(strlen(key)+2, sizeof(char));
 	if(keystr == NULL)
 	{
-		log_crit("Could not allocate memory (keystr) in parseFTLconf()");
+		log_crit("Could not allocate memory (keystr) in parseLorentzconf()");
 		return NULL;
 	}
 	sprintf(keystr, "%s=", key);
@@ -680,7 +680,7 @@ static char *parseFTLconf(FILE *fp, const char * key)
 	}
 
 	if(errno == ENOMEM)
-		log_crit("Could not allocate memory (getline) in parseFTLconf()");
+		log_crit("Could not allocate memory (getline) in parseLorentzconf()");
 
 	const int uret = pthread_mutex_unlock(&lock);
 	log_debug(DEBUG_LOCKS, "Released config lock (no match)");
@@ -725,17 +725,17 @@ static void getPrivacyLevelLegacy(FILE *fp)
 	const char *path = NULL;
 	if(fp == NULL)
 	{
-		if((fp = openFTLconf(&path)) == NULL)
+		if((fp = openLorentzconf(&path)) == NULL)
 			// Return silently if there is no config file available
 			return;
 		opened = true;
 	}
 
 	int value = 0;
-	char *buffer = parseFTLconf(fp, "PRIVACYLEVEL");
+	char *buffer = parseLorentzconf(fp, "PRIVACYLEVEL");
 	if(buffer != NULL && sscanf(buffer, "%i", &value) == 1)
 	{
-		// Check for change and validity of privacy level (set in FTL.h)
+		// Check for change and validity of privacy level (set in lorentz.h)
 		if(value >= PRIVACY_SHOW_ALL &&
 		   value <= PRIVACY_MAXIMUM &&
 		   value > config.misc.privacylevel.v.privacy_level)
@@ -763,14 +763,14 @@ static void getBlockingModeLegacy(FILE *fp)
 	const char *path = NULL;
 	if(fp == NULL)
 	{
-		if((fp = openFTLconf(&path)) == NULL)
+		if((fp = openLorentzconf(&path)) == NULL)
 			// Return silently if there is no config file available
 			return;
 		opened = true;
 	}
 
 	// Get config string (if present)
-	char *buffer = parseFTLconf(fp, "BLOCKINGMODE");
+	char *buffer = parseLorentzconf(fp, "BLOCKINGMODE");
 	if(buffer != NULL)
 	{
 		if(strcasecmp(buffer, "NXDOMAIN") == 0)
@@ -798,9 +798,9 @@ static void getBlockingModeLegacy(FILE *fp)
 // Routine for setting the debug flags in the config struct
 static void setDebugOption(FILE* fp, const char* option, enum debug_flag flag)
 {
-	const char *buffer = parseFTLconf(fp, option);
+	const char *buffer = parseLorentzconf(fp, option);
 
-	// Return early if the key has not been found in FTL's config file
+	// Return early if the key has not been found in Lorentz's config file
 	if(buffer == NULL)
 		return;
 
@@ -823,14 +823,14 @@ static void readDebugingSettingsLegacy(FILE *fp)
 	const char *path = NULL;
 	if(fp == NULL)
 	{
-		if((fp = openFTLconf(&path)) == NULL)
+		if((fp = openLorentzconf(&path)) == NULL)
 			// Return silently if there is no config file available
 			return;
 		opened = true;
 	}
 
 	bool bit = false;
-	const char *debug_all = parseFTLconf(fp, "DEBUG_ALL");
+	const char *debug_all = parseLorentzconf(fp, "DEBUG_ALL");
 	if(debug_all != NULL && parseBool(debug_all, &bit) && bit)
 	{
 		// Set all debug flags if DEBUG_ALL is set to true

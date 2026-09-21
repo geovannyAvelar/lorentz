@@ -1,9 +1,9 @@
 #!/bin/bash
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine
+# Lorentz Engine
 # Binary target tests
 #
 # This file is copyright under the latest version of the EUPL.
@@ -12,7 +12,7 @@
 okay=true
 
 check_libs() {
-  mapfile -t libs < <(readelf -d ./pihole-FTL | grep "Shared library" | grep -oE "\[.*\]")
+  mapfile -t libs < <(readelf -d ./lorentz | grep "Shared library" | grep -oE "\[.*\]")
   if [[ "${libs[*]}" != "${1}" ]]; then
     echo "Wrong libraries"
     echo "   Expected: ${1}"
@@ -24,7 +24,7 @@ check_libs() {
 }
 
 check_machine() {
-  mapfile -t header < <(readelf -h ./pihole-FTL | grep -E "(Class)|(Machine)" | sed "s/.*://;s/ \{2,\}//g;")
+  mapfile -t header < <(readelf -h ./lorentz | grep -E "(Class)|(Machine)" | sed "s/.*://;s/ \{2,\}//g;")
   if [[ "${header[0]}" != "${1}" || "${header[1]}" != "${2}" ]]; then
     echo "Wrong machine"
     echo "   Expected: Class: ${1} Machine: ${2}"
@@ -36,7 +36,7 @@ check_machine() {
 }
 
 check_CPU_arch() {
-  cpuarch="$(readelf -A ./pihole-FTL | grep "Tag_CPU_arch:" | sed "s/^ *//")"
+  cpuarch="$(readelf -A ./lorentz | grep "Tag_CPU_arch:" | sed "s/^ *//")"
   if [[ "${cpuarch}" != "Tag_CPU_arch: ${1}" ]]; then
     echo "Wrong CPU arch"
     echo "   Expected: Tag_CPU_arch: ${1}"
@@ -48,7 +48,7 @@ check_CPU_arch() {
 }
 
 check_FP_arch() {
-  fparch="$(readelf -A ./pihole-FTL | grep "Tag_FP_arch:" | sed "s/^ *//")"
+  fparch="$(readelf -A ./lorentz | grep "Tag_FP_arch:" | sed "s/^ *//")"
   if [[ "${fparch}" != "Tag_FP_arch: ${1}" && -n "${1}" ]]; then
     echo "Wrong FP arch"
     echo "   Expected: Tag_FP_arch: ${1}"
@@ -60,7 +60,7 @@ check_FP_arch() {
 }
 
 check_file() {
-  filedetails="$(file -b pihole-FTL | sed "s/, BuildID[^,]*//g")"
+  filedetails="$(file -b lorentz | sed "s/, BuildID[^,]*//g")"
   if [[ "${filedetails}" != "${1}" ]]; then
     echo "Wrong binary classification"
     echo "   Expected: ${1}"
@@ -72,9 +72,9 @@ check_file() {
 }
 
 check_static() {
-  if readelf -l ./pihole-FTL | grep -q INTERP; then
+  if readelf -l ./lorentz | grep -q INTERP; then
     echo "Not a static executable, depends on dynamic interpreter"
-    ldd ./pihole-FTL
+    ldd ./lorentz
     okay=false
     return
   fi
@@ -82,7 +82,7 @@ check_static() {
 }
 
 check_minimum_glibc_version() {
-  libc="$(objdump -T ./pihole-FTL | grep GLIBC | sed 's/.*GLIBC_\([.0-9]*\).*/\1/g' | sort -Vu | tail -n1)"
+  libc="$(objdump -T ./lorentz | grep GLIBC | sed 's/.*GLIBC_\([.0-9]*\).*/\1/g' | sort -Vu | tail -n1)"
   if [[ "${libc}" != "${1}" ]]; then
     echo "Wrong minimum glibc version"
     echo "   Expected: ${1}"
@@ -96,9 +96,9 @@ check_minimum_glibc_version() {
 check_crash() {
   # Run the intentional-crash subcommand and capture combined stdout+stderr.
   # The process exits non-zero (killed by SIGSEGV), so we suppress the error.
-  output="$(./pihole-FTL crash 2>&1 || true)"
-  if ! echo "$output" | grep -q "FTL crashed"; then
-    echo "Crash handler test: FAILED (FTL crash handler was not invoked)"
+  output="$(./lorentz crash 2>&1 || true)"
+  if ! echo "$output" | grep -q "Lorentz crashed"; then
+    echo "Crash handler test: FAILED (Lorentz crash handler was not invoked)"
     okay=false
     return
   fi
@@ -131,7 +131,7 @@ check_crash() {
 check_backtrace() {
   # The 'backtrace' subcommand prints a backtrace without crashing and must
   # exit cleanly.
-  output="$(./pihole-FTL backtrace 2>&1)"
+  output="$(./lorentz backtrace 2>&1)"
   status=$?
   if [[ "${status}" -ne 0 ]]; then
     echo "Backtrace subcommand test: FAILED (exit status ${status})"

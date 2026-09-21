@@ -131,7 +131,7 @@ jobs:
           -src/database/sqlite3.h
           -src/zip/miniz/*
           -src/lua/*
-          +src/lua/ftl_*  
+          +src/lua/lorentz_*  
         input: codeql-results/cpp.sarif
         output: codeql-results/cpp.sarif
 

@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Datastructure prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -17,7 +17,7 @@
 #include "enums.h"
 
 // Definitions like OVERTIME_SLOT
-#include "FTL.h"
+#include "lorentz.h"
 
 typedef struct {
 	// Fields ordered by alignment (8-byte, 4-byte, 2-byte, 1-byte) to
@@ -214,8 +214,8 @@ unsigned int get_cached_count(void) __attribute__ ((pure));
 #define query_set_status_init(query, new_status) _query_set_status(query, new_status, true, __FUNCTION__, __LINE__, __FILE__)
 void _query_set_status(queriesData *query, const enum query_status new_status, const bool init, const char *func, const int line, const char *file);
 
-void FTL_reload_all_domainlists(void);
-void FTL_reset_per_client_domain_data(void);
+void Lorentz_reload_all_domainlists(void);
+void Lorentz_reset_per_client_domain_data(void);
 
 const char *getDomainString(const queriesData *query);
 const char *getCNAMEDomainString(const queriesData *query);
@@ -232,8 +232,8 @@ int get_refresh_hostnames_val(const char *refresh_hostnames) __attribute__ ((pur
 const char *get_blocking_mode_str(const enum blocking_mode mode) __attribute__ ((const));
 int get_blocking_mode_val(const char *blocking_mode) __attribute__ ((pure));
 const char * __attribute__ ((const)) get_blocking_status_str(const enum blocking_status blocking);
-const char *get_ptr_type_str(const enum ptr_type piholePTR) __attribute__ ((const));
-int get_ptr_type_val(const char *piholePTR) __attribute__ ((pure));
+const char *get_ptr_type_str(const enum ptr_type lorentzPTR) __attribute__ ((const));
+int get_ptr_type_val(const char *lorentzPTR) __attribute__ ((pure));
 const char *get_busy_reply_str(const enum busy_reply replyWhenBusy) __attribute__ ((const));
 int get_busy_reply_val(const char *replyWhenBusy) __attribute__ ((pure));
 const char * get_listeningMode_str(const enum listening_mode listeningMode) __attribute__ ((const));

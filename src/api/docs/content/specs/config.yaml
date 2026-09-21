@@ -3,12 +3,12 @@ components:
   paths:
     config:
       get:
-        summary: Get current configuration of your Pi-hole
+        summary: Get current configuration of your Lorentz
         tags:
-          - "Pi-hole configuration"
+          - "Lorentz configuration"
         operationId: "get_config"
         description: |
-          This API hook returns infos about the config of your Pi-hole.
+          This API hook returns infos about the config of your Lorentz.
         parameters:
           - $ref: 'config.yaml#/components/parameters/detailed'
         responses:
@@ -32,12 +32,12 @@ components:
                     - $ref: 'common.yaml#/components/errors/unauthorized'
                     - $ref: 'common.yaml#/components/schemas/took'
       patch:
-        summary: Change configuration of your Pi-hole
+        summary: Change configuration of your Lorentz
         tags:
-          - "Pi-hole configuration"
+          - "Lorentz configuration"
         operationId: "patch_config"
         description: |
-          This API hook allows to modify the config of your Pi-hole. This endpoint supports changing multiple properties at once when you specify several in the payload. See examples below.
+          This API hook allows to modify the config of your Lorentz. This endpoint supports changing multiple properties at once when you specify several in the payload. See examples below.
         parameters:
           - $ref: 'config.yaml#/components/parameters/restart'
         requestBody:
@@ -77,12 +77,12 @@ components:
                     - $ref: 'common.yaml#/components/schemas/took'
     config_elem:
       get:
-        summary: Get specific part of current configuration of your Pi-hole
+        summary: Get specific part of current configuration of your Lorentz
         tags:
-          - "Pi-hole configuration"
+          - "Lorentz configuration"
         operationId: "get_config_elem"
         description: |
-          This API hook returns infos about the requested subset of your Pi-hole's configuration.
+          This API hook returns infos about the requested subset of your Lorentz's configuration.
           The response will be a filtered JSON object and a subset of the full `GET /config` response.
         parameters:
           - $ref: 'config.yaml#/components/parameters/detailed'
@@ -111,7 +111,7 @@ components:
       put:
         summary: Add config array item
         tags:
-          - "Pi-hole configuration"
+          - "Lorentz configuration"
         operationId: "add_array_item"
         description: |
           *Note:* There will be no content on success.
@@ -146,7 +146,7 @@ components:
       delete:
         summary: Delete config array item
         tags:
-          - "Pi-hole configuration"
+          - "Lorentz configuration"
         operationId: "delete_array_item"
         description: |
           *Note:* There will be no content on success.
@@ -186,12 +186,12 @@ components:
                     - $ref: 'common.yaml#/components/schemas/took'
     props:
       get:
-        summary: Get special properties of your Pi-hole configuration
+        summary: Get special properties of your Lorentz configuration
         tags:
-          - "Pi-hole configuration"
+          - "Lorentz configuration"
         operationId: "get_config_props"
         description: |
-          This API hook returns a list of special properties in your Pi-hole configuration.
+          This API hook returns a list of special properties in your Lorentz configuration.
         responses:
           '200':
             description: OK
@@ -239,7 +239,7 @@ components:
                   type: boolean
                 analyzeOnlyAandAAAA:
                   type: boolean
-                piholePTR:
+                lorentzPTR:
                   type: string
                 replyWhenBusy:
                   type: string
@@ -569,7 +569,7 @@ components:
                 log:
                   type: object
                   properties:
-                    ftl:
+                    lorentz:
                       type: string
                     dnsmasq:
                       type: string
@@ -750,7 +750,7 @@ components:
             ignoreLocalhost: false
             showDNSSEC: true
             analyzeOnlyAandAAAA: false
-            piholePTR: PI.HOLE
+            lorentzPTR: LORENTZ.LAN
             replyWhenBusy: ALLOW
             blockTTL: 2
             hosts:
@@ -847,7 +847,7 @@ components:
               parseARPcache: true
               expire: 365
           webserver:
-            domain: pi.hole
+            domain: lorentz.lan
             acl: "+0.0.0.0/0,::/0"
             port: 80,[::]:80
             threads: 0
@@ -865,7 +865,7 @@ components:
               timeout: 300
               restore: true
             tls:
-              cert: "/etc/pihole/tls.pem"
+              cert: "/etc/lorentz/tls.pem"
               validity: 47
             paths:
               webroot: "/var/www/html"
@@ -884,7 +884,7 @@ components:
               app_sudo: false
               cli_pw: true
               excludeClients: [ '1\.2\.3\.4', 'localhost', 'fe80::345' ]
-              excludeDomains: [ 'google\\.de', 'pi-hole\.net' ]
+              excludeDomains: [ 'google\\.de', 'lorentz\.net' ]
               maxHistory: 86400
               maxClients: 10
               client_history_global_max: true
@@ -893,17 +893,17 @@ components:
                 limit: 60.0
                 unit: "C"
           files:
-            pid: "/run/pihole-FTL.pid"
-            database: "/etc/pihole/pihole-FTL.db"
-            tmp_db: "/etc/pihole/pihole-tmp.db"
-            gravity: "/etc/pihole/gravity.db"
+            pid: "/run/lorentz.pid"
+            database: "/etc/lorentz/lorentz.db"
+            tmp_db: "/etc/lorentz/lorentz-tmp.db"
+            gravity: "/etc/lorentz/gravity.db"
             gravity_tmp: "/tmp"
-            macvendor: "/etc/pihole/macvendor.db"
+            macvendor: "/etc/lorentz/macvendor.db"
             pcap: ""
             log:
-              ftl: "/var/log/pihole/FTL.log"
-              dnsmasq: "/var/log/pihole/pihole.log"
-              webserver: "/var/log/pihole/webserver.log"
+              lorentz: "/var/log/lorentz/lorentz.log"
+              dnsmasq: "/var/log/lorentz/lorentz.log"
+              webserver: "/var/log/lorentz/webserver.log"
           misc:
             nice: -10
             delay_startup: 10
@@ -996,7 +996,7 @@ components:
           read_only:
             - key: "misc.readOnly"
               reason: "read_only"
-              description: "Variable can only be set in pihole.toml, not via API"
+              description: "Variable can only be set in lorentz.toml, not via API"
             - key: "webserver.api.pwhash"
               reason: "env_var"
               description: "Set via environment variable"
@@ -1047,7 +1047,7 @@ components:
     restart:
       name: restart
       in: query
-      description: Restart FTL after a change would require this. This option can be used if you want to avoid a restart, e.g., when adding multiple items independently instead of all together at once. Note that you will have to restart FTL manually later to apply the changes.
+      description: Restart Lorentz after a change would require this. This option can be used if you want to avoid a restart, e.g., when adding multiple items independently instead of all together at once. Note that you will have to restart Lorentz manually later to apply the changes.
       required: false
       schema:
         type: boolean

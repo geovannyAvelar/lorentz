@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Global definitions
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
-#ifndef FTL_H
-#define FTL_H
+#ifndef LORENTZ_H
+#define LORENTZ_H
 
 #define __USE_XOPEN
 #define _GNU_SOURCE
@@ -82,7 +82,7 @@
 // Over how many queries do we iterate at most when trying to find a match?
 #define MAXITER 1000
 
-// How many hours do we want to store in FTL's memory? [hours]
+// How many hours do we want to store in Lorentz's memory? [hours]
 #define MAXLOGAGE 24u
 
 // Interval for overTime data [seconds]
@@ -114,7 +114,7 @@
 #define DB_FAILED -2
 #define DB_NODATA -1
 
-// Add a timeout for the pihole-FTL.db database connection [milliseconds]
+// Add a timeout for the lorentz.db database connection [milliseconds]
 // This prevents immediate failures when the database is busy for a short time.
 // Default: 1000 (one second)
 #define DATABASE_BUSY_TIMEOUT 1000
@@ -136,8 +136,8 @@
 // Default: 30 [seconds]
 #define REPLY_TIMEOUT 30
 
-// Special exit code used to signal that FTL wants to restart
-#define RESTART_FTL_CODE 22
+// Special exit code used to signal that Lorentz wants to restart
+#define RESTART_LORENTZ_CODE 22
 
 // How often should the database be analyzed?
 // Default: 604800 (once per week)
@@ -185,7 +185,7 @@
 #define MAXMACLEN 18
 
 // Use our own syscalls handling functions that will detect possible errors
-// and report accordingly in the log. This will make debugging FTL crash
+// and report accordingly in the log. This will make debugging Lorentz crash
 // caused by insufficient memory or by code bugs (not properly dealing
 // with NULL pointers) much easier.
 #ifdef __GNUC__
@@ -194,50 +194,50 @@
 #endif
 #undef strdup // strdup() is a macro in itself, it needs special handling
 #undef free
-#define free(ptr) { FTLfree(ptr, __FILE__,  __FUNCTION__,  __LINE__); ptr = NULL; }
-#define strdup(str_in) FTLstrdup(str_in, __FILE__,  __FUNCTION__,  __LINE__)
-#define calloc(numer_of_elements, element_size) FTLcalloc(numer_of_elements, element_size, __FILE__,  __FUNCTION__,  __LINE__)
-#define realloc(ptr, new_size) FTLrealloc(ptr, new_size, __FILE__,  __FUNCTION__,  __LINE__)
-#define printf(format, ...) FTLfprintf(stdout, __FILE__, __FUNCTION__,  __LINE__, format, ##__VA_ARGS__)
-#define fprintf(stream, format, ...) FTLfprintf(stream, __FILE__, __FUNCTION__,  __LINE__, format, ##__VA_ARGS__)
-#define vprintf(format, args) FTLvfprintf(stdout, __FILE__, __FUNCTION__,  __LINE__, format, args)
-#define vfprintf(stream, format, args) FTLvfprintf(stream, __FILE__, __FUNCTION__,  __LINE__, format, args)
-#define sprintf(buffer, format, ...) FTLsprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, format, ##__VA_ARGS__)
-#define vsprintf(buffer, format, args) FTLvsprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, format, args)
-#define asprintf(buffer, format, ...) FTLasprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, format, ##__VA_ARGS__)
-#define vasprintf(buffer, format, args) FTLvasprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, format, args)
-#define snprintf(buffer, maxlen, format, ...) FTLsnprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, maxlen, format, ##__VA_ARGS__)
-#define vsnprintf(buffer, maxlen, format, args) FTLvsnprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, maxlen, format, args)
-#define write(fd, buf, n) FTLwrite(fd, buf, n, __FILE__,  __FUNCTION__,  __LINE__)
-#define accept(sockfd, addr, addrlen) FTLaccept(sockfd, addr, addrlen, __FILE__,  __FUNCTION__,  __LINE__)
-#define recv(sockfd, buf, len, flags) FTLrecv(sockfd, buf, len, flags, true, __FILE__,  __FUNCTION__,  __LINE__)
-#define recv_nowarn(sockfd, buf, len, flags) FTLrecv(sockfd, buf, len, flags,false,  __FILE__,  __FUNCTION__,  __LINE__)
-#define recvfrom(sockfd, buf, len, flags, src_addr, addrlen) FTLrecvfrom(sockfd, buf, len, flags, src_addr, addrlen, __FILE__,  __FUNCTION__,  __LINE__)
-#define sendto(sockfd, buf, len, flags, dest_addr, addrlen) FTLsendto(sockfd, buf, len, flags, dest_addr, addrlen, true, __FILE__,  __FUNCTION__,  __LINE__)
-#define sendto_nowarn(sockfd, buf, len, flags, dest_addr, addrlen) FTLsendto(sockfd, buf, len, flags, dest_addr, addrlen, false, __FILE__,  __FUNCTION__,  __LINE__)
-#define select(nfds, readfds, writefds, exceptfds, timeout) FTLselect(nfds, readfds, writefds, exceptfds, timeout, __FILE__,  __FUNCTION__,  __LINE__)
-#define pthread_mutex_lock(mutex) FTLpthread_mutex_lock(mutex, __FILE__,  __FUNCTION__,  __LINE__)
-#define fopen(pathname, mode) FTLfopen(pathname, mode, __FILE__,  __FUNCTION__,  __LINE__)
-#define ftlallocate(fd, offset, len) FTLfallocate(fd, offset, len, __FILE__,  __FUNCTION__,  __LINE__)
-#define strlen(str) FTLstrlen(str, __FILE__,  __FUNCTION__,  __LINE__)
-#define strnlen(str, maxlen) FTLstrnlen(str, maxlen, __FILE__,  __FUNCTION__,  __LINE__)
-#define strcpy(dest, src) FTLstrcpy(dest, src, __FILE__,  __FUNCTION__,  __LINE__)
-#define strncpy(dest, src, n) FTLstrncpy(dest, src, n, __FILE__,  __FUNCTION__,  __LINE__)
-#define memset(s, c, n) FTLmemset(s, c, n, __FILE__,  __FUNCTION__,  __LINE__)
-#define memcpy(dest, src, n) FTLmemcpy(dest, src, n, __FILE__,  __FUNCTION__,  __LINE__)
-#define memmove(dest, src, n) FTLmemmove(dest, src, n, __FILE__,  __FUNCTION__,  __LINE__)
+#define free(ptr) { Lorentzfree(ptr, __FILE__,  __FUNCTION__,  __LINE__); ptr = NULL; }
+#define strdup(str_in) Lorentzstrdup(str_in, __FILE__,  __FUNCTION__,  __LINE__)
+#define calloc(numer_of_elements, element_size) Lorentzcalloc(numer_of_elements, element_size, __FILE__,  __FUNCTION__,  __LINE__)
+#define realloc(ptr, new_size) Lorentzrealloc(ptr, new_size, __FILE__,  __FUNCTION__,  __LINE__)
+#define printf(format, ...) Lorentzfprintf(stdout, __FILE__, __FUNCTION__,  __LINE__, format, ##__VA_ARGS__)
+#define fprintf(stream, format, ...) Lorentzfprintf(stream, __FILE__, __FUNCTION__,  __LINE__, format, ##__VA_ARGS__)
+#define vprintf(format, args) Lorentzvfprintf(stdout, __FILE__, __FUNCTION__,  __LINE__, format, args)
+#define vfprintf(stream, format, args) Lorentzvfprintf(stream, __FILE__, __FUNCTION__,  __LINE__, format, args)
+#define sprintf(buffer, format, ...) Lorentzsprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, format, ##__VA_ARGS__)
+#define vsprintf(buffer, format, args) Lorentzvsprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, format, args)
+#define asprintf(buffer, format, ...) Lorentzasprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, format, ##__VA_ARGS__)
+#define vasprintf(buffer, format, args) Lorentzvasprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, format, args)
+#define snprintf(buffer, maxlen, format, ...) Lorentzsnprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, maxlen, format, ##__VA_ARGS__)
+#define vsnprintf(buffer, maxlen, format, args) Lorentzvsnprintf(__FILE__, __FUNCTION__,  __LINE__, buffer, maxlen, format, args)
+#define write(fd, buf, n) Lorentzwrite(fd, buf, n, __FILE__,  __FUNCTION__,  __LINE__)
+#define accept(sockfd, addr, addrlen) Lorentzaccept(sockfd, addr, addrlen, __FILE__,  __FUNCTION__,  __LINE__)
+#define recv(sockfd, buf, len, flags) Lorentzrecv(sockfd, buf, len, flags, true, __FILE__,  __FUNCTION__,  __LINE__)
+#define recv_nowarn(sockfd, buf, len, flags) Lorentzrecv(sockfd, buf, len, flags,false,  __FILE__,  __FUNCTION__,  __LINE__)
+#define recvfrom(sockfd, buf, len, flags, src_addr, addrlen) Lorentzrecvfrom(sockfd, buf, len, flags, src_addr, addrlen, __FILE__,  __FUNCTION__,  __LINE__)
+#define sendto(sockfd, buf, len, flags, dest_addr, addrlen) Lorentzsendto(sockfd, buf, len, flags, dest_addr, addrlen, true, __FILE__,  __FUNCTION__,  __LINE__)
+#define sendto_nowarn(sockfd, buf, len, flags, dest_addr, addrlen) Lorentzsendto(sockfd, buf, len, flags, dest_addr, addrlen, false, __FILE__,  __FUNCTION__,  __LINE__)
+#define select(nfds, readfds, writefds, exceptfds, timeout) Lorentzselect(nfds, readfds, writefds, exceptfds, timeout, __FILE__,  __FUNCTION__,  __LINE__)
+#define pthread_mutex_lock(mutex) Lorentzpthread_mutex_lock(mutex, __FILE__,  __FUNCTION__,  __LINE__)
+#define fopen(pathname, mode) Lorentzfopen(pathname, mode, __FILE__,  __FUNCTION__,  __LINE__)
+#define lorentzallocate(fd, offset, len) Lorentzfallocate(fd, offset, len, __FILE__,  __FUNCTION__,  __LINE__)
+#define strlen(str) Lorentzstrlen(str, __FILE__,  __FUNCTION__,  __LINE__)
+#define strnlen(str, maxlen) Lorentzstrnlen(str, maxlen, __FILE__,  __FUNCTION__,  __LINE__)
+#define strcpy(dest, src) Lorentzstrcpy(dest, src, __FILE__,  __FUNCTION__,  __LINE__)
+#define strncpy(dest, src, n) Lorentzstrncpy(dest, src, n, __FILE__,  __FUNCTION__,  __LINE__)
+#define memset(s, c, n) Lorentzmemset(s, c, n, __FILE__,  __FUNCTION__,  __LINE__)
+#define memcpy(dest, src, n) Lorentzmemcpy(dest, src, n, __FILE__,  __FUNCTION__,  __LINE__)
+#define memmove(dest, src, n) Lorentzmemmove(dest, src, n, __FILE__,  __FUNCTION__,  __LINE__)
 #ifdef strstr
 #undef strstr
 #endif
-#define strstr(haystack, needle) FTLstrstr(haystack, needle, __FILE__,  __FUNCTION__,  __LINE__)
-#define strcmp(s1, s2) FTLstrcmp(s1, s2, __FILE__,  __FUNCTION__,  __LINE__)
-#define strncmp(s1, s2, n) FTLstrncmp(s1, s2, n, __FILE__,  __FUNCTION__,  __LINE__)
-#define strcasecmp(s1, s2) FTLstrcasecmp(s1, s2, __FILE__,  __FUNCTION__,  __LINE__)
-#define strncasecmp(s1, s2, n) FTLstrncasecmp(s1, s2, n, __FILE__,  __FUNCTION__,  __LINE__)
-#define strcat(dest, src) FTLstrcat(dest, src, __FILE__,  __FUNCTION__,  __LINE__)
-#define strncat(dest, src, n) FTLstrncat(dest, src, n, __FILE__,  __FUNCTION__,  __LINE__)
-#define memcmp(s1, s2, n) FTLmemcmp(s1, s2, n, __FILE__,  __FUNCTION__,  __LINE__)
-#define memmem(haystack, haystacklen, needle, needlelen) FTLmemmem(haystack, haystacklen, needle, needlelen, __FILE__,  __FUNCTION__,  __LINE__)
+#define strstr(haystack, needle) Lorentzstrstr(haystack, needle, __FILE__,  __FUNCTION__,  __LINE__)
+#define strcmp(s1, s2) Lorentzstrcmp(s1, s2, __FILE__,  __FUNCTION__,  __LINE__)
+#define strncmp(s1, s2, n) Lorentzstrncmp(s1, s2, n, __FILE__,  __FUNCTION__,  __LINE__)
+#define strcasecmp(s1, s2) Lorentzstrcasecmp(s1, s2, __FILE__,  __FUNCTION__,  __LINE__)
+#define strncasecmp(s1, s2, n) Lorentzstrncasecmp(s1, s2, n, __FILE__,  __FUNCTION__,  __LINE__)
+#define strcat(dest, src) Lorentzstrcat(dest, src, __FILE__,  __FUNCTION__,  __LINE__)
+#define strncat(dest, src, n) Lorentzstrncat(dest, src, n, __FILE__,  __FUNCTION__,  __LINE__)
+#define memcmp(s1, s2, n) Lorentzmemcmp(s1, s2, n, __FILE__,  __FUNCTION__,  __LINE__)
+#define memmem(haystack, haystacklen, needle, needlelen) Lorentzmemmem(haystack, haystacklen, needle, needlelen, __FILE__,  __FUNCTION__,  __LINE__)
 #include "syscalls/syscalls.h"
 
 // Preprocessor help functions
@@ -253,4 +253,4 @@
 // defined in cache.c
 const char *edestr(int ede);
 
-#endif // FTL_H
+#endif // LORENTZ_H

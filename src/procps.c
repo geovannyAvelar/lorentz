@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  /proc system subroutines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "procps.h"
 #include "log.h"
 #include <dirent.h>
@@ -20,7 +20,7 @@
 // readPID()
 #include "daemon.h"
 
-#define PROCESS_NAME   "pihole-FTL"
+#define PROCESS_NAME   "lorentz"
 
 // This function tries to obtain the process name of a given PID
 // It returns true on success, false otherwise and stores the process name in
@@ -89,7 +89,7 @@ static pid_t readPID(void)
 	pid_t pid = -1;
 	FILE *f = NULL;
 	// Open file for reading
-	if((f = fopen(FTL_PID_FILE, "r")) == NULL)
+	if((f = fopen(LORENTZ_PID_FILE, "r")) == NULL)
 	{
 		// Log error
 		log_warn("Unable to read PID from file: %s", strerror(errno));
@@ -160,10 +160,10 @@ static bool process_alive(const pid_t pid)
 	return running;
 }
 
-// This function prints an info message about if another FTL process is already
-// running. It returns true if another FTL process is already running, false
+// This function prints an info message about if another Lorentz process is already
+// running. It returns true if another Lorentz process is already running, false
 // otherwise.
-bool another_FTL(void)
+bool another_Lorentz(void)
 {
 	// The PID in the PID file
 	const pid_t pid = readPID();
@@ -179,7 +179,7 @@ bool another_FTL(void)
 	}
 	else if(pid < 0)
 	{
-		// If we cannot read the PID file, we assume no other FTL process is
+		// If we cannot read the PID file, we assume no other Lorentz process is
 		// running. We write our own PID to the file later after we have
 		// successfully started up (and possibly forked).
 		log_info("PID file does not exist or not readable");
@@ -189,21 +189,21 @@ bool another_FTL(void)
 		char pname[PROC_PATH_SIZ + 1] = { 0 };
 		if(get_process_name(pid, pname) && strcasecmp(pname, PROCESS_NAME) == 0)
 		{
-			// If we found another FTL process by looking at the PID
+			// If we found another Lorentz process by looking at the PID
 			// file, we log an info message and return true. This
 			// will terminate the current process.
 			log_crit("%s is already running (PID %d)!", PROCESS_NAME, pid);
 			return true;
 		}
 		// If we found another process by looking at the PID file, which
-		// is, however, not FTL, we log this and continue.
+		// is, however, not Lorentz, we log this and continue.
 		log_warn("Found process \"%s\" at PID %d suggested by PID file, ignoring", pname, pid);
 	}
 
-	// If we did not find another FTL process by looking at the PID file, we assume
-	// no other FTL process is running. We write our own PID to the file later after
+	// If we did not find another Lorentz process by looking at the PID file, we assume
+	// no other Lorentz process is running. We write our own PID to the file later after
 	// we have successfully started up (and possibly forked).
-	log_info("No other running FTL process found.");
+	log_info("No other running Lorentz process found.");
 	return false;
 }
 

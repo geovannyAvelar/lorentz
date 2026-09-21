@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Config routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "toml_reader.h"
 #include "config/setupVars.h"
 #include "log.h"
@@ -19,7 +19,7 @@
 // INT_MAX
 #include <limits.h>
 #include "datastructure.h"
-// openFTLtoml()
+// openLorentztoml()
 #include "config/toml_helper.h"
 // delete_all_sessions()
 #include "api/api.h"
@@ -146,7 +146,7 @@ static bool migrate_config(toml_datum_t toml, struct config *newconf)
 	return restart;
 }
 
-bool readFTLtoml(struct config *oldconf, struct config *newconf,
+bool readLorentztoml(struct config *oldconf, struct config *newconf,
                  toml_datum_t toml, const bool verbose, bool *restart,
                  const unsigned int version, const bool teleporter,
                  char err[VALIDATOR_ERRBUF_LEN])
@@ -240,7 +240,7 @@ bool readFTLtoml(struct config *oldconf, struct config *newconf,
 
 		// An option the API may not set is equally not settable by uploading a
 		// file through the API. A Teleporter archive carries a whole
-		// pihole.toml, so without this it would be a way around
+		// lorentz.toml, so without this it would be a way around
 		// FLAG_API_READ_ONLY - in the same file that may name a program for
 		// dnsmasq to run. Everything else in the archive is imported as usual
 		// and the value configured on this host is kept, so restoring a backup
@@ -248,7 +248,7 @@ bool readFTLtoml(struct config *oldconf, struct config *newconf,
 		// The message table entry makes that visible in the web interface
 		// rather than only in the log.
 		//
-		// Importing the same archive with "pihole-FTL --teleporter <file>" does
+		// Importing the same archive with "lorentz --teleporter <file>" does
 		// apply them: that already requires access to the host, which is the
 		// whole point of the distinction.
 		if(teleporter && !cli_mode && new_conf_item->f & FLAG_API_READ_ONLY)
@@ -280,14 +280,14 @@ bool readFTLtoml(struct config *oldconf, struct config *newconf,
 		// Try to parse config item
 		readTOMLvalue(new_conf_item, new_conf_item->p[level-1], table[level-2], newconf);
 
-		// Check if we need to restart FTL
+		// Check if we need to restart Lorentz
 		if(old_conf_item != NULL &&
 		   !compare_config_item(new_conf_item->t, &old_conf_item->v, &new_conf_item->v))
 		{
 			log_debug(DEBUG_CONFIG, "%s CHANGED", new_conf_item->k);
-			if(new_conf_item->f & FLAG_RESTART_FTL && restart != NULL)
+			if(new_conf_item->f & FLAG_RESTART_LORENTZ && restart != NULL)
 			{
-				log_info("Restarting FTL due to change of %s", new_conf_item->k);
+				log_info("Restarting Lorentz due to change of %s", new_conf_item->k);
 				*restart = true;
 			}
 
@@ -301,7 +301,7 @@ bool readFTLtoml(struct config *oldconf, struct config *newconf,
 	// Migrate config from old to new
 	if(migrate_config(toml, newconf) && restart != NULL)
 	{
-		log_info("Restarting FTL due to migration of configuration");
+		log_info("Restarting Lorentz due to migration of configuration");
 		*restart = true;
 	}
 
@@ -310,8 +310,8 @@ bool readFTLtoml(struct config *oldconf, struct config *newconf,
 	if(verbose)
 		reportDebugFlags();
 
-	// Print FTL environment variables (if used)
-	printFTLenv();
+	// Print Lorentz environment variables (if used)
+	printLorentzenv();
 
 	// Hold what we just read to the same rules the API, the CLI and environment
 	// variables obey. readTOMLvalue() only parses, so this is what stops a value
@@ -339,7 +339,7 @@ static bool parseTOML(toml_result_t *toml, const unsigned int version)
 {
 	// Try to open default config file. Use fallback if not found
 	bool locked = false;
-	FILE *fp = openFTLtoml("r", version, &locked);
+	FILE *fp = openLorentztoml("r", version, &locked);
 	if(fp == NULL)
 		return false;
 
@@ -347,7 +347,7 @@ static bool parseTOML(toml_result_t *toml, const unsigned int version)
 	*toml = toml_parse_file(fp);
 
 	// Close file and release exclusive lock
-	closeFTLtoml(fp, locked);
+	closeLorentztoml(fp, locked);
 
 	// Check for errors
 	if(!toml->ok)
@@ -385,8 +385,8 @@ bool getLogFilePathTOML(void)
 		return false;
 	}
 
-	toml_datum_t ftl = toml_table_find(log, "ftl");
-	if(ftl.type != TOML_STRING)
+	toml_datum_t lorentz = toml_table_find(log, "lorentz");
+	if(lorentz.type != TOML_STRING)
 	{
 		log_debug(DEBUG_CONFIG, "files.log DOES NOT EXIST or is not a string");
 		toml_free(conf);
@@ -394,10 +394,10 @@ bool getLogFilePathTOML(void)
 	}
 
 	// Only replace string when it is different
-	if(strcmp(config.files.log.ftl.v.s,ftl.u.s) != 0)
+	if(strcmp(config.files.log.lorentz.v.s,lorentz.u.s) != 0)
 	{
-		config.files.log.ftl.t = CONF_STRING_ALLOCATED;
-		config.files.log.ftl.v.s = strdup(ftl.u.s); // Allocated string
+		config.files.log.lorentz.t = CONF_STRING_ALLOCATED;
+		config.files.log.lorentz.v.s = strdup(lorentz.u.s); // Allocated string
 	}
 
 	toml_free(conf);

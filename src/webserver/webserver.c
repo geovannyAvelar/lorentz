@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  HTTP server routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/webserver.h"
 // api_handler()
 #include "api/api.h"
@@ -162,16 +162,16 @@ static int redirect_root_handler(struct mg_connection *conn, void *input)
 		log_debug(DEBUG_API, "URI: %s", uri);
 	}
 
-	// Check if the requested host is the configured domain (defaulting to pi.hole).
+	// Check if the requested host is the configured domain (defaulting to lorentz.lan).
 	// Do not redirect if the host is anything else, e.g. a blocked domain in
 	// IP blocking mode where the browser connects using the blocked hostname.
 	// Use an exact-length comparison to prevent a prefix-match false positive
-	// (e.g. host "pi" incorrectly matching domain "pi.hole").
+	// (e.g. host "pi" incorrectly matching domain "lorentz.lan").
 	const size_t domain_len = strlen(config.webserver.domain.v.s);
 	if(host != NULL && host_len == domain_len &&
 	   strncasecmp(host, config.webserver.domain.v.s, host_len) == 0)
 	{
-		// 308 Permanent Redirect from http://pi.hole -> http://pi.hole/admin/
+		// 308 Permanent Redirect from http://lorentz.lan -> http://lorentz.lan/admin/
 		if(strcmp(uri, "/") == 0 || strcmp(uri, config.webserver.paths.prefix.v.s) == 0)
 		{
 			log_debug(DEBUG_API, "Redirecting / --308--> %s",
@@ -183,7 +183,7 @@ static int redirect_root_handler(struct mg_connection *conn, void *input)
 
 	// Host did not match webserver.domain — not redirecting. When deployed
 	// behind a reverse proxy, ensure webserver.domain matches the Host header
-	// the proxy forwards (configure via WEBSERVER_DOMAIN in pihole.toml).
+	// the proxy forwards (configure via WEBSERVER_DOMAIN in lorentz.toml).
 	log_debug(DEBUG_API, "Not redirecting %s (Host: \"%.*s\" != domain: \"%s\")",
 	          uri, (int)host_len, host ? host : "", config.webserver.domain.v.s);
 	return 0;
@@ -333,7 +333,7 @@ static int log_http_access(const struct mg_connection *conn, const char *message
 }
 
 // mbedTLS formats every message at or below the threshold before handing it to
-// FTL_mbed_debug(), so the threshold is what keeps this out of the TLS hot path
+// Lorentz_mbed_debug(), so the threshold is what keeps this out of the TLS hot path
 // when the user did not ask for debugging. Level 3 is "informational", level 4
 // would add the record hex dumps on top.
 void set_mbedtls_debug_threshold(const bool enabled)
@@ -345,7 +345,7 @@ void set_mbedtls_debug_threshold(const bool enabled)
 #endif
 }
 
-void FTL_mbed_debug(void *user_param, int level, const char *file, int line, const char *message)
+void Lorentz_mbed_debug(void *user_param, int level, const char *file, int line, const char *message)
 {
 	// Only log when in TLS debugging mode
 	if(!config.debug.tls.v.b)
@@ -385,7 +385,7 @@ void FTL_mbed_debug(void *user_param, int level, const char *file, int line, con
  * @return The HTTP status code used for the redirection on success, or 0 on failure.
  */
 int __attribute__((format(printf, 3, 4), nonnull(1,3)))
-ftl_http_redirect(struct mg_connection *conn, const int code, const char *format, ...)
+lorentz_http_redirect(struct mg_connection *conn, const int code, const char *format, ...)
 {
 	// Determine the size of the formatted string
 	va_list args;
@@ -679,8 +679,8 @@ void http_init(void)
 	if(threads == 0)
 	{
 		// For compatibility with older versions, set the number of
-		// threads to the default value (50) if it was 0. Before Pi-hole
-		// FTL v6.0.4, the number of threads was computed in dependence
+		// threads to the default value (50) if it was 0. Before Lorentz
+		// Lorentz v6.0.4, the number of threads was computed in dependence
 		// of the number of CPUs available. This is no longer the case.
 		threads = 50;
 	}
@@ -755,7 +755,7 @@ void http_init(void)
 		"index_files", "index.html,index.htm,index.lp",
 		"enable_keep_alive", "yes",
 		"keep_alive_timeout_ms", "5000",
-		// Pi-hole's web interface is built from Lua *pages* (".lp"), which are
+		// Lorentz's web interface is built from Lua *pages* (".lp"), which are
 		// the only files the embedded web server may evaluate. CivetWeb would
 		// otherwise also run standalone ".lua" scripts and expand server-side
 		// includes in ".shtml" files, both through patterns that default to
@@ -964,7 +964,7 @@ void http_init(void)
 	if(strcmp(config.webserver.paths.webhome.v.s, "/") == 0 &&
 	   config.dns.blocking.mode.v.blocking_mode == MODE_IP)
 	{
-		log_warn("Webhome is set to root (/) and IP blocking is enabled. This may result in the Pi-hole web interface to display in places where otherwise ads would show up");
+		log_warn("Webhome is set to root (/) and IP blocking is enabled. This may result in the Lorentz web interface to display in places where otherwise ads would show up");
 	}
 
 	// Register [prefix]<webhome without trailing slash> -> [<prefix>]<webhome> redirect handler
@@ -1011,7 +1011,7 @@ static char *append_to_path(char *path, const char *append)
 	return new_path;
 }
 
-void FTL_rewrite_pattern(char *filename, unsigned long filename_buf_len)
+void Lorentz_rewrite_pattern(char *filename, unsigned long filename_buf_len)
 {
 	log_debug(DEBUG_API, "Rewriting filename: %s", filename);
 	const bool trailing_slash = filename[strlen(filename) - 1] == '/';
@@ -1154,7 +1154,7 @@ void *webserver_thread(void *val)
 	// Set thread name
 	prctl(PR_SET_NAME, thread_names[WEBSERVER], 0, 0, 0);
 
-	// Initialize FTL HTTP server
+	// Initialize Lorentz HTTP server
 	http_init();
 
 	// Initial delay until we check the certificate for the first time
@@ -1171,7 +1171,7 @@ void *webserver_thread(void *val)
 		if(status == CERT_EXPIRES_SOON &&
 		   config.webserver.tls.validity.v.ui > 0)
 		{
-			if(is_pihole_certificate(config.webserver.tls.cert.v.s))
+			if(is_lorentz_certificate(config.webserver.tls.cert.v.s))
 			{
 				log_info("TLS certificate at %s is about to expire soon, generating new one",
 				         config.webserver.tls.cert.v.s);
@@ -1187,7 +1187,7 @@ void *webserver_thread(void *val)
 			}
 			else
 			{
-				log_err("TLS certificate at %s is about to expire soon, but it is not a Pi-hole certificate. Please renew it manually!",
+				log_err("TLS certificate at %s is about to expire soon, but it is not a Lorentz certificate. Please renew it manually!",
 				        config.webserver.tls.cert.v.s);
 			}
 		}

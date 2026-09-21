@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Theme-related routines
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -18,28 +18,28 @@
 struct web_themes webthemes[THEME_MAX] = {
 	{
 		/* name */ "default-auto",
-		/* description */ "Pi-hole auto",
+		/* description */ "Lorentz auto",
 		/* color */ "#367fa9",
 		/* id */ THEME_DEFAULT_AUTO,
 		/* dark */ true,
 	},
 	{
 		/* name */ "default-light",
-		/* description */ "Pi-hole day",
+		/* description */ "Lorentz day",
 		/* color */ "#367fa9",
 		/* id */ THEME_DEFAULT_LIGHT,
 		/* dark */ false,
 	},
 	{
 		/* name */ "default-dark",
-		/* description */ "Pi-hole midnight",
+		/* description */ "Lorentz midnight",
 		/* color */ "#272c30",
 		/* id */ THEME_DEFAULT_DARK,
 		/* dark */ true,
 	},
 	{
 		/* name */ "default-darker",
-		/* description */ "Pi-hole deep-midnight",
+		/* description */ "Lorentz deep-midnight",
 		/* color */ "#2e6786",
 		/* id */ THEME_DEFAULT_DARKER,
 		/* dark */ true,

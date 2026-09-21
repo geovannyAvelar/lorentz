@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2021 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Query table database prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -15,7 +15,7 @@
 // db_conn
 #include "db-driver.h"
 
-#define CREATE_FTL_TABLE "CREATE TABLE ftl ( id INTEGER PRIMARY KEY NOT NULL, value BLOB NOT NULL );"
+#define CREATE_LORENTZ_TABLE "CREATE TABLE lorentz ( id INTEGER PRIMARY KEY NOT NULL, value BLOB NOT NULL );"
 
 #define CREATE_QUERIES_TABLE_V1 "CREATE TABLE queries ( id INTEGER PRIMARY KEY AUTOINCREMENT, " \
                                                        "timestamp INTEGER NOT NULL, " \
@@ -133,7 +133,7 @@ bool optimize_queries_table(db_conn *db);
 bool create_addinfo_table(db_conn *db);
 bool add_query_storage_columns(db_conn *db);
 bool add_query_storage_column_regex_id(db_conn *db);
-bool add_ftl_table_description(db_conn *db);
+bool add_lorentz_table_description(db_conn *db);
 bool rename_query_storage_column_regex_id(db_conn *db);
 bool add_query_storage_column_ede(db_conn *db);
 bool replace_queries_view_with_joins(db_conn *db);

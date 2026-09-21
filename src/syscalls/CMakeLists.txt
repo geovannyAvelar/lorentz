@@ -1,8 +1,8 @@
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine
+# Lorentz Engine
 # /src/syscalls/CMakeList.txt
 #
 # This file is copyright under the latest version of the EUPL.
@@ -12,7 +12,7 @@ set(sources
         accept.c
         asprintf.c
         calloc.c
-        ftlallocate.c
+        lorentzallocate.c
         fopen.c
         fprintf.c
         free.c

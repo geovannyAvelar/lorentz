@@ -1,8 +1,8 @@
 {
-  "name": "pihole-ftl",
+  "name": "lorentz",
   "private": true,
   "version": "1.0.0",
-  "description": "Source of the Pi-hole FTL daemon",
+  "description": "Source of the Lorentz daemon",
   "main": "",
   "repository": {
     "type": "git",

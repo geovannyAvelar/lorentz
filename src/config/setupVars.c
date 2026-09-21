@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Configuration interpreting routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "log.h"
 #include "config/config.h"
 #include "config/setupVars.h"
@@ -344,8 +344,8 @@ static void get_conf_upstream_servers_from_setupVars(struct conf_item *conf_item
 	for(unsigned int j = 0; j < MAX_SERVERS; j++)
 	{
 		// Get clients which the user doesn't want to see
-		char server_key[sizeof("PIHOLE_DNS_XX") + 1];
-		sprintf(server_key, "PIHOLE_DNS_%u", j);
+		char server_key[sizeof("LORENTZ_DNS_XX") + 1];
+		sprintf(server_key, "LORENTZ_DNS_%u", j);
 		// Get value from setupVars.conf (if present)
 		const char *value = read_setupVarsconf(server_key);
 
@@ -355,7 +355,7 @@ static void get_conf_upstream_servers_from_setupVars(struct conf_item *conf_item
 			cJSON *item = cJSON_CreateString(value);
 			cJSON_AddItemToArray(conf_item->v.json, item);
 
-			log_info("setupVars.conf:PIHOLE_DNS_%u -> Setting %s[%u] = %s",
+			log_info("setupVars.conf:LORENTZ_DNS_%u -> Setting %s[%u] = %s",
 			         j, conf_item->k, j, item->valuestring);
 		}
 
@@ -589,15 +589,15 @@ void importsetupVarsConf(void)
 	// Try to obtain list of upstream servers
 	get_conf_upstream_servers_from_setupVars(&config.dns.upstreams);
 
-	// Try to get Pi-hole domain
-	get_conf_string_from_setupVars("PIHOLE_DOMAIN", &config.dns.domain.name);
+	// Try to get Lorentz domain
+	get_conf_string_from_setupVars("LORENTZ_DOMAIN", &config.dns.domain.name);
 
 	// Try to get bool properties (the first two are intentionally set from the same key)
 	get_conf_bool_from_setupVars("DNS_FQDN_REQUIRED", &config.dns.domainNeeded);
 	get_conf_bool_from_setupVars("DNS_FQDN_REQUIRED", &config.dns.expandHosts);
 	get_conf_bool_from_setupVars("DNS_BOGUS_PRIV", &config.dns.bogusPriv);
 	get_conf_bool_from_setupVars("DNSSEC", &config.dns.dnssec);
-	get_conf_string_from_setupVars("PIHOLE_INTERFACE", &config.dns.interface);
+	get_conf_string_from_setupVars("LORENTZ_INTERFACE", &config.dns.interface);
 	get_conf_string_from_setupVars("HOSTRECORD", &config.dns.hostRecord);
 
 	// Try to obtain listening mode

@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Teleporter un-/compression routines
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "zip/teleporter.h"
 #include "config/config.h"
 // hostname()
@@ -23,9 +23,9 @@
 #include "database/db-driver.h"
 // toml_parse()
 #include "config/tomlc17/tomlc17.h"
-// readFTLtoml()
+// readLorentztoml()
 #include "config/toml_reader.h"
-// writeFTLtoml()
+// writeLorentztoml()
 #include "config/toml_writer.h"
 // write_dnsmasq_config()
 #include "config/dnsmasq_config.h"
@@ -55,8 +55,8 @@ static const char *gravity_tables[] = {
 	"client_by_group"
 };
 
-// Tables to copy from the FTL database to the Teleporter database
-static const char *ftl_tables[] = {
+// Tables to copy from the Lorentz database to the Teleporter database
+static const char *lorentz_tables[] = {
 	"message",
 	"aliasclient",
 	"network",
@@ -92,7 +92,7 @@ static bool create_teleporter_database(const char *filename, const char **tables
 	if(db_set_busy_handler(db, sqliteBusyCallback, NULL) != DB_OK)
 		log_warn("Failed to set busy timeout during creation of in-memory Teleporter database: %s", db_errmsg(db));
 
-	// Attach the FTL database to the in-memory database
+	// Attach the Lorentz database to the in-memory database
 	if(db_attach(db, filename, "disk") != DB_OK)
 	{
 		log_warn("Failed to attach database \"%s\" to in-memory database: %s", filename, db_errmsg(db));
@@ -115,10 +115,10 @@ static bool create_teleporter_database(const char *filename, const char **tables
 		}
 	}
 
-	// Detach the FTL database from the in-memory database
+	// Detach the Lorentz database from the in-memory database
 	if(db_detach(db, "disk") != DB_OK)
 	{
-		log_warn("Failed to detach FTL database from in-memory database: %s", db_errmsg(db));
+		log_warn("Failed to detach Lorentz database from in-memory database: %s", db_errmsg(db));
 		db_close(db);
 		return false;
 	}
@@ -156,15 +156,15 @@ const char *generate_teleporter_zip(mz_zip_archive *zip, char filename[128], voi
 	// Initialize ZIP archive
 	memset(zip, 0, sizeof(*zip));
 
-	// Start with 64KB allocation size (pihole.TOML is slightly larger than 32KB
+	// Start with 64KB allocation size (lorentz.TOML is slightly larger than 32KB
 	// at the time of writing thjs)
 	if(!mz_zip_writer_init_heap(zip, 0, 64*1024))
 	{
 		return "Failed creating heap ZIP archive";
 	}
 
-	// Add pihole.toml to the ZIP archive
-	const char *file_comment = "Pi-hole's configuration";
+	// Add lorentz.toml to the ZIP archive
+	const char *file_comment = "Lorentz's configuration";
 	const char *file_path = GLOBALTOMLPATH;
 	if(!mz_zip_writer_add_file(zip, file_path+1, file_path, file_comment, (uint16_t)strlen(file_comment), MZ_BEST_COMPRESSION))
 	{
@@ -181,13 +181,13 @@ const char *generate_teleporter_zip(mz_zip_archive *zip, char filename[128], voi
 		return "Failed to add /etc/hosts to heap ZIP archive!";
 	}
 
-	// Add /etc/pihole/dhcp.lease to the ZIP archive if it exists
+	// Add /etc/lorentz/dhcp.lease to the ZIP archive if it exists
 	file_comment = "DHCP leases file";
-	file_path = "/etc/pihole/dhcp.leases";
+	file_path = "/etc/lorentz/dhcp.leases";
 	if(file_exists(file_path) && !mz_zip_writer_add_file(zip, file_path+1, file_path, file_comment, (uint16_t)strlen(file_comment), MZ_BEST_COMPRESSION))
 	{
 		mz_zip_writer_end(zip);
-		return "Failed to add /etc/pihole/dhcp.leases to heap ZIP archive!";
+		return "Failed to add /etc/lorentz/dhcp.leases to heap ZIP archive!";
 	}
 
 	const char *directory = "/etc/dnsmasq.d";
@@ -226,7 +226,7 @@ const char *generate_teleporter_zip(mz_zip_archive *zip, char filename[128], voi
 	if(create_teleporter_database(config.files.gravity.v.s, gravity_tables, ArraySize(gravity_tables), &dbbuf, &dbsize))
 	{
 		// Add gravity database to ZIP archive
-		file_comment = "Pi-hole's gravity database";
+		file_comment = "Lorentz's gravity database";
 		file_path = config.files.gravity.v.s;
 		if(file_path[0] == '/')
 			file_path++;
@@ -244,10 +244,10 @@ const char *generate_teleporter_zip(mz_zip_archive *zip, char filename[128], voi
 		return "Failed to create gravity database for heap ZIP archive!";
 	}
 
-	if(create_teleporter_database(config.files.database.v.s, ftl_tables, ArraySize(ftl_tables), &dbbuf, &dbsize))
+	if(create_teleporter_database(config.files.database.v.s, lorentz_tables, ArraySize(lorentz_tables), &dbbuf, &dbsize))
 	{
-		// Add FTL database to ZIP archive
-		file_comment = "Pi-hole's FTL database";
+		// Add Lorentz database to ZIP archive
+		file_comment = "Lorentz's database";
 		file_path = config.files.database.v.s;
 		if(file_path[0] == '/')
 			file_path++;
@@ -255,14 +255,14 @@ const char *generate_teleporter_zip(mz_zip_archive *zip, char filename[128], voi
 		{
 			db_free_buffer(dbbuf);
 			mz_zip_writer_end(zip);
-			return "Failed to add FTL database to heap ZIP archive!";
+			return "Failed to add Lorentz database to heap ZIP archive!";
 		}
 		db_free_buffer(dbbuf);
 	}
 	else
 	{
 		mz_zip_writer_end(zip);
-		return "Failed to create FTL database for heap ZIP archive!";
+		return "Failed to create Lorentz database for heap ZIP archive!";
 	}
 
 	// Get the heap data so we can send it to the requesting client
@@ -284,22 +284,22 @@ const char *generate_teleporter_zip(mz_zip_archive *zip, char filename[128], voi
 	// current datetime)
 	char timestr[TIMESTR_SIZE];
 	get_timestr(timestr, time(NULL), false, true);
-	snprintf(filename, 128, "pi-hole_%s_teleporter_%s.zip", hostname(), timestr);
+	snprintf(filename, 128, "lorentz_%s_teleporter_%s.zip", hostname(), timestr);
 
 	// Everything worked well
 	return NULL;
 }
 
-static const char *test_and_import_pihole_toml(void *ptr, size_t size, char * const hint)
+static const char *test_and_import_lorentz_toml(void *ptr, size_t size, char * const hint)
 {
 	// Check if the file is empty
 	if(size == 0)
-		return "File etc/pihole/pihole.toml in ZIP archive is empty";
+		return "File etc/lorentz/lorentz.toml in ZIP archive is empty";
 
 	// Create a memory copy that is null-terminated
 	char *buffer = calloc(size+1, sizeof(char));
 	if(buffer == NULL)
-		return "Failed to allocate memory for null-terminated copy of etc/pihole/pihole.toml in ZIP archive";
+		return "Failed to allocate memory for null-terminated copy of etc/lorentz/lorentz.toml in ZIP archive";
 	memcpy(buffer, ptr, size);
 	buffer[size] = '\0';
 
@@ -309,20 +309,20 @@ static const char *test_and_import_pihole_toml(void *ptr, size_t size, char * co
 	{
 		free(buffer);
 		log_err("ZIP TOML file is not valid: %s", toml.errmsg);
-		return "File etc/pihole/pihole.toml in ZIP archive is not a valid TOML file";
+		return "File etc/lorentz/lorentz.toml in ZIP archive is not a valid TOML file";
 	}
 	free(buffer);
 
-	// Check if the file contains a valid configuration for Pi-hole by parsing it into
+	// Check if the file contains a valid configuration for Lorentz by parsing it into
 	// a temporary config struct (teleporter_config)
 	struct config teleporter_config = { 0 };
 	duplicate_config(&teleporter_config, &config);
-	// readFTLtoml() holds every value in the archive to the validator its config
+	// readLorentztoml() holds every value in the archive to the validator its config
 	// item declares. An import is not a lesser path than PATCH /api/config: it
 	// is reachable by anyone holding an admin session and installs a complete
 	// configuration, so a value the API refuses must not get in this way either.
 	char valerr[VALIDATOR_ERRBUF_LEN] = { 0 };
-	if(!readFTLtoml(NULL, &teleporter_config, toml.toptab, true, NULL, 0, true, valerr))
+	if(!readLorentztoml(NULL, &teleporter_config, toml.toptab, true, NULL, 0, true, valerr))
 	{
 		free_config(&teleporter_config, false);
 		toml_free(toml);
@@ -330,11 +330,11 @@ static const char *test_and_import_pihole_toml(void *ptr, size_t size, char * co
 		// The buffer names the offending item when a value was refused, and
 		// stays empty when the file could not be read at all
 		if(valerr[0] == '\0')
-			return "File etc/pihole/pihole.toml in ZIP archive contains invalid TOML configuration";
+			return "File etc/lorentz/lorentz.toml in ZIP archive contains invalid TOML configuration";
 
 		log_err("Teleporter: %s", valerr);
 		set_hint(hint, valerr);
-		return "File etc/pihole/pihole.toml in ZIP archive contains an invalid value";
+		return "File etc/lorentz/lorentz.toml in ZIP archive contains an invalid value";
 	}
 
 	// Test dnsmasq config in the imported configuration
@@ -343,20 +343,20 @@ static const char *test_and_import_pihole_toml(void *ptr, size_t size, char * co
 	{
 		free_config(&teleporter_config, false);
 		toml_free(toml);
-		return "File etc/pihole/pihole.toml in ZIP archive contains invalid dnsmasq configuration";
+		return "File etc/lorentz/lorentz.toml in ZIP archive contains invalid dnsmasq configuration";
 	}
 
 	// When we reach this point, we know that the file is a valid TOML file and contains
-	// a valid configuration for Pi-hole. We can now safely overwrite the current
+	// a valid configuration for Lorentz. We can now safely overwrite the current
 	// configuration with the one from the ZIP archive
 
 	// Install new configuration (takes ownership of teleporter_config)
 	replace_config(&teleporter_config);
 
-	// Write new pihole.toml to disk, the dnsmaq config was already written above
+	// Write new lorentz.toml to disk, the dnsmaq config was already written above
 	// Also write the custom list to disk
 	rotate_files(GLOBALTOMLPATH, NULL);
-	writeFTLtoml(true, NULL);
+	writeLorentztoml(true, NULL);
 	write_custom_list();
 
 	toml_free(toml);
@@ -429,13 +429,13 @@ static const char *import_dhcp_leases(const void *ptr, size_t size, char * const
 	// Check the content really is a lease database before overwriting the
 	// current one - the bytes come straight from the uploaded archive.
 	//
-	// Skip the file rather than failing the import: pihole.toml is installed
+	// Skip the file rather than failing the import: lorentz.toml is installed
 	// earlier in the same archive, so returning an error here would report
 	// failure for an import that has already changed the configuration. The
 	// TAR.GZ importer skips the same file for the same reason.
 	if(!valid_dhcp_leases(ptr, size))
 	{
-		log_warn("Not importing etc/pihole/dhcp.leases: not a DHCP lease database");
+		log_warn("Not importing etc/lorentz/dhcp.leases: not a DHCP lease database");
 		return NULL;
 	}
 
@@ -471,7 +471,7 @@ static const char *test_and_import_database(void *ptr, size_t size, const char *
 	// See https://www.sqlite.org/fileformat.html, section 1.3
 	if(size < 100)
 	{
-		return "File etc/pihole/gravity.db in ZIP archive is empty";
+		return "File etc/lorentz/gravity.db in ZIP archive is empty";
 	}
 
 	// Check file header to see if this is a SQLite3 database file
@@ -483,7 +483,7 @@ static const char *test_and_import_database(void *ptr, size_t size, const char *
 	// See https://www.sqlite.org/fileformat.html, section 1.3.1
 	if(memcmp(ptr, "SQLite format 3", 15) != 0)
 	{
-		return "File etc/pihole/gravity.db in ZIP archive is not a SQLite3 database file (no header)";
+		return "File etc/lorentz/gravity.db in ZIP archive is not a SQLite3 database file (no header)";
 	}
 
 	// Check if the file is a valid SQlite3 database
@@ -501,7 +501,7 @@ static const char *test_and_import_database(void *ptr, size_t size, const char *
 	{
 		set_hint(hint, db_errmsg(database));
 		db_close(database);
-		return "File etc/pihole/gravity.db in ZIP archive is not a valid SQLite3 database file";
+		return "File etc/lorentz/gravity.db in ZIP archive is not a valid SQLite3 database file";
 	}
 
 	// Run PRAGMA integrity_check on the database to check if the database is
@@ -642,8 +642,8 @@ const char *read_teleporter_zip(uint8_t *buffer, const size_t buflen, char * con
 
 		// List of files to process from a Teleporter ZIP archive
 		const char *extract_files[] = {
-			"etc/pihole/pihole.toml",
-			"etc/pihole/dhcp.leases",
+			"etc/lorentz/lorentz.toml",
+			"etc/lorentz/dhcp.leases",
 			config.files.gravity.v.s[0] == '/' ? config.files.gravity.v.s + 1 : config.files.gravity.v.s
 		};
 
@@ -696,7 +696,7 @@ const char *read_teleporter_zip(uint8_t *buffer, const size_t buflen, char * con
 		// Process file
 		const char *import_tables[ArraySize(gravity_tables)] = { NULL };
 		size_t num_tables = 0u;
-		// Is this "etc/pihole/pihole.toml" ?
+		// Is this "etc/lorentz/lorentz.toml" ?
 		if(strcmp(file_stat.m_filename, extract_files[0]) == 0)
 		{
 			// Check whether we should import this file
@@ -707,18 +707,18 @@ const char *read_teleporter_zip(uint8_t *buffer, const size_t buflen, char * con
 				continue;
 			}
 
-			// Import Pi-hole configuration
+			// Import Lorentz configuration
 			memset(hint, 0, ERRBUF_SIZE);
-			const char *err = test_and_import_pihole_toml(ptr, file_stat.m_uncomp_size, hint);
+			const char *err = test_and_import_lorentz_toml(ptr, file_stat.m_uncomp_size, hint);
 			if(err != NULL)
 			{
 				free(ptr);
 				mz_zip_reader_end(&zip);
 				return err;
 			}
-			log_debug(DEBUG_CONFIG, "Imported Pi-hole configuration: %s", file_stat.m_filename);
+			log_debug(DEBUG_CONFIG, "Imported Lorentz configuration: %s", file_stat.m_filename);
 		}
-		// Is this "etc/pihole/dhcp.leases"?
+		// Is this "etc/lorentz/dhcp.leases"?
 		else if(strcmp(file_stat.m_filename, extract_files[1]) == 0)
 		{
 			// Check whether we should import this file
@@ -740,7 +740,7 @@ const char *read_teleporter_zip(uint8_t *buffer, const size_t buflen, char * con
 			}
 			log_debug(DEBUG_CONFIG, "Imported DHCP leases: %s", file_stat.m_filename);
 		}
-		// Is this "etc/pihole/gravity.db"?
+		// Is this "etc/lorentz/gravity.db"?
 		else if(strcmp(file_stat.m_filename, extract_files[2]) == 0)
 		{
 			// Check whether we should import this file

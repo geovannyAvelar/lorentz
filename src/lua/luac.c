@@ -194,7 +194,7 @@ static int pmain(lua_State* L)
  return 0;
 }
 
-/******* Pi-hole modification ********/
+/******* Lorentz modification ********/
 int luac_main(int argc, char* argv[])
 /*************************************/
 {

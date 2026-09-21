@@ -6,62 +6,62 @@ if [[ ${TEST} == "false" ]]; then
   exit 0
 fi
 
-# Create pihole user if it does not exist
-if ! id -u pihole &> /dev/null; then
-  useradd -m -s /usr/sbin/nologin pihole
+# Create lorentz user if it does not exist
+if ! id -u lorentz &> /dev/null; then
+  useradd -m -s /usr/sbin/nologin lorentz
 fi
 
-# Kill possibly running pihole-FTL process
-while pidof -s pihole-FTL > /dev/null; do
-  pid="$(pidof -s pihole-FTL)"
-  echo "Terminating running pihole-FTL process with PID ${pid}"
+# Kill possibly running lorentz process
+while pidof -s lorentz > /dev/null; do
+  pid="$(pidof -s lorentz)"
+  echo "Terminating running lorentz process with PID ${pid}"
   kill "$pid"
   sleep 1
 done
 
 # Clean up possible old files from earlier test runs
-rm -rf /etc/pihole /etc/dnsmasq.d /var/log/pihole /dev/shm/FTL-*
-rm -f /tmp/dnsmasq_warnings /tmp/ftl_test_*.json
+rm -rf /etc/lorentz /etc/dnsmasq.d /var/log/lorentz /dev/shm/Lorentz-*
+rm -f /tmp/dnsmasq_warnings /tmp/lorentz_test_*.json
 
 # Create necessary directories and files
-mkdir -p /home/pihole /etc/pihole /run/pihole /var/log/pihole /etc/pihole/config_backups /var/www/html
-echo "" > /var/log/pihole/FTL.log
-echo "" > /var/log/pihole/pihole.log
-echo "" > /var/log/pihole/webserver.log
-touch /run/pihole-FTL.pid ptr.log
-touch /etc/pihole/dhcp.leases
-chown -R pihole:pihole /etc/pihole /run/pihole /var/log/pihole
-chown pihole:pihole /run/pihole-FTL.pid
+mkdir -p /home/lorentz /etc/lorentz /run/lorentz /var/log/lorentz /etc/lorentz/config_backups /var/www/html
+echo "" > /var/log/lorentz/lorentz.log
+echo "" > /var/log/lorentz/lorentz.log
+echo "" > /var/log/lorentz/webserver.log
+touch /run/lorentz.pid ptr.log
+touch /etc/lorentz/dhcp.leases
+chown -R lorentz:lorentz /etc/lorentz /run/lorentz /var/log/lorentz
+chown lorentz:lorentz /run/lorentz.pid
 
-# Copy binary into a location the new user pihole can access
-cp ./pihole-FTL /home/pihole/pihole-FTL
-chmod +x /home/pihole/pihole-FTL
+# Copy binary into a location the new user lorentz can access
+cp ./lorentz /home/lorentz/lorentz
+chmod +x /home/lorentz/lorentz
 # Note: We cannot add CAP_NET_RAW and CAP_NET_ADMIN at this point
-setcap CAP_NET_BIND_SERVICE+eip /home/pihole/pihole-FTL
+setcap CAP_NET_BIND_SERVICE+eip /home/lorentz/lorentz
 
 # Prepare gravity database
-./pihole-FTL sqlite3 /etc/pihole/gravity.db < test/gravity.db.sql
-chown pihole:pihole /etc/pihole/gravity.db
+./lorentz sqlite3 /etc/lorentz/gravity.db < test/gravity.db.sql
+chown lorentz:lorentz /etc/lorentz/gravity.db
 
-# Prepare pihole-FTL database
-rm -rf /etc/pihole/pihole-FTL.db
-./pihole-FTL sqlite3 /etc/pihole/pihole-FTL.db < test/pihole-FTL.db.sql
-chown pihole:pihole /etc/pihole/pihole-FTL.db
+# Prepare lorentz database
+rm -rf /etc/lorentz/lorentz.db
+./lorentz sqlite3 /etc/lorentz/lorentz.db < test/lorentz.db.sql
+chown lorentz:lorentz /etc/lorentz/lorentz.db
 
 # Prepare TLS key and certificate
-cp test/test.pem /etc/pihole/test.pem
-cp test/test.crt /etc/pihole/test.crt
+cp test/test.pem /etc/lorentz/test.pem
+cp test/test.crt /etc/lorentz/test.crt
 
-# Prepare pihole.toml
-cp test/pihole.toml /etc/pihole/pihole.toml
-chown pihole:pihole /etc/pihole/pihole.toml
+# Prepare lorentz.toml
+cp test/lorentz.toml /etc/lorentz/lorentz.toml
+chown lorentz:lorentz /etc/lorentz/lorentz.toml
 
-# Prepare 01-pihole-tests.conf
+# Prepare 01-lorentz-tests.conf
 mkdir -p /etc/dnsmasq.d
-cp test/01-pihole-tests.conf /etc/dnsmasq.d/01-pihole-tests.conf
+cp test/01-lorentz-tests.conf /etc/dnsmasq.d/01-lorentz-tests.conf
 
 # Prepare versions file (read by /api/version)
-cp test/versions /etc/pihole/versions
+cp test/versions /etc/lorentz/versions
 
 # Prepare Lua test script
 cp test/broken_lua.lp /var/www/html/broken_lua.lp
@@ -78,32 +78,32 @@ OLDUMASK=$(umask)
 umask 0022
 
 # Set exemplary config value by environment variable
-export FTLCONF_misc_nice="-11"
-export FTLCONF_dns_upstrrr="-11"
-export FTLCONF_debug_api="not_a_bool"
-export FTLCONF_MISC_CHECK_SHMEM=91
-export FTLCONF_files_pcap='*123#./test/pcap'
+export LORENTZCONF_misc_nice="-11"
+export LORENTZCONF_dns_upstrrr="-11"
+export LORENTZCONF_debug_api="not_a_bool"
+export LORENTZCONF_MISC_CHECK_SHMEM=91
+export LORENTZCONF_files_pcap='*123#./test/pcap'
 
-# Start FTL
-if ! su pihole -s /bin/sh -c /home/pihole/pihole-FTL; then
-  echo "pihole-FTL failed to start"
+# Start Lorentz
+if ! su lorentz -s /bin/sh -c /home/lorentz/lorentz; then
+  echo "lorentz failed to start"
   exit 1
 fi
 
-# Give FTL some time for startup preparations
+# Give Lorentz some time for startup preparations
 sleep 2
 
 # Optionally attach gdb for crash backtraces (opt-in via GDB=1)
 if [[ "${GDB}" == "1" ]]; then
   echo "handle SIGHUP nostop SIGPIPE nostop SIGTERM nostop SIG32 nostop SIG33 nostop SIG34 nostop SIG35 nostop SIG41 nostop" > /root/.gdbinit
-  gdb -p $(cat /run/pihole-FTL.pid) --ex continue --ex "bt full" &
+  gdb -p $(cat /run/lorentz.pid) --ex continue --ex "bt full" &
 fi
 
-# Print versions of pihole-FTL
-echo -n "FTL version (DNS): "
-dig TXT CHAOS version.FTL @127.0.0.1 +short
-echo "FTL verbose version (CLI): "
-/home/pihole/pihole-FTL -vv
+# Print versions of lorentz
+echo -n "Lorentz version (DNS): "
+dig TXT CHAOS version.Lorentz @127.0.0.1 +short
+echo "Lorentz verbose version (CLI): "
+/home/lorentz/lorentz -vv
 echo -n "Contained dnsmasq version (DNS): "
 dig TXT CHAOS version.bind @127.0.0.1 +short
 
@@ -123,7 +123,7 @@ if [ -z "$BATS" ]; then
 fi
 
 # Run BATS test suite (includes DNS, regex, CLI, config tests;
-# FTL remains running for the pytest API tests afterwards)
+# Lorentz remains running for the pytest API tests afterwards)
 echo "Running BATS test suite..."
 $BATS -p "test/test_suite.bats"
 RET=$?
@@ -131,10 +131,10 @@ RET=$?
 # Trigger network table update (PARSE_NEIGHBOR_CACHE) so mock-hwaddr
 # devices like ip-127.0.0.1 exist before pytest checks them.
 # RT signal offset 5 maps to PARSE_NEIGHBOR_CACHE in signals.c.
-kill -SIGRTMIN+5 "$(cat /run/pihole-FTL.pid)" 2>/dev/null
+kill -SIGRTMIN+5 "$(cat /run/lorentz.pid)" 2>/dev/null
 sleep 2
 
-# Run pytest API tests (FTL is still running — BATS no longer terminates it)
+# Run pytest API tests (Lorentz is still running — BATS no longer terminates it)
 # Skip on riscv64 — the emulated runner is too slow for the full API suite
 if [[ "${CI_ARCH}" != "linux/riscv64" ]]; then
   echo "Running pytest API tests..."
@@ -147,9 +147,9 @@ else
   echo "Skipping pytest API tests (too slow on ${CI_ARCH})"
 fi
 
-# Run final BATS suite — log validation and FTL termination
+# Run final BATS suite — log validation and Lorentz termination
 # This runs after both test_suite.bats and pytest to catch any
-# unexpected log messages from the entire run, then terminates FTL.
+# unexpected log messages from the entire run, then terminates Lorentz.
 echo ""
 echo "Running final log validation..."
 $BATS -p "test/test_final.bats"
@@ -163,20 +163,20 @@ curl_to_tricorder() {
 }
 
 if [[ $RET != 0 ]]; then
-  echo -n "pihole/pihole.log: "
-  curl_to_tricorder /var/log/pihole/pihole.log
+  echo -n "lorentz/lorentz.log: "
+  curl_to_tricorder /var/log/lorentz/lorentz.log
   echo ""
-  echo -n "pihole/FTL.log: "
-  curl_to_tricorder /var/log/pihole/FTL.log
+  echo -n "lorentz/lorentz.log: "
+  curl_to_tricorder /var/log/lorentz/lorentz.log
   echo ""
   echo -n "ptr.log: "
   curl_to_tricorder ./ptr.log
   echo ""
   echo -n "webserver.log: "
-  curl_to_tricorder /var/log/pihole/webserver.log
+  curl_to_tricorder /var/log/lorentz/webserver.log
   echo ""
-  echo -n "pihole.toml: "
-  curl_to_tricorder /etc/pihole/pihole.toml
+  echo -n "lorentz.toml: "
+  curl_to_tricorder /etc/lorentz/lorentz.toml
   echo ""
 fi
 
@@ -185,13 +185,13 @@ umask "$OLDUMASK"
 
 # Run performance tests (opt-in via RUN_PERF_TEST=1)
 if [[ "${RUN_PERF_TEST}" == "1" ]]; then
-  if ! su pihole -s /bin/sh -c "/home/pihole/pihole-FTL --perf"; then
-    echo "pihole-FTL --perf failed to start"
+  if ! su lorentz -s /bin/sh -c "/home/lorentz/lorentz --perf"; then
+    echo "lorentz --perf failed to start"
   fi
 fi
 
 # Remove copied file
-rm /home/pihole/pihole-FTL
+rm /home/lorentz/lorentz
 
 # Stop local powerDNS resolver
 killall pdns_server

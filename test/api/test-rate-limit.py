@@ -2,17 +2,17 @@
 # /api/auth endpoint checking that rate limiting is enforced
 import random
 import string
-from libs.FTLAPI import FTLAPI
+from libs.LORENTZAPI import LORENTZAPI
 
 if __name__ == "__main__":
-	# Create FTLAPI object
-	ftl = FTLAPI("http://127.0.0.1:8080")
+	# Create LORENTZAPI object
+	lorentz = LORENTZAPI("http://127.0.0.1:8080")
 
 	# Try to login with random passwords
 	for i in range(0, 100):
 		pw = "".join(random.choices(string.printable, k=random.randint(1, 64)))
 		try:
-			ftl.login(pw)
+			lorentz.login(pw)
 		except Exception as e:
 			if "too_many_requests" in str(e):
 				print("Rate-limited on attempt no. "  + str(i))

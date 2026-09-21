@@ -1,7 +1,7 @@
 """
-Pi-hole FTL API tests -- what a Teleporter archive may and may not carry.
+Lorentz API tests -- what a Teleporter archive may and may not carry.
 
-An imported archive contains a complete pihole.toml and is installed as the
+An imported archive contains a complete lorentz.toml and is installed as the
 running configuration.  Parsing it is not the same as accepting it: every value
 has to pass the validator its config item declares, exactly as it would when set
 through PATCH /api/config, the CLI or an environment variable.  Otherwise the
@@ -31,17 +31,17 @@ import zipfile
 
 import pytest
 
-from libs.FTLAPI import AuthenticationMethods
+from libs.LORENTZAPI import AuthenticationMethods
 
-PIHOLE_TOML = "/etc/pihole/pihole.toml"
-FTL_LOG = "/var/log/pihole/FTL.log"
+LORENTZ_TOML = "/etc/lorentz/lorentz.toml"
+LORENTZ_LOG = "/var/log/lorentz/lorentz.log"
 RESTART_MARKER = "CLI password set and stored in file"
 
 
 def _log_end():
-    """Byte offset of the end of FTL.log."""
+    """Byte offset of the end of lorentz.log."""
     try:
-        with open(FTL_LOG, "r") as f:
+        with open(LORENTZ_LOG, "r") as f:
             f.seek(0, 2)
             return f.tell()
     except FileNotFoundError:
@@ -49,16 +49,16 @@ def _log_end():
 
 
 def _wait_for_restart(start_pos, timeout=30):
-    """Block until a restarted FTL has re-initialised.
+    """Block until a restarted Lorentz has re-initialised.
 
-    An accepted import sets restart_ftl(). Probing the API is no good, it
+    An accepted import sets restart_lorentz(). Probing the API is no good, it
     can answer from the process that is going away, so watch the log for
     the marker the new one writes.
     """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            with open(FTL_LOG, "r") as f:
+            with open(LORENTZ_LOG, "r") as f:
                 f.seek(start_pos)
                 for line in f:
                     if RESTART_MARKER in line:
@@ -66,19 +66,19 @@ def _wait_for_restart(start_pos, timeout=30):
         except FileNotFoundError:
             pass
         time.sleep(0.25)
-    raise AssertionError("FTL did not come back within %ds of an import" % timeout)
+    raise AssertionError("Lorentz did not come back within %ds of an import" % timeout)
 
 
 def _archive(toml_text: str) -> bytes:
-    """Pack a pihole.toml into a Teleporter ZIP archive."""
+    """Pack a lorentz.toml into a Teleporter ZIP archive."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("etc/pihole/pihole.toml", toml_text)
+        zf.writestr("etc/lorentz/lorentz.toml", toml_text)
     return buf.getvalue()
 
 
 def _current_toml() -> str:
-    with open(PIHOLE_TOML, "r", encoding="utf-8") as fp:
+    with open(LORENTZ_TOML, "r", encoding="utf-8") as fp:
         return fp.read()
 
 
@@ -93,7 +93,7 @@ def _replace(toml_text: str, key: str, value: str) -> str:
     lines = toml_text.splitlines(keepends=True)
     start = next((i for i, line in enumerate(lines)
                   if re.match(r"^\s*" + re.escape(key) + r"\s*=", line)), None)
-    assert start is not None, f"{key} not found in {PIHOLE_TOML}"
+    assert start is not None, f"{key} not found in {LORENTZ_TOML}"
 
     end = start
     if re.match(r"^\s*" + re.escape(key) + r"\s*=\s*\[", lines[start]) and \
@@ -106,15 +106,15 @@ def _replace(toml_text: str, key: str, value: str) -> str:
     return "".join(lines[:start] + [f"{indent}{key} = {value}\n"] + lines[end + 1:])
 
 
-def _import(ftl, toml_text: str):
-    return ftl.POST("/api/teleporter", None, AuthenticationMethods.HEADER,
+def _import(lorentz, toml_text: str):
+    return lorentz.POST("/api/teleporter", None, AuthenticationMethods.HEADER,
                     {"file": ("teleporter.zip", _archive(toml_text), "application/zip")})
 
 
-# Each entry is a value no other way of configuring FTL would accept.
+# Each entry is a value no other way of configuring Lorentz would accept.
 INVALID_VALUES = [
     # An embedded newline carries a second directive into dnsmasq.conf
-    ("hostRecord", '"pi.hole,127.0.0.1\\nlog-queries"', "dns.hostRecord"),
+    ("hostRecord", '"lorentz.lan,127.0.0.1\\nlog-queries"', "dns.hostRecord"),
     # Same, in an array
     ("cnameRecords", '[ "a.com,b.com\\nlog-queries" ]', "dns.cnameRecords"),
     # Not a valid IP/hostname pair
@@ -124,7 +124,7 @@ INVALID_VALUES = [
 
 @pytest.mark.parametrize("key,value,expected_item", INVALID_VALUES,
                          ids=[v[2] for v in INVALID_VALUES])
-def test_invalid_value_is_refused(ftl, key, value, expected_item):
+def test_invalid_value_is_refused(lorentz, key, value, expected_item):
     """An archive carrying an invalid value is refused, naming the item."""
     before = _current_toml()
 
@@ -133,7 +133,7 @@ def test_invalid_value_is_refused(ftl, key, value, expected_item):
     # internationalized host name in dns.hosts which our own validator rejects,
     # and that would otherwise be reported instead of the value under test.
     archive = before if key == "hosts" else _replace(before, "hosts", "[]")
-    response = _import(ftl, _replace(archive, key, value))
+    response = _import(lorentz, _replace(archive, key, value))
 
     assert "error" in response, \
         f"{expected_item}: archive was accepted, response: {response}"
@@ -148,7 +148,7 @@ def test_invalid_value_is_refused(ftl, key, value, expected_item):
 
 
 
-def test_migrated_value_is_validated(ftl):
+def test_migrated_value_is_validated(lorentz):
     """A value a migration produces is checked like any other.
 
     The migrations run once the whole file has been read, so a check sitting
@@ -164,7 +164,7 @@ def test_migrated_value_is_validated(ftl):
         'domain = "local\\nlog-queries"\n'
     )
 
-    response = _import(ftl, archive)
+    response = _import(lorentz, archive)
 
     assert "error" in response, f"the migrated value was accepted: {response}"
     hint = str(response["error"].get("hint", ""))
@@ -178,7 +178,7 @@ def test_migrated_value_is_validated(ftl):
 # API either, otherwise the archive would be the way around that restriction.
 LOCKED_ITEMS = [
     ("dnsmasq_lines", '[ "log-queries" ]', "misc.dnsmasq_lines"),
-    ("advancedOpts", '[ "put_delete_auth_file", "/etc/pihole/pihole.toml" ]',
+    ("advancedOpts", '[ "put_delete_auth_file", "/etc/lorentz/lorentz.toml" ]',
      "webserver.advancedOpts"),
     # Relocating the document root is host-only; "/" would serve the filesystem
     ("webroot", '"/"', "webserver.paths.webroot"),
@@ -187,10 +187,10 @@ LOCKED_ITEMS = [
 
 @pytest.mark.parametrize("key,value,dotted", LOCKED_ITEMS,
                          ids=[i[2] for i in LOCKED_ITEMS])
-def test_locked_item_is_not_carried_over(ftl, key, value, dotted):
+def test_locked_item_is_not_carried_over(lorentz, key, value, dotted):
     """An archive changing a host-only item is imported without that change."""
     def _value():
-        node = ftl.GET("/api/config/" + dotted.replace(".", "/"))["config"]
+        node = lorentz.GET("/api/config/" + dotted.replace(".", "/"))["config"]
         for part in dotted.split("."):
             node = node[part]
         return node
@@ -198,7 +198,7 @@ def test_locked_item_is_not_carried_over(ftl, key, value, dotted):
     before = _value()
 
     pos = _log_end()
-    response = _import(ftl, _replace(_current_toml(), key, value))
+    response = _import(lorentz, _replace(_current_toml(), key, value))
     assert "error" not in response, f"{dotted}: refused: {response}"
     _wait_for_restart(pos)
 

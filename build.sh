@@ -1,10 +1,10 @@
 #!/bin/bash
-# Pi-hole: A black hole for Internet advertisements
+# Lorentz: A black hole for Internet advertisements
 # (c) 2020 Pi-hole, LLC (https://pi-hole.net)
 # Network-wide ad blocking via your own hardware.
 #
-# FTL Engine
-# Build script for FTL
+# Lorentz Engine
+# Build script for Lorentz
 #
 # This file is copyright under the latest version of the EUPL.
 # Please see LICENSE file for your rights under this license.
@@ -54,7 +54,7 @@ done
 if [[ -n "${help}" ]]; then
     cat << EOF
 Usage: $0 [options]
-Helper script simplifying the build process of Pi-hole FTL.
+Helper script simplifying the build process of Lorentz.
 
 Shortcuts:
   dev                Build, install, restart, and tail logs.
@@ -64,9 +64,9 @@ Other options:
   clean              Clean the build environment before building.
   nobuild            Do not trigger a build, e.g., after cleaning.
   install            Install the built binaries (requires sudo).
-  restart            Restart the pihole-FTL service (requires sudo).
-  clean-logs         Clean the FTL and dnsmasq log files.
-  tail               Tail (follow) the FTL and dnsmasq log files.
+  restart            Restart the lorentz service (requires sudo).
+  clean-logs         Clean the Lorentz and dnsmasq log files.
+  tail               Tail (follow) the Lorentz and dnsmasq log files.
   -h, help           Display this help text.
 
 Special CI options:
@@ -198,16 +198,16 @@ fi
 cmake --build . -- ${MAKEFLAGS}
 
 # Checksum verification
-./pihole-FTL verify
+./lorentz verify
 
 # If we are asked to install, we do this here (requires root privileges)
 # Otherwise, we simply copy the binary one level down
 if [[ -n "${install}" ]]; then
-    echo "Installing pihole-FTL"
+    echo "Installing lorentz"
     ${SUDO} cmake --install .
 else
-    echo "Copying compiled pihole-FTL binary to repository root"
-    cp pihole-FTL ../
+    echo "Copying compiled lorentz binary to repository root"
+    cp lorentz ../
     # Copy the regression test binaries alongside it so the bats tests can run
     # them from the repo root.
     for regression_bin in tar_regression gzip_regression ptr_response_regression db_driver_regression db_layer_regression; do
@@ -225,20 +225,20 @@ fi
 
 # If we are asked to restart, we do this here
 if [[ -n "${restart}" ]]; then
-    echo "Restarting pihole-FTL"
+    echo "Restarting lorentz"
 
     # First, reset the failure-counter in case a previous error caused a
-    # restarting loop now preventing systemd from starting FTL
-    ${SUDO} systemctl reset-failed pihole-FTL
+    # restarting loop now preventing systemd from starting Lorentz
+    ${SUDO} systemctl reset-failed lorentz
 
-    # Restart FTL
-    ${SUDO} systemctl restart pihole-FTL
+    # Restart Lorentz
+    ${SUDO} systemctl restart lorentz
 fi
 
 # If we are asked to clean the logs, we do this here
 if [[ -n "${clean_logs}" ]]; then
     echo "Cleaning log files"
-    for log_file in "$(pihole-FTL --config files.log.ftl)" "$(pihole-FTL --config files.log.dnsmasq)"; do
+    for log_file in "$(lorentz --config files.log.lorentz)" "$(lorentz --config files.log.dnsmasq)"; do
         echo "Cleaning ${log_file}"
         echo "" | ${SUDO} tee "$log_file"
     done
@@ -246,8 +246,8 @@ fi
 
 # If we want to attach the debugger, we do this here
 if [[ -n "${debug}" ]]; then
-    echo "Waiting for pihole-FTL to start..."
-    pid_file=/run/pihole-FTL.pid
+    echo "Waiting for lorentz to start..."
+    pid_file=/run/lorentz.pid
 
     # Loop until the pid file is created and non-empty
     while [ ! -f "${pid_file}" ] || [ ! -s "${pid_file}" ]; do
@@ -258,7 +258,7 @@ if [[ -n "${debug}" ]]; then
     pid=$(cat "${pid_file}")
 
     # Attach gdb to the process
-    echo "Attaching debugger to pihole-FTL (PID: ${pid})..."
+    echo "Attaching debugger to lorentz (PID: ${pid})..."
     ${SUDO} gdb -p "${pid}"
 fi
 
@@ -272,9 +272,9 @@ if [[ -n "${tail}" ]]; then
     fi
 
     # Get the log file locations
-    ftl_log=$(pihole-FTL --config files.log.ftl)
-    dnsmasq_log=$(pihole-FTL --config files.log.dnsmasq)
+    lorentz_log=$(lorentz --config files.log.lorentz)
+    dnsmasq_log=$(lorentz --config files.log.dnsmasq)
 
     # Create tmux sub-session with two panes next to each other each running a tail command
-    tmux new-session -d "tail -f ${ftl_log}" \; split-window -h "tail -f ${dnsmasq_log}" \; attach
+    tmux new-session -d "tail -f ${lorentz_log}" \; split-window -h "tail -f ${dnsmasq_log}" \; attach
 fi

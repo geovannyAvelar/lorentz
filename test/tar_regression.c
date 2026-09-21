@@ -11,9 +11,9 @@
 // Include the implementation directly so the tests can exercise the
 // file-internal helpers (parse_tar_size(), tar_entry_span()) and reuse the
 // TAR_* layout constants instead of duplicating them here. tar.c pulls in
-// FTL.h, which redefines the libc string/memory calls to FTL* wrappers; the
+// lorentz.h, which redefines the libc string/memory calls to Lorentz* wrappers; the
 // #undef block below restores the plain libc names for the test code itself,
-// and the handful of FTL* wrappers tar.c needs are provided as thin stubs
+// and the handful of Lorentz* wrappers tar.c needs are provided as thin stubs
 // further down.
 #include "zip/tar.c"
 
@@ -45,7 +45,7 @@ struct tar_test {
 	void (*run)(void);
 };
 
-size_t FTLstrlen(const char *s, const char *file, const char *func, const int line)
+size_t Lorentzstrlen(const char *s, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -53,7 +53,7 @@ size_t FTLstrlen(const char *s, const char *file, const char *func, const int li
 	return strlen(s);
 }
 
-size_t FTLstrnlen(const char *s, const size_t maxlen, const char *file, const char *func, const int line)
+size_t Lorentzstrnlen(const char *s, const size_t maxlen, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -64,7 +64,7 @@ size_t FTLstrnlen(const char *s, const size_t maxlen, const char *file, const ch
 	return len;
 }
 
-int FTLstrncmp(const char *s1, const char *s2, const size_t n, const char *file, const char *func, const int line)
+int Lorentzstrncmp(const char *s1, const char *s2, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -72,7 +72,7 @@ int FTLstrncmp(const char *s1, const char *s2, const size_t n, const char *file,
 	return strncmp(s1, s2, n);
 }
 
-int FTLstrcmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
+int Lorentzstrcmp(const char *s1, const char *s2, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -80,7 +80,7 @@ int FTLstrcmp(const char *s1, const char *s2, const char *file, const char *func
 	return strcmp(s1, s2);
 }
 
-void *FTLmemcpy(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
+void *Lorentzmemcpy(void *dest, const void *src, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -88,7 +88,7 @@ void *FTLmemcpy(void *dest, const void *src, const size_t n, const char *file, c
 	return memcpy(dest, src, n);
 }
 
-void *FTLmemset(void *s, const int c, const size_t n, const char *file, const char *func, const int line)
+void *Lorentzmemset(void *s, const int c, const size_t n, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -96,7 +96,7 @@ void *FTLmemset(void *s, const int c, const size_t n, const char *file, const ch
 	return memset(s, c, n);
 }
 
-void *FTLcalloc(const size_t nmemb, const size_t size, const char *file, const char *func, const int line)
+void *Lorentzcalloc(const size_t nmemb, const size_t size, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -104,7 +104,7 @@ void *FTLcalloc(const size_t nmemb, const size_t size, const char *file, const c
 	return calloc(nmemb, size);
 }
 
-bool FTLfree(void *ptr, const char *file, const char *func, const int line)
+bool Lorentzfree(void *ptr, const char *file, const char *func, const int line)
 {
 	(void)file;
 	(void)func;
@@ -113,7 +113,7 @@ bool FTLfree(void *ptr, const char *file, const char *func, const int line)
 	return true;
 }
 
-int FTLfprintf(FILE *stream, const char *file, const char *func, const int line, const char *format, ...)
+int Lorentzfprintf(FILE *stream, const char *file, const char *func, const int line, const char *format, ...)
 {
 	(void)file;
 	(void)func;

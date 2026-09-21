@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  X.509 certificate and randomness generator prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -20,6 +20,6 @@
 bool generate_certificate(const char *certfile, bool rsa, const char *domain, const unsigned int validity_days);
 enum cert_check read_certificate(const char *certfile, const char *domain, const bool private_key);
 enum cert_check cert_currently_valid(const char *certfile, const time_t valid_for_at_least_days);
-bool is_pihole_certificate(const char *certfile);
+bool is_lorentz_certificate(const char *certfile);
 
 #endif // X509_H

@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2023 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  API Implementation /api/search
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "webserver/http-common.h"
 #include "webserver/json_macros.h"
 #include "api/api.h"
@@ -21,7 +21,7 @@
 
 #define MAX_SEARCH_RESULTS 10000u
 
-static int search_table(struct ftl_conn *api, db_conn *db, const char *item,
+static int search_table(struct lorentz_conn *api, db_conn *db, const char *item,
                         const enum gravity_list_type listtype,
                         char *ids, const unsigned int limit,
                         unsigned int *N, const bool partial, cJSON* json)
@@ -104,7 +104,7 @@ static int search_table(struct ftl_conn *api, db_conn *db, const char *item,
 	return 200;
 }
 
-static int search_gravity(struct ftl_conn *api, db_conn *db, const char *punycode, cJSON *array,
+static int search_gravity(struct lorentz_conn *api, db_conn *db, const char *punycode, cJSON *array,
                           cJSON **abp_patterns, const unsigned int limit, unsigned int *N,
                           const bool partial, const bool antigravity)
 {
@@ -143,7 +143,7 @@ static int search_gravity(struct ftl_conn *api, db_conn *db, const char *punycod
 	return 200;
 }
 
-int api_search(struct ftl_conn *api)
+int api_search(struct lorentz_conn *api)
 {
 	int ret = 0;
 	const char *domain = api->item;

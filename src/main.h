@@ -1,8 +1,8 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2019 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Main prototypes
 *
 *  This file is copyright under the latest version of the EUPL.
@@ -16,7 +16,7 @@
 extern int main_dnsmasq(int argc, char ** argv);
 
 // defined in dnsmasq_interface.c
-void FTL_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start);
+void Lorentz_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start);
 
 extern char *username;
 extern bool startup;

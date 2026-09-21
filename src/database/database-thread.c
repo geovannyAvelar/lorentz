@@ -1,14 +1,14 @@
-/* Pi-hole: A black hole for Internet advertisements
+/* Lorentz: A black hole for Internet advertisements
 *  (c) 2017 Pi-hole, LLC (https://pi-hole.net)
 *  Network-wide ad blocking via your own hardware.
 *
-*  FTL Engine
+*  Lorentz Engine
 *  Database thread
 *
 *  This file is copyright under the latest version of the EUPL.
 *  Please see LICENSE file for your rights under this license. */
 
-#include "FTL.h"
+#include "lorentz.h"
 #include "database/database-thread.h"
 #include "database/common.h"
 // [un]lock_shm();
@@ -26,12 +26,12 @@
 #include "database/aliasclients.h"
 // Eventqueue routines
 #include "events.h"
-// get_FTL_db_stats()
+// get_Lorentz_db_stats()
 #include "files.h"
 // gravity_updated(), gravityDB_dump_perf_stats()
 #include "database/gravity-db.h"
-// FTL_dump_cache_stats() - forward declaration to avoid pulling in dnsmasq headers
-extern void FTL_dump_cache_stats(void);
+// Lorentz_dump_cache_stats() - forward declaration to avoid pulling in dnsmasq headers
+extern void Lorentz_dump_cache_stats(void);
 // parse_proc_meminfo()
 #include "procps.h"
 // sqlite3_mem_used()
@@ -72,7 +72,7 @@ static bool analyze_database(db_conn *db)
  *
  * @return void
  * @see parse_proc_meminfo(), getProcessMemory(), format_memory_size(),
- *      sqlite3_mem_used(), get_FTL_db_stats(), get_row_count(), log_debug()
+ *      sqlite3_mem_used(), get_Lorentz_db_stats(), get_row_count(), log_debug()
  */
 static void log_used_memory(void)
 {
@@ -131,7 +131,7 @@ static void log_used_memory(void)
 
 	// Log on-disk database file size
 	struct stat st;
-	get_FTL_db_stats(&st);
+	get_Lorentz_db_stats(&st);
 	char db_size_prefix[2] = { 0 };
 	double db_size_formatted = 0.0;
 	format_memory_size(db_size_prefix, st.st_size, &db_size_formatted);
@@ -158,7 +158,7 @@ void *DB_thread(void *val)
 		DB_read_queries();
 
 	// Signify that the import is done, so garbage collection will run. An
-	// import that was aborted because FTL terminates is not: main() skips
+	// import that was aborted because Lorentz terminates is not: main() skips
 	// the final export then
 	if(!killed)
 		db_import_done = true;
@@ -176,9 +176,9 @@ void *DB_thread(void *val)
 	time_t lastDBdelete = before;
 
 	// Add some randomness (between one and two hours) to these timestamps
-	// to avoid them running at the same time and immediately after FTL was
+	// to avoid them running at the same time and immediately after Lorentz was
 	// (re)started. We really only want them to run in the background when
-	// FTL is running for a while.
+	// Lorentz is running for a while.
 	time_t lastAnalyze = before + 3600 + (rand() % 3600);
 	time_t lastMACVendor = before + 3600 + (rand() % 3600);
 
@@ -190,7 +190,7 @@ void *DB_thread(void *val)
 	time_t lastGravityStats = before;
 
 	// This thread runs until shutdown of the process. We keep this thread
-	// running when pihole-FTL.db is corrupted because reloading of privacy
+	// running when lorentz.db is corrupted because reloading of privacy
 	// level, and the gravity database (initially and after gravity)
 	db_conn *db = NULL;
 	while(!killed)
@@ -204,11 +204,11 @@ void *DB_thread(void *val)
 			lastMemLog = now;
 		}
 
-		// Dump gravity lookup and FTL cache performance statistics every 5 minutes
+		// Dump gravity lookup and Lorentz cache performance statistics every 5 minutes
 		// (only when debug.performance is enabled)
 		if(config.debug.performance.v.b && now - lastGravityStats >= 300)
 		{
-			TIMED_DB_OP(FTL_dump_cache_stats());
+			TIMED_DB_OP(Lorentz_dump_cache_stats());
 			TIMED_DB_OP(gravityDB_dump_perf_stats());
 			lastGravityStats = now;
 		}
@@ -321,7 +321,7 @@ void *DB_thread(void *val)
 
 		// Process database related event queue elements
 		if(get_and_clear_event(RELOAD_GRAVITY))
-			TIMED_DB_OP(FTL_reload_all_domainlists());
+			TIMED_DB_OP(Lorentz_reload_all_domainlists());
 
 		// Intermediate cancellation-point
 		BREAK_IF_KILLED();
