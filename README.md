@@ -15,17 +15,10 @@
 > original licence (EUPL-1.2) and all upstream copyright notices. Please report problems with this fork here,
 > not to the Pi-hole project.
 
+<h1 align="center">Lorentz</h1>
+
 <p align="center">
-  <a href="https://pi-hole.net/">
-    <img src="https://raw.githubusercontent.com/pi-hole/graphics/refs/heads/master/Vortex/vortex_with_text.svg" alt="Lorentz logo" width="80" height="128">
-  </a>
-  <br>
   <strong>Network-wide ad blocking via your own Linux hardware</strong>
-  <br>
-  <br>
-  <a href="https://pi-hole.net/">
-    <img src="https://raw.githubusercontent.com/pi-hole/graphics/refs/heads/master/FTLDNS/FTLDNS.svg" alt="Lorentz logo" width="500" height="128">
-  </a>
 </p>
 
 Lorentz (`lorentz`) provides an interactive API and also generates statistics for the [Pi-hole®](https://pi-hole.net/trademark-rules-and-brand-guidelines/) web interface.
