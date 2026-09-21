@@ -42,6 +42,8 @@ set(database_sources
         query-table.c
         query-table.h
         session-table.c
+        user-table.c
+        user-table.h
         session-table.h
         sqlite3.h
         sqlite3-ext.c

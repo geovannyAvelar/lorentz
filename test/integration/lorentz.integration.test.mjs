@@ -92,9 +92,9 @@ for (const backend of backends) describe(`a fresh lorentz (${backend.name})`, ()
       const log = await lorentzLog(lorentz);
       if (backend.name === "sqlite") {
         assert.match(log, /Database version is 1\b/);
-        assert.match(log, /Updating long-term database to version 22/);
+        assert.match(log, /Updating long-term database to version 23/);
       } else {
-        assert.match(log, /Creating the long-term database \(version 22\)/);
+        assert.match(log, /Creating the long-term database \(version 23\)/);
       }
       assert.match(log, /Database successfully initialized/);
       assert.match(log, /Imported 0 queries from the (on-disk|long-term) database/);
@@ -105,13 +105,13 @@ for (const backend of backends) describe(`a fresh lorentz (${backend.name})`, ()
       await backend.healthy(lorentz);
       const db = lorentz.longterm;
       const version = Number(await db.query("SELECT value FROM lorentz WHERE id = 0;"));
-      assert.ok(version >= 22, `database version ${version}`);
+      assert.ok(version >= 23, `database version ${version}`);
       const tables = (backend.name === "sqlite"
         ? await db.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;")
         : await db.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = '${db.schema}' AND table_type = 'BASE TABLE' ORDER BY 1`)
       ).split("\n");
       for (const table of ["query_storage", "domain_by_id", "client_by_id", "forward_by_id",
-        "addinfo_by_id", "message", "session", "network", "network_addresses", "aliasclient", "counters", "lorentz"])
+        "addinfo_by_id", "message", "session", "network", "network_addresses", "aliasclient", "counters", "lorentz", "users"])
         assert.ok(tables.includes(table), `table ${table} exists`);
       assert.equal(await db.query(backend.name === "sqlite"
         ? "SELECT count(*) FROM sqlite_master WHERE type = 'view' AND name = 'queries';"
@@ -442,6 +442,274 @@ for (const backend of backends) describe(`API sessions (${backend.name})`, () =>
   });
 });
 
+// Accounts: an open API becomes a closed one with the first account, and every
+// account has the rights of its role
+for (const backend of backends) describe(`user accounts (${backend.name})`, () => {
+  let lorentz;
+  const admin = { username: "admin", password: "admin-password-1" };
+  const bootstrap = { ...admin, role: "admin", comment: "the first" };
+
+  const login = async (username, password, extra = {}) => {
+    const { status, body } = await api(lorentz, "/api/auth", { method: "POST", json: { username, password, ...extra } });
+    return { status, body, sid: body?.session?.sid };
+  };
+  const as = (sid) => ({ headers: { sid } });
+  const users = (sid, path = "", options = {}) => api(lorentz, `/api/users${path}`, { ...as(sid), ...options });
+  let sid; // of the admin
+
+  before(async () => {
+    lorentz = await backend.start();
+  });
+  after(async () => {
+    await lorentz?.stop();
+  });
+
+  it("is open until there is an account, and the first one has to be an admin", async () => {
+    assert.equal((await api(lorentz, "/api/users")).status, 200);
+    assert.deepEqual((await api(lorentz, "/api/users")).body.users, []);
+
+    const viewer = await api(lorentz, "/api/users", { method: "POST", json: { ...bootstrap, role: "viewer" } });
+    assert.equal(viewer.status, 409);
+    const implicit = await api(lorentz, "/api/users", { method: "POST", json: { username: "x", password: "longenough" } });
+    assert.equal(implicit.status, 409, "a viewer is the default, so this is refused too");
+
+    const created = await api(lorentz, "/api/users", { method: "POST", json: bootstrap });
+    assert.equal(created.status, 201);
+    const [user] = created.body.users;
+    assert.equal(user.username, "admin");
+    assert.equal(user.role, "admin");
+    assert.equal(user.enabled, true);
+    assert.equal(user.comment, "the first");
+    assert.equal(user.last_login, null);
+    assert.ok(user.id > 0 && user.created_at > 0);
+    assert.equal(user.pwhash, undefined, "the hash is never returned");
+    assert.equal(JSON.stringify(created.body).includes("BALLOON"), false);
+  });
+
+  it("requires a login from then on", async () => {
+    assert.equal((await api(lorentz, "/api/users")).status, 401);
+    assert.equal((await api(lorentz, "/api/stats/summary")).status, 401);
+    assert.equal((await login("admin", "wrong")).status, 401);
+    assert.equal((await login("nobody", admin.password)).status, 401);
+    assert.equal((await login("admin", "")).status, 401);
+    // The password of the configuration is empty, it does not open the API
+    assert.equal((await api(lorentz, "/api/auth", { method: "POST", json: { password: "" } })).status, 401);
+
+    const ok = await login("ADMIN", admin.password); // names are not case sensitive
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.session.valid, true);
+    assert.equal(ok.body.session.user.username, "admin");
+    assert.equal(ok.body.session.user.role, "admin");
+    sid = ok.sid;
+    assert.equal((await api(lorentz, "/api/stats/summary", as(sid))).status, 200);
+  });
+
+  it("lists, creates, reads and validates accounts", async () => {
+    for (const [body, key] of [
+      [{ username: "", password: "longenough" }, "empty name"],
+      [{ username: "has space", password: "longenough" }, "name with a space"],
+      [{ username: "a".repeat(65), password: "longenough" }, "name too long"],
+      [{ username: "bob", password: "short" }, "password too short"],
+      [{ username: "bob" }, "no password"],
+      [{ password: "longenough" }, "no name"],
+      [{ username: 5, password: "longenough" }, "name not a string"],
+      [{ username: "bob", password: "longenough", role: "root" }, "unknown role"],
+      [{ username: "bob", password: "longenough", enabled: "yes" }, "enabled not a boolean"],
+    ]) {
+      const { status, body: error } = await users(sid, "", { method: "POST", json: body });
+      assert.equal(status, 400, key);
+      assert.equal(error.error.key, "bad_request", key);
+    }
+    assert.equal((await users(sid, "", { method: "POST", json: { username: "admin", password: "longenough" } })).status, 409);
+    assert.equal((await users(sid, "", { method: "POST", json: { username: "ADMIN", password: "longenough" } })).status, 409);
+
+    const bob = await users(sid, "", { method: "POST", json: { username: "Bob.Smith@home", password: "bobs-password", comment: "reads" } });
+    assert.equal(bob.status, 201);
+    assert.equal(bob.body.users[0].username, "bob.smith@home");
+    assert.equal(bob.body.users[0].role, "viewer", "the default role");
+
+    const list = await users(sid);
+    assert.deepEqual(list.body.users.map((user) => user.username), ["admin", "bob.smith@home"]);
+    const one = await users(sid, "/BOB.smith@home");
+    assert.equal(one.body.users[0].comment, "reads");
+    assert.equal((await users(sid, "/nobody")).status, 404);
+    assert.equal((await users(sid, "/nobody", { method: "PUT", json: { comment: "x" } })).status, 404);
+    assert.equal((await users(sid, "/nobody", { method: "DELETE" })).status, 404);
+
+    // The database has what the API says, and not the password
+    const stored = await lorentz.longterm.query("SELECT username || ':' || role FROM users ORDER BY id");
+    assert.equal(stored, "admin:admin\nbob.smith@home:viewer");
+    assert.equal(await lorentz.longterm.query("SELECT count(*) FROM users WHERE pwhash LIKE '%bobs-password%'"), "0");
+  });
+
+  it("gives a viewer the rights to look and nothing more", async () => {
+    const viewer = await login("bob.smith@home", "bobs-password");
+    assert.equal(viewer.status, 200);
+    assert.equal(viewer.body.session.user.role, "viewer");
+    const v = viewer.sid;
+
+    assert.equal((await api(lorentz, "/api/stats/summary", as(v))).status, 200);
+    assert.equal((await api(lorentz, "/api/queries?length=1", as(v))).status, 200);
+    assert.equal((await api(lorentz, "/api/domains", as(v))).status, 200);
+    // Nothing that changes, nothing that holds secrets
+    const write = await api(lorentz, "/api/domains/deny/exact", { ...as(v), method: "POST", json: { domain: "x.example", groups: [0] } });
+    assert.equal(write.status, 403);
+    assert.equal(write.body.error.key, "forbidden");
+    assert.equal((await api(lorentz, "/api/groups", { ...as(v), method: "POST", json: { name: "g" } })).status, 403);
+    assert.equal((await api(lorentz, "/api/action/restartdns", { ...as(v), method: "POST" })).status, 403);
+    for (const path of ["/api/config", "/api/teleporter", "/api/logs/lorentz", "/api/auth/sessions", "/api/auth/app"])
+      assert.equal((await api(lorentz, path, as(v))).status, 403, path);
+
+    // Accounts: not the others, not to create, but themselves
+    assert.equal((await users(v)).status, 403);
+    assert.equal((await users(v, "", { method: "POST", json: { username: "eve", password: "longenough", role: "admin" } })).status, 403);
+    assert.equal((await users(v, "/admin")).status, 403);
+    assert.equal((await users(v, "/admin", { method: "PUT", json: { comment: "hacked" } })).status, 403);
+    assert.equal((await users(v, "/admin", { method: "DELETE" })).status, 403);
+    assert.equal((await users(v, "/bob.smith@home")).status, 200);
+    for (const change of [{ role: "admin" }, { enabled: false }, { username: "bobby" }])
+      assert.equal((await users(v, "/bob.smith@home", { method: "PUT", json: change })).status, 403, JSON.stringify(change));
+    assert.equal((await users(v, "/bob.smith@home", { method: "DELETE" })).status, 403);
+    assert.equal((await users(v, "/bob.smith@home", { method: "PUT", json: { comment: "my own" } })).status, 200);
+
+    // The session says who they are, and lists the accounts of the others for an admin
+    const sessions = await api(lorentz, "/api/auth/sessions", as(sid));
+    assert.deepEqual(sessions.body.sessions.map((session) => session.user?.username).sort(), ["admin", "bob.smith@home"]);
+    assert.equal((await api(lorentz, "/api/auth", { method: "DELETE", ...as(v) })).status, 204);
+    assert.equal((await api(lorentz, "/api/stats/summary", as(v))).status, 401);
+  });
+
+  it("changes a password with the old one, and ends the other sessions", async () => {
+    const first = await login("bob.smith@home", "bobs-password");
+    const second = await login("bob.smith@home", "bobs-password");
+    const [a, b] = [first.sid, second.sid];
+
+    const path = "/bob.smith@home";
+    assert.equal((await users(a, path, { method: "PUT", json: { password: "the-new-password" } })).status, 400, "no current password");
+    assert.equal((await users(a, path, { method: "PUT", json: { password: "the-new-password", current_password: "wrong" } })).status, 401);
+    assert.equal((await users(a, path, { method: "PUT", json: { password: "short", current_password: "bobs-password" } })).status, 400);
+    const changed = await users(a, path, { method: "PUT", json: { password: "the-new-password", current_password: "bobs-password" } });
+    assert.equal(changed.status, 200);
+
+    assert.equal((await api(lorentz, "/api/stats/summary", as(a))).status, 200, "the session that asked goes on");
+    assert.equal((await api(lorentz, "/api/stats/summary", as(b))).status, 401, "the other one ended");
+    assert.equal((await login("bob.smith@home", "bobs-password")).status, 401);
+    const again = await login("bob.smith@home", "the-new-password");
+    assert.equal(again.status, 200);
+
+    // An admin resets it without knowing the old one
+    const reset = await users(sid, path, { method: "PUT", json: { password: "reset-by-admin" } });
+    assert.equal(reset.status, 200);
+    assert.equal((await api(lorentz, "/api/stats/summary", as(again.sid))).status, 401, "sessions end on a reset");
+    assert.equal((await login("bob.smith@home", "reset-by-admin")).status, 200);
+    assert.notEqual(reset.body.users[0].last_login, undefined);
+  });
+
+  it("disables, enables, renames and deletes", async () => {
+    const path = "/bob.smith@home";
+    const session = await login("bob.smith@home", "reset-by-admin");
+    assert.equal((await api(lorentz, "/api/stats/summary", as(session.sid))).status, 200);
+
+    const disabled = await users(sid, path, { method: "PUT", json: { enabled: false } });
+    assert.equal(disabled.status, 200);
+    assert.equal(disabled.body.users[0].enabled, false);
+    assert.equal((await api(lorentz, "/api/stats/summary", as(session.sid))).status, 401, "its session ends");
+    assert.equal((await login("bob.smith@home", "reset-by-admin")).status, 401, "and it cannot log in");
+
+    assert.equal((await users(sid, path, { method: "PUT", json: { enabled: true, role: "admin", comment: null } })).status, 200);
+    const promoted = await login("bob.smith@home", "reset-by-admin");
+    assert.equal(promoted.status, 200);
+    assert.equal(promoted.body.session.user.role, "admin");
+    assert.equal((await users(promoted.sid)).status, 200, "an admin manages accounts");
+    // The role applies at once, without a new login
+    assert.equal((await users(sid, path, { method: "PUT", json: { role: "viewer" } })).status, 200);
+    assert.equal((await users(promoted.sid)).status, 403);
+    assert.equal((await api(lorentz, "/api/stats/summary", as(promoted.sid))).status, 200);
+
+    const renamed = await users(sid, path, { method: "PUT", json: { username: "Robert" } });
+    assert.equal(renamed.status, 200);
+    assert.equal(renamed.body.users[0].username, "robert");
+    assert.equal((await users(sid, path)).status, 404);
+    assert.equal((await users(sid, "/robert", { method: "PUT", json: { username: "admin" } })).status, 409);
+    assert.equal((await api(lorentz, "/api/stats/summary", as(promoted.sid))).status, 200, "a rename keeps the session");
+    assert.equal((await login("robert", "reset-by-admin")).status, 200);
+
+    assert.equal((await users(sid, "/robert", { method: "DELETE" })).status, 204);
+    assert.equal((await api(lorentz, "/api/stats/summary", as(promoted.sid))).status, 401, "a deleted account has no session");
+    assert.equal((await login("robert", "reset-by-admin")).status, 401);
+    assert.equal((await users(sid, "/robert")).status, 404);
+  });
+
+  it("never leaves the API without an enabled admin", async () => {
+    const own = await users(sid, "/admin", { method: "DELETE" });
+    assert.equal(own.status, 409, "your own account");
+    assert.equal((await users(sid, "/admin", { method: "PUT", json: { enabled: false } })).status, 409);
+    assert.equal((await users(sid, "/admin", { method: "PUT", json: { role: "viewer" } })).status, 409);
+
+    // A second admin can remove the first, but not the last
+    assert.equal((await users(sid, "", { method: "POST", json: { username: "second", password: "second-password", role: "admin" } })).status, 201);
+    const second = await login("second", "second-password");
+    assert.equal((await users(second.sid, "/admin", { method: "DELETE" })).status, 204);
+    assert.equal((await users(second.sid, "/second", { method: "DELETE" })).status, 409);
+    assert.equal((await users(second.sid, "/second", { method: "PUT", json: { role: "viewer" } })).status, 409);
+    assert.equal((await users(second.sid, "/second", { method: "PUT", json: { comment: "still fine" } })).status, 200);
+    sid = second.sid;
+  });
+
+  it("keeps the accounts and their sessions across a restart", async () => {
+    assert.equal((await users(sid, "", { method: "POST", json: { username: "kept", password: "kept-password", role: "viewer" } })).status, 201);
+    const kept = await login("kept", "kept-password");
+    await restartLorentz(lorentz);
+
+    assert.match(await lorentzLog(lorentz), /Restored \d+ API sessions?/);
+    assert.equal((await api(lorentz, "/api/stats/summary", as(kept.sid))).status, 200);
+    const check = await api(lorentz, "/api/auth", as(kept.sid));
+    assert.equal(check.body.session.user.username, "kept");
+    assert.equal((await users(sid)).body.users.length, 2);
+    assert.equal((await login("kept", "kept-password")).status, 200);
+    assert.equal((await api(lorentz, "/api/users")).status, 401);
+    assert.deepEqual(errorLines(await lorentzLog(lorentz)), []);
+  });
+});
+
+// With a password in the configuration as well, both ways in work
+for (const backend of backends) describe(`accounts and the password of the configuration (${backend.name})`, () => {
+  let lorentz;
+  const password = "configured-password";
+
+  before(async () => {
+    lorentz = await backend.start({ LORENTZCONF_webserver_api_password: password });
+  });
+  after(async () => {
+    await lorentz?.stop();
+  });
+
+  it("creates an account through a login with the configured password", async () => {
+    assert.equal((await api(lorentz, "/api/users")).status, 401);
+    const configured = await api(lorentz, "/api/auth", { method: "POST", json: { password } });
+    assert.equal(configured.status, 200);
+    assert.equal(configured.body.session.user, null, "not an account");
+    const sid = configured.body.session.sid;
+
+    // Its rights are the ones of an admin, and here the first account may be a viewer
+    const created = await api(lorentz, "/api/users", { method: "POST", headers: { sid }, json: { username: "carol", password: "carols-password" } });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.users[0].role, "viewer");
+    assert.equal((await api(lorentz, "/api/users/carol", { headers: { sid } })).status, 200);
+
+    const carol = await api(lorentz, "/api/auth", { method: "POST", json: { username: "carol", password: "carols-password" } });
+    assert.equal(carol.status, 200);
+    assert.equal((await api(lorentz, "/api/users", { headers: { sid: carol.body.session.sid } })).status, 403);
+    // The password of the configuration does not log in to an account and the other way round
+    assert.equal((await api(lorentz, "/api/auth", { method: "POST", json: { username: "carol", password } })).status, 401);
+    assert.equal((await api(lorentz, "/api/auth", { method: "POST", json: { password: "carols-password" } })).status, 401);
+    // Deleting the last account is fine when it is no admin: the configured password is still the way in
+    assert.equal((await api(lorentz, "/api/users/carol", { method: "DELETE", headers: { sid } })).status, 204);
+    assert.equal((await api(lorentz, "/api/users", { headers: { sid: carol.body.session.sid } })).status, 401);
+    assert.equal((await api(lorentz, "/api/stats/summary", { headers: { sid } })).status, 200);
+  });
+});
+
 describe("upgrading a database", () => {
   let lorentz;
   const fixture = join(dirname(fileURLToPath(import.meta.url)), "..", "lorentz.db.sql");
@@ -463,10 +731,10 @@ describe("upgrading a database", () => {
     const log = await lorentzLog(lorentz);
     assert.match(log, /Database version is 9\b/);
     assert.match(log, /Updating long-term database to version 10/);
-    assert.match(log, /Updating long-term database to version 22/);
+    assert.match(log, /Updating long-term database to version 23/);
     assert.match(log, /Database successfully initialized/);
     assert.deepEqual(errorLines(log), []);
-    assert.ok(Number(await sqlite(lorentz, LORENTZ_DB, "SELECT value FROM lorentz WHERE id = 0;")) >= 22);
+    assert.ok(Number(await sqlite(lorentz, LORENTZ_DB, "SELECT value FROM lorentz WHERE id = 0;")) >= 23);
     assert.equal(await sqlite(lorentz, LORENTZ_DB, "PRAGMA integrity_check;"), "ok");
   });
 
@@ -519,10 +787,10 @@ if (wanted.includes("postgres")) describe("PostgreSQL connection data from the e
 
   it("connects and creates its tables", async () => {
     const log = await lorentzLog(lorentz);
-    assert.match(log, /Creating the long-term database \(version 22\)/);
+    assert.match(log, /Creating the long-term database \(version 23\)/);
     assert.match(log, /Database successfully initialized/);
     assert.deepEqual(errorLines(log), []);
-    assert.equal(await schema.sql("SELECT value FROM lorentz WHERE id = 0"), "22");
+    assert.equal(await schema.sql("SELECT value FROM lorentz WHERE id = 0"), "23");
   });
 
   it("keeps the password out of the configuration and the log", async () => {

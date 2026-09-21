@@ -91,10 +91,10 @@ LORENTZ_BACKENDS=postgres npm --prefix test/integration test
 ### Schema on PostgreSQL
 
 A new PostgreSQL database is created by `db_schema_baseline()`
-(`src/database/db-schema.c`), which builds the current schema (version 22) in
+(`src/database/db-schema.c`), which builds the current schema (version 23) in
 one transaction using the dialect of the driver. The SQLite migrations of
 `db_init()` stay as they are, and `db_schema_migrate()` refuses anything but the
-current version, so a change of the schema after version 22 has to be written
+current version, so a change of the schema after version 23 has to be written
 for both. Three checks keep the two in step: the driver harnesses compare the
 PostgreSQL columns and indexes with the SQLite baseline, and
 `db_layer_regression` compares a real migrated SQLite file with the baseline

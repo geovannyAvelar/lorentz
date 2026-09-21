@@ -27,6 +27,7 @@
 #include <nettle/memops.h>
 // database session functions
 #include "database/session-table.h"
+#include "database/user-table.h"
 // LorentzDBerror()
 #include "database/common.h"
 // pthread_mutex_t
@@ -67,6 +68,27 @@ static void add_request_info(struct lorentz_conn *api, const char *csrf)
 	memset((int*)&api->request->is_authenticated, 1, sizeof(api->request->is_authenticated));
 }
 
+// Who a session belongs to: {"id", "username", "role"}, or null for a login with
+// the password of the configuration, which has the rights of an admin
+static cJSON *session_user_object(const int64_t account_id)
+{
+	if(account_id == SESSION_NO_ACCOUNT)
+		return cJSON_CreateNull();
+
+	enum user_role role;
+	char username[USERNAME_MAX + 1];
+	if(!user_cache_lookup(account_id, &role, username))
+		return cJSON_CreateNull();
+
+	cJSON *user = cJSON_CreateObject();
+	if(user == NULL)
+		return cJSON_CreateNull();
+	cJSON_AddNumberToObject(user, "id", (double)account_id);
+	cJSON_AddStringToObject(user, "username", username);
+	cJSON_AddStringToObject(user, "role", user_role_str(role));
+	return user;
+}
+
 void init_api_sessions(void)
 {
 	// Restore sessions from database
@@ -100,8 +122,8 @@ void free_api(void)
 // Returns >= 0 for any valid authentication
 int check_client_auth(struct lorentz_conn *api, const bool is_api)
 {
-	// When the pwhash is unset, authentication is disabled
-	if(config.webserver.api.pwhash.v.s[0] == '\0')
+	// When the pwhash is unset and there is no account, authentication is disabled
+	if(config.webserver.api.pwhash.v.s[0] == '\0' && users_enabled_count() == 0)
 	{
 		api->message = "no password set";
 		add_request_info(api, NULL);
@@ -269,6 +291,15 @@ int check_client_auth(struct lorentz_conn *api, const bool is_api)
 				          api->message, csrf, auth_data[i].csrf);
 				return API_AUTH_UNAUTHORIZED;
 			}
+			// The account of the session may have been disabled or deleted since
+			if(auth_data[i].account_id != SESSION_NO_ACCOUNT &&
+			   !user_cache_lookup(auth_data[i].account_id, NULL, NULL))
+			{
+				api->message = "account disabled";
+				log_debug(DEBUG_API, "API Authentication: FAIL (%s)", api->message);
+				return API_AUTH_UNAUTHORIZED;
+			}
+
 			user_id = i;
 			break;
 		}
@@ -353,6 +384,7 @@ static int get_all_sessions(struct lorentz_conn *api, cJSON *json)
 			JSON_ADD_NULL_TO_OBJECT(session, "x_forwarded_for");
 		JSON_ADD_BOOL_TO_OBJECT(session, "app", auth_data[i].app);
 		JSON_ADD_BOOL_TO_OBJECT(session, "cli", auth_data[i].cli);
+		JSON_ADD_ITEM_TO_OBJECT(session, "user", session_user_object(auth_data[i].account_id));
 		JSON_ADD_ITEM_TO_ARRAY(sessions, session);
 	}
 	AUTOUNLOCK();
@@ -386,6 +418,7 @@ static int get_session_object(struct lorentz_conn *api, cJSON *json, const int u
 		JSON_COPY_STR_TO_OBJECT(session, "csrf", auth_data[user_id].csrf);
 		JSON_ADD_NUMBER_TO_OBJECT(session, "validity", auth_data[user_id].valid_until - now);
 		JSON_REF_STR_IN_OBJECT(session, "message", api->message);
+		JSON_ADD_ITEM_TO_OBJECT(session, "user", session_user_object(auth_data[user_id].account_id));
 		JSON_ADD_ITEM_TO_OBJECT(json, "session", session);
 		return 0;
 	}
@@ -417,6 +450,16 @@ static bool delete_session(const int user_id, const bool is_locked)
 	memset(&auth_data[user_id], 0, sizeof(auth_data[user_id]));
 
 	return was_valid;
+}
+
+// End the sessions of an account, e.g. after it was deleted or disabled, except the one in
+// slot except_slot (-1 for none)
+void delete_user_sessions(const int64_t account_id, const int except_slot)
+{
+	AUTOLOCK(&auth_lock);
+	for(int i = 0; i < max_sessions; i++)
+		if(i != except_slot && auth_data[i].used && auth_data[i].account_id == account_id)
+			memset(&auth_data[i], 0, sizeof(auth_data[i]));
 }
 
 void delete_all_sessions(void)
@@ -510,7 +553,9 @@ int api_auth(struct lorentz_conn *api)
 	// Check HTTP method
 	char *password = NULL;
 	const time_t now = time(NULL);
-	const bool empty_password = config.webserver.api.pwhash.v.s[0] == '\0';
+	// Without a password in the configuration and without accounts, anyone may log in
+	const bool empty_password = config.webserver.api.pwhash.v.s[0] == '\0' && users_enabled_count() == 0;
+	const char *username = NULL;
 
 	if(api->item != NULL && strlen(api->item) > 0)
 	{
@@ -551,6 +596,23 @@ int api_auth(struct lorentz_conn *api)
 
 		// password is already null-terminated
 		password = json_password->valuestring;
+
+		// An account logs in with its name. Without one, the password is
+		// the one of the configuration
+		const cJSON *json_username = cJSON_GetObjectItemCaseSensitive(api->payload.json, "username");
+		if(json_username != NULL && !cJSON_IsNull(json_username))
+		{
+			if(!cJSON_IsString(json_username))
+			{
+				const char *message = "Field username has to be of type 'string'";
+				log_debug(DEBUG_API, "API auth error: %s", message);
+				return send_json_error(api, 400,
+				                       "bad_request",
+				                       message,
+				                       NULL);
+			}
+			username = json_username->valuestring;
+		}
 	}
 
 	// Did the client authenticate before and we can validate this?
@@ -576,8 +638,14 @@ int api_auth(struct lorentz_conn *api)
 	// - There no password on this machine
 	enum password_result result = PASSWORD_INCORRECT;
 
+	// An account is only used when a username is given
+	const bool by_account = username != NULL && username[0] != '\0';
+	struct user account = { 0 };
+
 	// If there is no password (or empty), check if there is any password at all
-	if(empty_password && (password == NULL || strlen(password) == 0))
+	if(by_account)
+		result = user_authenticate(username, password != NULL ? password : "", &account);
+	else if(empty_password && (password == NULL || strlen(password) == 0))
 		result = PASSWORD_CORRECT;
 	else
 		result = verify_login(password);
@@ -595,7 +663,8 @@ int api_auth(struct lorentz_conn *api)
 
 		// Check possible 2FA token
 		// Successful login with empty password does not require 2FA
-		if(strlen(config.webserver.api.totp_secret.v.s) > 0 && result == PASSWORD_CORRECT)
+		// (the 2FA secret belongs to the password of the configuration, not to accounts)
+		if(strlen(config.webserver.api.totp_secret.v.s) > 0 && result == PASSWORD_CORRECT && !by_account)
 		{
 			// Get 2FA token from payload
 			cJSON *json_totp;
@@ -685,6 +754,7 @@ int api_auth(struct lorentz_conn *api)
 
 				auth_data[i].tls.login = api->request->is_ssl;
 				auth_data[i].tls.mixed = false;
+				auth_data[i].account_id = by_account ? account.id : SESSION_NO_ACCOUNT;
 				auth_data[i].app = result == APPPASSWORD_CORRECT;
 				auth_data[i].cli = result == CLIPASSWORD_CORRECT;
 

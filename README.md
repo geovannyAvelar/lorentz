@@ -71,10 +71,43 @@ is, because they are private to one host or are produced by tools that write SQL
 
 Differences to be aware of: SQLite migrations are not replayed (the schema of the current version is created
 in one step, and a database of an older version is refused), `LIKE` ignores the case of letters as it does in
-SQLite, and a change of the schema after version 22 has to be written for both databases. Lorentz opens a
+SQLite, and a change of the schema after version 23 has to be written for both databases. Lorentz opens a
 connection for each request, and keeps up to `database.pool.size` (8) of the closed ones open for the next request, for at most `database.pool.idleTimeout` (300) seconds. Each connection is reset (`DISCARD ALL`) before it is used again, and one the server has closed is replaced. Set the size to 0 to turn the pool off. The pool caps the idle connections and not the busy ones, so an external pooler such as PgBouncer still helps when many API clients are expected; use session pooling mode, and set the timeout below the one of the pooler.
 
 The driver is described at the top of `src/database/db-postgres.c`, the tests in `test/integration/README.md`.
+
+## User accounts
+
+Besides the one password of `webserver.api.password`, the API has accounts, managed under `/api/users`
+(the reference is served at `/api/docs`, tag "User management"):
+
+| Request | Who | |
+|---|---|---|
+| `GET /api/users` | admin | list the accounts |
+| `POST /api/users` | admin | create one: `username`, `password`, optional `role`, `enabled`, `comment` |
+| `GET /api/users/{username}` | admin, or the account itself | read one |
+| `PUT /api/users/{username}` | admin, or the account itself | change the fields that are sent |
+| `DELETE /api/users/{username}` | admin | delete one and end its sessions |
+
+Log in with `POST /api/auth` and `{"username": "alice", "password": "..."}`; without `username` the password is
+the one of the configuration, as before, and has the rights of an admin. The session tells who is logged in
+(`session.user`). Usernames are 1 to 64 of letters, digits and `. _ - @` and are not case sensitive; passwords are
+8 to 256 characters and are stored as Balloon hashes, like the configured password.
+
+Two roles: an **admin** may do everything, a **viewer** reads statistics, queries, lists and the like and
+changes nothing, and cannot read the configuration, the logs, the sessions or the Teleporter export. Every
+account may read and change the password and the comment of its own account (a new password needs
+`current_password`); an admin may reset the password of others, rename, enable, disable and promote them.
+A password change ends the other sessions of the account, and disabling or deleting an account ends all of them.
+There always is at least one enabled admin: the last one cannot be deleted, disabled or demoted, and nobody
+deletes or disables their own account.
+
+As soon as an enabled account exists, the API needs a login even when `webserver.api.password` is empty. While
+it is still open (no password, no account) the first account has to be an enabled admin, and creating it
+closes the API. Accounts are kept in the `users` table of the long-term database (SQLite or PostgreSQL) and
+are held in memory for the checks of each request, so Lorentz instances that share one PostgreSQL database
+notice a change of another only after a restart. They are not part of the Teleporter export, the
+two-factor authentication (`webserver.api.totp_secret`) applies to the configured password only.
 
 ## Documentation
 

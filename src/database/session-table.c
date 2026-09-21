@@ -14,6 +14,7 @@
 #include "config/config.h"
 // get_memdb()
 #include "database/query-table.h"
+#include "database/user-table.h"
 
 bool create_session_table(db_conn *db)
 {
@@ -131,7 +132,7 @@ bool backup_db_sessions(struct session *sessions, const uint16_t max_sessions)
 	bool success = false;
 	unsigned int api_sessions = 0;
 	db_stmt *stmt = NULL;
-	if((stmt = db_prepare(db, "INSERT INTO session (login_at, valid_until, remote_addr, user_agent, sid, csrf, tls_login, tls_mixed, app, cli, x_forwarded_for) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", false)) == NULL)
+	if((stmt = db_prepare(db, "INSERT INTO session (login_at, valid_until, remote_addr, user_agent, sid, csrf, tls_login, tls_mixed, app, cli, x_forwarded_for, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", false)) == NULL)
 	{
 		log_err("SQL error in backup_db_sessions(): %s (%d)",
 		        db_errmsg(db), db_errcode(db));
@@ -226,6 +227,14 @@ bool backup_db_sessions(struct session *sessions, const uint16_t max_sessions)
 			goto backup_db_sessions_end;
 		}
 
+		// 12: user_id
+		if((sess->account_id == SESSION_NO_ACCOUNT ? db_bind_null(stmt, 12) : db_bind_int64(stmt, 12, sess->account_id)) != DB_OK)
+		{
+			log_err("Cannot bind user_id = %ld in backup_db_sessions(): %s (%d)",
+			        (long int)sess->account_id, db_errmsg(db), db_errcode(db));
+			goto backup_db_sessions_end;
+		}
+
 		// Execute statement
 		if(db_step(stmt) != DB_DONE)
 		{
@@ -283,7 +292,7 @@ bool restore_db_sessions(struct session *sessions, const uint16_t max_sessions)
 	// Get all sessions from database
 	char selectstr[256];
 	snprintf(selectstr, sizeof(selectstr), "SELECT login_at, valid_until, remote_addr, user_agent, sid, csrf, "
-	                                       "tls_login, tls_mixed, app, cli, x_forwarded_for FROM %ssession", prefix);
+	                                       "tls_login, tls_mixed, app, cli, x_forwarded_for, user_id FROM %ssession", prefix);
 	db_stmt *stmt = NULL;
 	if((stmt = db_prepare(memdb, selectstr, false)) == NULL)
 	{
@@ -300,7 +309,13 @@ bool restore_db_sessions(struct session *sessions, const uint16_t max_sessions)
 		// Allocate memory for new session
 		struct session *sess = &sessions[i];
 
-		// Get values from database
+		// Get values from database. A session of an account that does not
+		// exist (any more) or is disabled is not restored
+		memset(sess, 0, sizeof(*sess));
+		sess->account_id = db_column_type(stmt, 11) == DB_TYPE_NULL ? SESSION_NO_ACCOUNT : db_column_int64(stmt, 11);
+		if(sess->account_id != SESSION_NO_ACCOUNT && !user_cache_lookup(sess->account_id, NULL, NULL))
+			continue;
+
 		// 1: login_at
 		sess->login_at = db_column_int64(stmt, 0);
 

@@ -118,7 +118,20 @@ static const char *const baseline_statements[] = {
 		"tls_mixed SMALLINT, "
 		"app SMALLINT, "
 		"cli SMALLINT, "
-		"x_forwarded_for TEXT)",
+		"x_forwarded_for TEXT, "
+		"user_id BIGINT)",
+
+	// Accounts of the API (version 23). role is admin or viewer
+	"CREATE TABLE users ("
+		"id @PK@, "
+		"username TEXT UNIQUE NOT NULL, "
+		"pwhash TEXT NOT NULL, "
+		"role TEXT NOT NULL DEFAULT 'admin', "
+		"enabled SMALLINT NOT NULL DEFAULT 1, "
+		"comment TEXT, "
+		"created_at BIGINT NOT NULL, "
+		"updated_at BIGINT NOT NULL, "
+		"last_login BIGINT)",
 };
 
 // Rows the tables start with: the version, the time of the latest stored query

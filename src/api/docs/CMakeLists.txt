@@ -38,6 +38,7 @@ set(sources
         hex/specs/search_yaml.h
         hex/specs/stats_yaml.h
         hex/specs/teleporter_yaml.h
+        hex/specs/users_yaml.h
         docs.c
         )
 

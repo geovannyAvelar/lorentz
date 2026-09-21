@@ -39,6 +39,8 @@ static struct {
 	{ "/api/auth/app",                          "",                           generateAppPw,                         { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
 	{ "/api/auth/totp",                         "",                           generateTOTP,                          { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
 	{ "/api/auth",                              "",                           api_auth,                              { API_PARSE_JSON, 0                         }, false, HTTP_GET | HTTP_POST | HTTP_DELETE },
+	{ "/api/users",                             "/{username}",                api_users,                             { API_PARSE_JSON, 0                         }, true,  HTTP_GET | HTTP_PUT | HTTP_DELETE },
+	{ "/api/users",                             "",                           api_users,                             { API_PARSE_JSON, 0                         }, true,  HTTP_GET | HTTP_POST },
 	{ "/api/dns/blocking",                      "",                           api_dns_blocking,                      { API_PARSE_JSON, 0                         }, true,  HTTP_GET | HTTP_POST },
 	{ "/api/clients/_suggestions",              "",                           api_client_suggestions,                { API_PARSE_JSON, 0                         }, true,  HTTP_GET },
 	{ "/api/clients",                           "/{client}",                  api_list,                              { API_PARSE_JSON, 0                         }, true,  HTTP_GET | HTTP_PUT | HTTP_DELETE },
@@ -217,6 +219,7 @@ int api_handler(struct mg_connection *conn, void *ignored)
 
 	// Loop over all API endpoints and check if the requested URI matches
 	bool unauthorized = false;
+	bool forbidden = false;
 	bool handler_ran = false;
 	enum http_method allowed_methods = 0;
 	unsigned int best_rank = 0;
@@ -278,6 +281,13 @@ int api_handler(struct mg_connection *conn, void *ignored)
 				break;
 			}
 
+			// A viewer may look, not change
+			if(api_request[i].require_auth && !api_role_allows(&api, api_request[i].uri))
+			{
+				forbidden = true;
+				break;
+			}
+
 			// Call the API function and get the return code
 			log_debug(DEBUG_API, "Processing %s %s in %s",
 			          api.request->request_method,
@@ -318,6 +328,9 @@ int api_handler(struct mg_connection *conn, void *ignored)
 		// Do this only after having cleaned up above
 		return send_json_unauthorized(&api);
 	}
+
+	if(forbidden)
+		return send_json_error(&api, 403, "forbidden", "Insufficient permissions", NULL);
 
 	// The HTTP OPTIONS method requests permitted communication options for
 	// a given URL or server. We no not implement the wildcard OPTIONS method

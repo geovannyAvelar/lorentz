@@ -16,7 +16,7 @@
 // Version of the long-term database schema created by db_schema_baseline().
 // It has to be the version the migrations of a SQLite database end at
 // (MEMDB_VERSION in query-table.h, checked when the database is initialized)
-#define DB_SCHEMA_VERSION 22
+#define DB_SCHEMA_VERSION 23
 
 // Create the current schema in an empty database in one step, instead of
 // replaying the history of migrations. The DDL is written once and adapted to

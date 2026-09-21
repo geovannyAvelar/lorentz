@@ -33,6 +33,7 @@
 #include "signals.h"
 // create_session_table()
 #include "database/session-table.h"
+#include "database/user-table.h"
 // assert()
 #include <assert.h>
 // _Atomic
@@ -404,6 +405,9 @@ static void db_init_finish(db_conn *db)
 	lock_shm();
 	import_aliasclients(db);
 	unlock_shm();
+
+	// The accounts of the API
+	users_load_cache(db);
 
 	// Close database to prevent having it opened all time
 	// We already closed the database when we returned earlier
@@ -877,6 +881,22 @@ void db_init(void)
 		if(!replace_queries_view_with_joins(db))
 		{
 			log_info("Queries VIEW cannot be replaced, database not available");
+			dbclose(&db);
+			DBerror = true;
+			return;
+		}
+		// Get updated version
+		dbversion = db_get_int(db, DB_VERSION);
+	}
+
+	// Update to version 23 if lower
+	if(dbversion < 23)
+	{
+		// Update to version 23: Add the users table and session.user_id
+		log_info("Updating long-term database to version 23");
+		if(!add_users_table(db))
+		{
+			log_info("The users table cannot be added, database not available");
 			dbclose(&db);
 			DBerror = true;
 			return;

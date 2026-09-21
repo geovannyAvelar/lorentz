@@ -30,6 +30,7 @@ set(sources
         stats.c
         teleporter.c
         theme.c
+        users.c
         theme.h
         )
 

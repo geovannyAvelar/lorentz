@@ -58,6 +58,12 @@ struct session {
 	char x_forwarded_for[48]; // see remote_addr note
 	char sid[SID_SIZE];
 	char csrf[SID_SIZE];
+	// The account this session belongs to. SESSION_NO_ACCOUNT for a login with the
+	// password of the configuration (webserver.api.password), the app or the CLI password
+	int64_t account_id;
 };
+
+// (accounts are numbered from 1, so a zeroed session has none)
+#define SESSION_NO_ACCOUNT 0
 
 #endif // AUTH_H

@@ -1,0 +1,287 @@
+openapi: 3.0.2
+components:
+  parameters:
+    username:
+      in: path
+      name: username
+      description: Name of the account (not case sensitive)
+      required: true
+      schema:
+        type: string
+        example: alice
+  schemas:
+    user:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID of the account
+        username:
+          type: string
+          description: Name of the account, in lower case
+        role:
+          type: string
+          enum: [admin, viewer]
+          description: |
+            `admin` may do everything. `viewer` reads statistics, lists and the like, and may
+            change nothing, look at the configuration, the logs, the sessions or the Teleporter
+            export, or manage accounts (but their own password and comment).
+        enabled:
+          type: boolean
+          description: A disabled account cannot log in, and its sessions end
+        comment:
+          type: string
+          nullable: true
+        created_at:
+          type: integer
+          description: Unix timestamp
+        updated_at:
+          type: integer
+          description: Unix timestamp
+        last_login:
+          type: integer
+          nullable: true
+          description: Unix timestamp of the last login, null if there was none
+    users:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: 'users.yaml#/components/schemas/user'
+    create:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          description: 1 to 64 letters, digits and `.` `_` `-` `@`. Stored in lower case
+          example: alice
+        password:
+          type: string
+          description: 8 to 256 characters
+        role:
+          type: string
+          enum: [admin, viewer]
+          default: viewer
+        enabled:
+          type: boolean
+          default: true
+        comment:
+          type: string
+          nullable: true
+    update:
+      type: object
+      description: Only the fields that are sent are changed
+      properties:
+        username:
+          type: string
+          description: Rename the account (admin only)
+        password:
+          type: string
+          description: |
+            A new password. Changing your own needs `current_password`, an admin
+            resets the password of another account without it. The other sessions of
+            the account end.
+        current_password:
+          type: string
+        role:
+          type: string
+          enum: [admin, viewer]
+          description: Admin only
+        enabled:
+          type: boolean
+          description: Admin only
+        comment:
+          type: string
+          nullable: true
+    error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            key:
+              type: string
+              description: "Machine-readable error type"
+            message:
+              type: string
+              description: "Human-readable error message"
+            hint:
+              type: string
+              nullable: true
+  responses:
+    unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: 'common.yaml#/components/errors/unauthorized'
+              - $ref: 'common.yaml#/components/schemas/took'
+    forbidden:
+      description: Forbidden (the account has not the rights for this)
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: 'users.yaml#/components/schemas/error'
+              - $ref: 'common.yaml#/components/schemas/took'
+    conflict:
+      description: Conflict (the name is taken, or the change would leave no enabled admin)
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: 'users.yaml#/components/schemas/error'
+              - $ref: 'common.yaml#/components/schemas/took'
+    bad_request:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: 'common.yaml#/components/errors/bad_request'
+              - $ref: 'common.yaml#/components/schemas/took'
+    not_found:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: 'users.yaml#/components/schemas/error'
+              - $ref: 'common.yaml#/components/schemas/took'
+  paths:
+    users:
+      get:
+        summary: List accounts
+        tags:
+          - "User management"
+        operationId: "get_users"
+        description: |
+          Returns all accounts (admin only). The password hashes are never returned.
+
+          As soon as there is an enabled account, the API needs authentication even
+          when `webserver.api.password` is empty. Log in with `username` and `password`.
+        responses:
+          '200':
+            description: OK
+            content:
+              application/json:
+                schema:
+                  allOf:
+                    - $ref: 'users.yaml#/components/schemas/users'
+                    - $ref: 'common.yaml#/components/schemas/took'
+          '401':
+            $ref: 'users.yaml#/components/responses/unauthorized'
+          '403':
+            $ref: 'users.yaml#/components/responses/forbidden'
+      post:
+        summary: Create an account
+        tags:
+          - "User management"
+        operationId: "add_user"
+        description: |
+          Creates an account (admin only). While the API is open (no password and no
+          account) the first account has to be an enabled admin.
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: 'users.yaml#/components/schemas/create'
+        responses:
+          '201':
+            description: Created
+            content:
+              application/json:
+                schema:
+                  allOf:
+                    - $ref: 'users.yaml#/components/schemas/users'
+                    - $ref: 'common.yaml#/components/schemas/took'
+          '400':
+            $ref: 'users.yaml#/components/responses/bad_request'
+          '401':
+            $ref: 'users.yaml#/components/responses/unauthorized'
+          '403':
+            $ref: 'users.yaml#/components/responses/forbidden'
+          '409':
+            $ref: 'users.yaml#/components/responses/conflict'
+    user:
+      parameters:
+        - $ref: 'users.yaml#/components/parameters/username'
+      get:
+        summary: Get an account
+        tags:
+          - "User management"
+        operationId: "get_user"
+        description: Returns an account. An admin may read any, everybody their own.
+        responses:
+          '200':
+            description: OK
+            content:
+              application/json:
+                schema:
+                  allOf:
+                    - $ref: 'users.yaml#/components/schemas/users'
+                    - $ref: 'common.yaml#/components/schemas/took'
+          '401':
+            $ref: 'users.yaml#/components/responses/unauthorized'
+          '403':
+            $ref: 'users.yaml#/components/responses/forbidden'
+          '404':
+            $ref: 'users.yaml#/components/responses/not_found'
+      put:
+        summary: Update an account
+        tags:
+          - "User management"
+        operationId: "update_user"
+        description: |
+          Changes the fields that are sent. An admin may change any account.
+          Everybody may change the password and the comment of their own account, and
+          not their role or state. Disabling or demoting the last enabled admin is refused.
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: 'users.yaml#/components/schemas/update'
+        responses:
+          '200':
+            description: OK
+            content:
+              application/json:
+                schema:
+                  allOf:
+                    - $ref: 'users.yaml#/components/schemas/users'
+                    - $ref: 'common.yaml#/components/schemas/took'
+          '400':
+            $ref: 'users.yaml#/components/responses/bad_request'
+          '401':
+            $ref: 'users.yaml#/components/responses/unauthorized'
+          '403':
+            $ref: 'users.yaml#/components/responses/forbidden'
+          '404':
+            $ref: 'users.yaml#/components/responses/not_found'
+          '409':
+            $ref: 'users.yaml#/components/responses/conflict'
+      delete:
+        summary: Delete an account
+        tags:
+          - "User management"
+        operationId: "delete_user"
+        description: |
+          Deletes an account and ends its sessions (admin only). Neither your own
+          account nor the last enabled admin can be deleted.
+          *Note:* There will be no content on success.
+        responses:
+          '204':
+            description: Deleted
+          '401':
+            $ref: 'users.yaml#/components/responses/unauthorized'
+          '403':
+            $ref: 'users.yaml#/components/responses/forbidden'
+          '404':
+            $ref: 'users.yaml#/components/responses/not_found'
+          '409':
+            $ref: 'users.yaml#/components/responses/conflict'

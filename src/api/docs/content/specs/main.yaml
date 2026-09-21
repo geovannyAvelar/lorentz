@@ -41,6 +41,8 @@ servers:
 tags:
   - name: "Authentication"
     description: Methods used to authenticate with the API
+  - name: "User management"
+    description: Methods used to manage the accounts that log in to the API
   - name: "Metrics"
     description: Methods used to get usage data from your Lorentz
   - name: "DNS control"
@@ -257,6 +259,12 @@ paths:
 
   /network/interfaces:
     $ref: 'network.yaml#/components/paths/interfaces'
+
+  /users:
+    $ref: 'users.yaml#/components/paths/users'
+
+  /users/{username}:
+    $ref: 'users.yaml#/components/paths/user'
 
   /teleporter:
     $ref: 'teleporter.yaml#/components/paths/teleporter'

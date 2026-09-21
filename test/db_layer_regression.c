@@ -34,6 +34,7 @@
 #include "webserver/cJSON/cJSON.h"
 #include "../test/db_layer_test.h"
 #include "database/db-schema.h"
+#include "database/user-table.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -180,6 +181,145 @@ void test_common_helpers(void)
 	dbclose(&c);
 	CHECK(c == NULL);
 	dbclose(&c); // closing twice is harmless
+}
+
+
+/* ---- API accounts (database/user-table.c), on whatever database is configured ---- */
+
+static void check_users(void)
+{
+	struct user u, v;
+	struct user *list = NULL;
+	size_t count = 0;
+
+	// Nobody yet, so nothing is required to log in
+	CHECK(users_enabled_count() == 0);
+	CHECK(user_get("alice", &u) == USER_NOT_FOUND);
+	CHECK(user_list(&list, &count) == USER_OK && count == 0);
+	free(list);
+
+	// Names and passwords are checked
+	CHECK(user_create("", "longenough", USER_ROLE_ADMIN, NULL, true, &u) == USER_INVALID_NAME);
+	CHECK(user_create("has space", "longenough", USER_ROLE_ADMIN, NULL, true, &u) == USER_INVALID_NAME);
+	CHECK(user_create("semi;colon", "longenough", USER_ROLE_ADMIN, NULL, true, &u) == USER_INVALID_NAME);
+	CHECK(user_create("x' OR 1=1 --", "longenough", USER_ROLE_ADMIN, NULL, true, &u) == USER_INVALID_NAME);
+	CHECK(user_create("alice", "short", USER_ROLE_ADMIN, NULL, true, &u) == USER_INVALID_PASSWORD);
+	CHECK(user_create(NULL, "longenough", USER_ROLE_ADMIN, NULL, true, &u) == USER_INVALID_NAME);
+	CHECK(user_create("alice", NULL, USER_ROLE_ADMIN, NULL, true, &u) == USER_INVALID_PASSWORD);
+	char toolong[300];
+	memset(toolong, 'a', sizeof(toolong) - 1);
+	toolong[sizeof(toolong) - 1] = '\0';
+	CHECK(user_create("alice", toolong, USER_ROLE_ADMIN, NULL, true, &u) == USER_INVALID_PASSWORD);
+	CHECK(user_create(toolong, "longenough", USER_ROLE_ADMIN, NULL, true, &u) == USER_INVALID_NAME);
+	CHECK(user_create("alice", "longenough", USER_ROLE_ADMIN, toolong, true, &u) == USER_INVALID_COMMENT);
+	CHECK(users_enabled_count() == 0);
+
+	// Create: the name is stored in lower case, the hash is not the password
+	CHECK(user_create("Alice", "correct horse", USER_ROLE_ADMIN, "the boss", true, &u) == USER_OK);
+	CHECK(strcmp(u.username, "alice") == 0 && u.role == USER_ROLE_ADMIN && u.enabled);
+	CHECK(strcmp(u.comment, "the boss") == 0 && u.id > 0 && u.created_at > 0 && u.last_login == 0);
+	CHECK(users_enabled_count() == 1);
+	CHECK(user_create("ALICE", "another password", USER_ROLE_VIEWER, NULL, true, &v) == USER_EXISTS);
+	CHECK(user_create("bob", "hunter2hunter2", USER_ROLE_VIEWER, NULL, true, &v) == USER_OK && v.id != u.id);
+	CHECK(users_enabled_count() == 2);
+	db_conn *db = dbopen(false, false);
+	CHECK(db != NULL);
+	if(db != NULL)
+	{
+		CHECK(db_query_int_str(db, "SELECT count(*) FROM users WHERE pwhash = ?", "correct horse") == 0);
+		CHECK(db_query_int_str(db, "SELECT count(*) FROM users WHERE pwhash LIKE ?", "$BALLOON-SHA256$%") == 2);
+		dbclose(&db);
+	}
+
+	// Read
+	CHECK(user_get("ALICE", &v) == USER_OK && v.id == u.id);
+	CHECK(user_list(&list, &count) == USER_OK && count == 2);
+	CHECK(count == 2 && strcmp(list[0].username, "alice") == 0 && strcmp(list[1].username, "bob") == 0);
+	free(list);
+
+	// The cache follows the database
+	enum user_role role;
+	char name[USERNAME_MAX + 1];
+	CHECK(user_cache_lookup(u.id, &role, name) && role == USER_ROLE_ADMIN && strcmp(name, "alice") == 0);
+	CHECK(!user_cache_lookup(u.id + 1000, NULL, NULL));
+
+	// Log in: right, wrong, unknown, disabled
+	struct user login;
+	CHECK(user_authenticate("alice", "correct horse", &login) == PASSWORD_CORRECT && login.id == u.id);
+	CHECK(login.last_login > 0);
+	CHECK(user_authenticate("ALICE", "correct horse", &login) == PASSWORD_CORRECT);
+	CHECK(user_get("alice", &v) == USER_OK && v.last_login > 0);
+	CHECK(user_authenticate("alice", "wrong", &login) == PASSWORD_INCORRECT);
+	CHECK(user_authenticate("nobody", "correct horse", &login) == PASSWORD_INCORRECT);
+	CHECK(user_authenticate("alice", "", &login) == PASSWORD_INCORRECT);
+	CHECK(user_check_password("alice", "correct horse") == PASSWORD_CORRECT);
+	sleep(1); // the rate limit counts the failures of a second
+
+	// Update: only what is asked for
+	struct user_changes ch = { .has_comment = true, .comment = "changed" };
+	CHECK(user_update("bob", &ch, &v) == USER_OK && strcmp(v.comment, "changed") == 0 && v.role == USER_ROLE_VIEWER && v.enabled);
+	CHECK(user_authenticate("bob", "hunter2hunter2", &login) == PASSWORD_CORRECT);
+	ch = (struct user_changes){ .has_comment = true, .comment = NULL };
+	CHECK(user_update("bob", &ch, &v) == USER_OK && v.comment[0] == '\0');
+	ch = (struct user_changes){ .has_password = true, .password = "a new password" };
+	CHECK(user_update("bob", &ch, &v) == USER_OK);
+	CHECK(user_authenticate("bob", "a new password", &login) == PASSWORD_CORRECT);
+	CHECK(user_authenticate("bob", "hunter2hunter2", &login) == PASSWORD_INCORRECT);
+	ch = (struct user_changes){ .has_password = true, .password = "short" };
+	CHECK(user_update("bob", &ch, &v) == USER_INVALID_PASSWORD);
+	ch = (struct user_changes){ .has_username = true, .username = "Robert" };
+	CHECK(user_update("bob", &ch, &v) == USER_OK && strcmp(v.username, "robert") == 0);
+	CHECK(user_get("bob", &v) == USER_NOT_FOUND);
+	CHECK(user_authenticate("robert", "a new password", &login) == PASSWORD_CORRECT && login.id != u.id);
+	ch = (struct user_changes){ .has_username = true, .username = "alice" };
+	CHECK(user_update("robert", &ch, &v) == USER_EXISTS);
+	ch = (struct user_changes){ .has_username = true, .username = "no good" };
+	CHECK(user_update("robert", &ch, &v) == USER_INVALID_NAME);
+	ch = (struct user_changes){ .has_comment = true, .comment = "x" };
+	CHECK(user_update("nobody", &ch, &v) == USER_NOT_FOUND);
+	ch = (struct user_changes){ .has_role = true, .role = USER_ROLE_ADMIN };
+	CHECK(user_update("robert", &ch, &v) == USER_OK && v.role == USER_ROLE_ADMIN);
+	CHECK(user_cache_lookup(v.id, &role, NULL) && role == USER_ROLE_ADMIN);
+	sleep(1);
+
+	// A disabled account does not log in and is not in the cache
+	ch = (struct user_changes){ .has_enabled = true, .enabled = false };
+	CHECK(user_update("robert", &ch, &v) == USER_OK && !v.enabled);
+	CHECK(users_enabled_count() == 1 && !user_cache_lookup(v.id, NULL, NULL));
+	CHECK(user_authenticate("robert", "a new password", &login) == PASSWORD_INCORRECT);
+	ch.enabled = true;
+	CHECK(user_update("robert", &ch, &v) == USER_OK && users_enabled_count() == 2);
+
+	// The last enabled admin stays: not deleted, disabled or demoted
+	ch = (struct user_changes){ .has_role = true, .role = USER_ROLE_VIEWER };
+	CHECK(user_update("robert", &ch, &v) == USER_OK); // alice is still an admin
+	CHECK(user_update("alice", &ch, &v) == USER_LAST_ADMIN);
+	ch = (struct user_changes){ .has_enabled = true, .enabled = false };
+	CHECK(user_update("alice", &ch, &v) == USER_LAST_ADMIN);
+	CHECK(user_delete("alice", NULL) == USER_LAST_ADMIN);
+	CHECK(user_get("alice", &v) == USER_OK && v.role == USER_ROLE_ADMIN && v.enabled);
+	// A change that leaves things as they are is no problem
+	ch = (struct user_changes){ .has_role = true, .role = USER_ROLE_ADMIN, .has_comment = true, .comment = "still" };
+	CHECK(user_update("alice", &ch, &v) == USER_OK);
+
+	// Delete
+	int64_t id = 0;
+	CHECK(user_delete("ROBERT", &id) == USER_OK && id > 0);
+	CHECK(user_delete("robert", NULL) == USER_NOT_FOUND);
+	CHECK(users_enabled_count() == 1 && !user_cache_lookup(id, NULL, NULL));
+	CHECK(user_delete("alice", NULL) == USER_LAST_ADMIN);
+
+	// The cache is read again from the database at start
+	db = dbopen(false, false);
+	CHECK(db != NULL && users_load_cache(db) && users_enabled_count() == 1);
+	dbclose(&db);
+}
+
+void test_users(void)
+{
+	db_test_fresh_lorentz_db("users.db");
+	CHECK(!LorentzDBerror());
+	check_users();
 }
 
 /* ---- in-memory query database (database/query-table.c) ---- */
@@ -695,7 +835,7 @@ void test_postgres_database(void)
 	CHECK(db_table_exists(db, "lorentz") && db_table_exists(db, "query_storage") && db_table_exists(db, "queries"));
 	CHECK(db_table_exists(db, "session") && db_table_exists(db, "network_addresses") && db_table_exists(db, "message"));
 	CHECK(db_get_int(db, DB_VERSION) == DB_SCHEMA_VERSION);
-	CHECK(db_query_int(db, "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'lz_init' AND table_type = 'BASE TABLE'") == 12);
+	CHECK(db_query_int(db, "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'lz_init' AND table_type = 'BASE TABLE'") == 13);
 
 	// The helpers of common.c work on it
 	CHECK(db_set_Lorentz_property(db, DB_LASTTIMESTAMP, 1234));
@@ -730,6 +870,9 @@ void test_postgres_database(void)
 		CHECK(get_row_count("query_storage", false) == 1);
 		dbclose(&db);
 	}
+
+	// Accounts
+	check_users();
 
 	// The in-memory database (always SQLite) exports to the server ...
 	config.database.maxDBdays.v.ui = 365;
@@ -800,6 +943,7 @@ int main(void)
 	configure();
 
 	test_common_helpers();
+	test_users();
 	test_memory_database();
 	test_gravity_database();
 	test_message_session_network();

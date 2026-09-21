@@ -310,11 +310,31 @@ components:
               type: string
               description: Human-readable message describing the session status
               nullable: true
+            user:
+              type: object
+              description: The account of the session, null for a login with the password of the configuration
+              nullable: true
+              properties:
+                id:
+                  type: integer
+                username:
+                  type: string
+                role:
+                  type: string
+                  enum: [admin, viewer]
 
     password:
       type: object
       description: Password to be sent to the API
       properties:
+        username:
+          type: string
+          description: |
+            The account to log in to. Without it, the password is the one of the
+            configuration (`webserver.api.password`). Two-factor authentication (2FA)
+            applies to that password only.
+          nullable: true
+          example: alice
         password:
           type: string
           description: Password to be used for login
