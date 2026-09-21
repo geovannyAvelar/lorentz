@@ -29,6 +29,18 @@ Lorentz (`lorentz`) provides an interactive API and also generates statistics fo
 - **Interactive**: our API can be used to interface with your projects
 - **Insightful**: stats normally reserved inside of `dnsmasq` are made available so you can see what's really happening on your network
 
+## Database drivers
+
+All database access goes through a driver interface (`src/database/db-driver.h`). The default driver
+is SQLite. An experimental PostgreSQL driver (`src/database/db-postgres.c`, on libpq) is built with
+`-DUSE_POSTGRESQL=ON` and needs `libpq-dev`.
+
+The PostgreSQL driver implements the whole interface (see the comment at the top of the file for the
+differences, for example that there is no `ATTACH` and no in-memory database), and is tested against
+real servers. **Lorentz itself cannot run on PostgreSQL yet**: the queries, migrations and schema of the
+long-term, in-memory and gravity databases are written in SQLite's dialect, and they still have to be
+moved behind the dialect hooks of the driver.
+
 ## Documentation
 
 Lorentz has no documentation of its own yet. The documentation of the upstream project, Pi-hole FTLDNS, can be found [here](https://docs.pi-hole.net/ftldns/). It applies only where this fork did not change the behavior (see the notice at the top).

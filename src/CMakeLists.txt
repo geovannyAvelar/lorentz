@@ -283,6 +283,15 @@ target_compile_definitions(core PRIVATE DNSMASQ_VERSION=\"${DNSMASQ_VERSION}\")
 target_include_directories(core PRIVATE ${PROJECT_SOURCE_DIR}/src)
 add_dependencies(core gen_version)
 
+# The PostgreSQL driver of the database layer (src/database/db-postgres.c)
+option(USE_POSTGRESQL "Build the PostgreSQL database driver, needs libpq" OFF)
+if(USE_POSTGRESQL)
+    find_package(PostgreSQL REQUIRED)
+    message(STATUS "Building the PostgreSQL database driver: YES (libpq ${PostgreSQL_VERSION_STRING})")
+else()
+    message(STATUS "Building the PostgreSQL database driver: NO")
+endif()
+
 # Every object file of the Lorentz executable. The database layer regression
 # harness (see the end of this file) is linked with the same set
 set(LORENTZ_OBJECT_FILES
@@ -307,6 +316,9 @@ set(LORENTZ_OBJECT_FILES
         $<TARGET_OBJECTS:ntp>
         )
 add_executable(lorentz ${LORENTZ_OBJECT_FILES})
+if(USE_POSTGRESQL)
+    target_link_libraries(lorentz ${PostgreSQL_LIBRARIES})
+endif()
 if(STATIC)
     set_target_properties(lorentz PROPERTIES LINK_SEARCH_START_STATIC ON)
     set_target_properties(lorentz PROPERTIES LINK_SEARCH_END_STATIC ON)
@@ -653,5 +665,30 @@ if(BUILD_DB_LAYER_REGRESSION)
     # Same libraries as the Lorentz executable (they are added to it in several
     # places above, depending on what was found on the build system)
     target_link_libraries(db_layer_regression Threads::Threads m
+            $<TARGET_PROPERTY:lorentz,LINK_LIBRARIES>)
+endif()
+
+# Regression harness for the PostgreSQL driver (src/database/db-postgres.c).
+# It links the driver, the SQLite driver the registry needs and the SQLite
+# object library, and talks to a real PostgreSQL server named by the
+# POSTGRES_URL environment variable (it reports SKIP without one). The
+# "PostgreSQL driver" test of test/integration starts a PostgreSQL container
+# and runs the binary against it.
+#
+# Only built on request, and only where libpq is installed.
+option(BUILD_DB_POSTGRES_REGRESSION "Build the PostgreSQL driver regression test harness (needs libpq)" OFF)
+if(BUILD_DB_POSTGRES_REGRESSION)
+    find_package(PostgreSQL REQUIRED)
+    add_executable(db_postgres_regression
+            ${PROJECT_SOURCE_DIR}/test/db_postgres_regression.c
+            ${PROJECT_SOURCE_DIR}/src/database/db-driver.c
+            ${PROJECT_SOURCE_DIR}/src/database/db-sqlite.c
+            ${PROJECT_SOURCE_DIR}/src/database/db-postgres.c
+            $<TARGET_OBJECTS:sqlite3>)
+    target_compile_definitions(db_postgres_regression PRIVATE HAVE_POSTGRES)
+    target_include_directories(db_postgres_regression PRIVATE ${PROJECT_SOURCE_DIR}/src ${PostgreSQL_INCLUDE_DIRS})
+    # The SQLite object library includes the SQLite shell, which needs whatever
+    # libraries (readline, ...) the Lorentz executable is linked with
+    target_link_libraries(db_postgres_regression Threads::Threads ${CMAKE_DL_LIBS} m ${PostgreSQL_LIBRARIES}
             $<TARGET_PROPERTY:lorentz,LINK_LIBRARIES>)
 endif()

@@ -9,7 +9,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 --test-timeout=900000 lorentz.integration.test.mjs"
+    "test": "node --test --test-concurrency=1 --test-timeout=900000 lorentz.integration.test.mjs postgres.driver.test.mjs",
+    "test:postgres": "node --test --test-timeout=900000 postgres.driver.test.mjs",
+    "test:lorentz": "node --test --test-concurrency=1 --test-timeout=900000 lorentz.integration.test.mjs"
   },
   "devDependencies": {
     "testcontainers": "^11.0.0"

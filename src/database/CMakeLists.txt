@@ -54,5 +54,12 @@ set(database_sources
         )
 
 add_library(database OBJECT ${database_sources})
+if(USE_POSTGRESQL)
+    # The PostgreSQL driver, linked in when libpq is available (see USE_POSTGRESQL
+    # in the parent CMakeLists.txt)
+    target_sources(database PRIVATE db-postgres.c)
+    target_compile_definitions(database PRIVATE HAVE_POSTGRES)
+    target_include_directories(database PRIVATE ${PostgreSQL_INCLUDE_DIRS})
+endif()
 target_compile_options(database PRIVATE "${EXTRAWARN}")
 target_include_directories(database PRIVATE ${PROJECT_SOURCE_DIR}/src)

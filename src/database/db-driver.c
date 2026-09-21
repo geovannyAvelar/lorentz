@@ -15,7 +15,10 @@
 #include <string.h>
 
 static const db_driver *const drivers[] = {
-	&db_driver_sqlite
+	&db_driver_sqlite,
+#ifdef HAVE_POSTGRES
+	&db_driver_postgres,
+#endif
 };
 
 // Look up a driver by name, NULL if unknown

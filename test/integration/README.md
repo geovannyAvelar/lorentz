@@ -52,3 +52,24 @@ LORENTZ_BINARY=/path/to/old/lorentz npm --prefix test/integration test
 
 Both must pass. A test that fails for both is a wrong expectation of the
 test, one that fails only for the new binary is a regression.
+
+## PostgreSQL driver
+
+`postgres.driver.test.mjs` starts PostgreSQL 16 and 17 containers and runs the
+native harness `test/db_postgres_regression.c` against each of them (about
+20,000 checks: placeholder translation, binding and columns, SQLSTATE error
+classification, row locks, transactions and savepoints, arrays, schemas,
+formatting, dialect, closing, interrupting and sharing a connection between
+threads).
+
+```bash
+cd cmake
+cmake -DBUILD_DB_POSTGRES_REGRESSION=ON ..     # needs libpq (libpq-dev)
+make db_postgres_regression
+cd ..
+npm --prefix test/integration run test:postgres
+```
+
+Set `LORENTZ_PG_HARNESS` if the binary is elsewhere and `PG_IMAGES` (comma
+separated) to pick other server versions. The harness alone can be pointed at
+any throw-away database with `POSTGRES_URL=postgresql://... ./db_postgres_regression`.

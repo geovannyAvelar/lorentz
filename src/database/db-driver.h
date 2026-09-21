@@ -198,6 +198,8 @@ struct db_driver {
 
 // Driver registry
 extern const db_driver db_driver_sqlite;
+// Only available when built with USE_POSTGRESQL
+extern const db_driver db_driver_postgres;
 const db_driver *db_driver_get(const char *name);
 // Select the driver used by db_open(). Defaults to "sqlite"
 bool db_driver_select(const char *name);
