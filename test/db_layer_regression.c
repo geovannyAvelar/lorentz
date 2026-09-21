@@ -33,7 +33,9 @@
 #include "webserver/http-common.h"
 #include "webserver/cJSON/cJSON.h"
 #include "../test/db_layer_test.h"
+#include "database/db-schema.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -537,6 +539,207 @@ void test_gravity_parselist(void)
 	CHECK(gravity_parseList(list, "/nonexistent/dir/x.db", "1", false, false) == EXIT_FAILURE);
 }
 
+
+/* ---- schema: migrations against the baseline ---- */
+
+// The affinity SQLite gives a declared type, which decides what it stores
+static const char *affinity(const char *declared)
+{
+	char up[64];
+	size_t i = 0;
+	for(; declared != NULL && declared[i] != '\0' && i < sizeof(up) - 1; i++)
+		up[i] = (char)toupper((unsigned char)declared[i]);
+	up[i] = '\0';
+	if(strstr(up, "INT") != NULL)
+		return "integer";
+	if(strstr(up, "CHAR") != NULL || strstr(up, "CLOB") != NULL || strstr(up, "TEXT") != NULL)
+		return "text";
+	if(up[0] == '\0' || strstr(up, "BLOB") != NULL)
+		return "blob";
+	if(strstr(up, "REAL") != NULL || strstr(up, "FLOA") != NULL || strstr(up, "DOUB") != NULL)
+		return "real";
+	return "numeric";
+}
+
+// name:affinity:required, sorted, one line per column of a table
+static int describe_table(db_conn *db, const char *table, char out[64][128])
+{
+	char sql[160];
+	snprintf(sql, sizeof(sql), "SELECT lower(name), type, \"notnull\" = 1 OR pk > 0 FROM pragma_table_info('%s')", table);
+	db_stmt *s = db_prepare(db, sql, false);
+	int n = 0;
+	while(s != NULL && n < 64 && db_step(s) == DB_ROW)
+		snprintf(out[n++], 128, "%s:%s:%s", db_column_text(s, 0), affinity(db_column_text(s, 1)), db_column_int(s, 2) ? "required" : "optional");
+	db_finalize(s);
+	for(int i = 1; i < n; i++)
+		for(int j = i; j > 0 && strcmp(out[j - 1], out[j]) > 0; j--)
+		{
+			char tmp[128];
+			strcpy(tmp, out[j]);
+			strcpy(out[j], out[j - 1]);
+			strcpy(out[j - 1], out[j]);
+			strcpy(out[j - 1], tmp);
+		}
+	return n;
+}
+
+// Columns whose declared type differs on purpose between the history of a
+// SQLite database and the baseline. SQLite stores whatever the code puts in
+// them either way; the baseline needs a type a server accepts
+static bool known_type_difference(const char *table, const char *migrated, const char *baseline)
+{
+	static const struct { const char *table, *migrated, *baseline; } known[] = {
+		{ "lorentz", "value:blob:required", "value:integer:required" },
+		{ "query_storage", "timestamp:integer:required", "timestamp:real:required" },
+		{ "addinfo_by_id", "content:blob:required", "content:text:required" },
+		{ "session", "login_at:numeric:required", "login_at:integer:required" },
+		{ "session", "valid_until:numeric:required", "valid_until:integer:required" },
+		{ "session", "tls_login:numeric:optional", "tls_login:integer:optional" },
+		{ "session", "tls_mixed:numeric:optional", "tls_mixed:integer:optional" },
+		{ "session", "app:numeric:optional", "app:integer:optional" },
+		{ "session", "cli:numeric:optional", "cli:integer:optional" },
+	};
+	for(unsigned int i = 0; i < ArraySize(known); i++)
+		if(strcmp(known[i].table, table) == 0 && strcmp(known[i].migrated, migrated) == 0 && strcmp(known[i].baseline, baseline) == 0)
+			return true;
+	// message.blob1..blob5 hold numbers, text and floating point in SQLite
+	return strcmp(table, "message") == 0 && strstr(migrated, ":blob:optional") != NULL && strstr(baseline, ":text:optional") != NULL;
+}
+
+void test_schema_baseline(void)
+{
+	// The database the migrations of db_init() produce...
+	db_test_fresh_lorentz_db("schema.db");
+	db_conn *migrated = dbopen(true, false);
+	// ...and the baseline in an empty one
+	db_conn *baseline = db_open(":memory:", DB_OPEN_READWRITE | DB_OPEN_MEMORY);
+	CHECK(migrated != NULL && baseline != NULL);
+	const char *error = NULL;
+	CHECK(baseline != NULL && db_schema_baseline(baseline, &error));
+	if(migrated == NULL || baseline == NULL)
+		return;
+
+	static const char *tables[] = { "lorentz", "counters", "query_storage", "domain_by_id", "client_by_id", "forward_by_id",
+	                                "addinfo_by_id", "message", "network", "network_addresses", "aliasclient", "session" };
+	for(unsigned int t = 0; t < ArraySize(tables); t++)
+	{
+		static char a[64][128], b[64][128];
+		const int na = describe_table(migrated, tables[t], a);
+		const int nb = describe_table(baseline, tables[t], b);
+		CHECK(na > 0 && na == nb);
+		for(int i = 0; i < na && i < nb; i++)
+		{
+			// same column, same requirement, same kind of value (or a known difference)
+			const bool same = strcmp(a[i], b[i]) == 0 || known_type_difference(tables[t], a[i], b[i]);
+			CHECK(same);
+			if(!same)
+				fprintf(stderr, "  %s: migrated %s, baseline %s\n", tables[t], a[i], b[i]);
+		}
+	}
+
+	// The same indexes and the view of the same shape
+	CHECK(db_query_int(migrated, "SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%'") ==
+	      db_query_int(baseline, "SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%'"));
+	static char va[64][128], vb[64][128];
+	CHECK(describe_table(migrated, "queries", va) == describe_table(baseline, "queries", vb));
+
+	// The rows the migrations leave: properties with their descriptions and the counters
+	CHECK(db_query_int(migrated, "SELECT value FROM lorentz WHERE id = 0") == DB_SCHEMA_VERSION);
+	CHECK(db_query_int(migrated, "SELECT count(*) FROM lorentz WHERE description IS NOT NULL") ==
+	      db_query_int(baseline, "SELECT count(*) FROM lorentz WHERE description IS NOT NULL"));
+	CHECK(db_query_int(migrated, "SELECT count(*) FROM counters") == db_query_int(baseline, "SELECT count(*) FROM counters"));
+
+	dbclose(&migrated);
+	db_close(baseline);
+}
+
+
+/* ---- long-term database on PostgreSQL (needs POSTGRES_URL and a build with USE_POSTGRESQL) ---- */
+
+void test_postgres_database(void)
+{
+	const char *url = getenv("POSTGRES_URL");
+	if(url == NULL || *url == '\0' || db_driver_get("postgres") == NULL)
+	{
+		fprintf(stderr, "skipping the PostgreSQL tests: POSTGRES_URL is not set or the driver is not built in\n");
+		return;
+	}
+
+	// The database of this test lives in its own schema, chosen through the
+	// connection string
+	CHECK(db_driver_select("postgres"));
+	db_conn *setup = db_open(url, DB_OPEN_READWRITE);
+	CHECK(setup != NULL);
+	if(setup == NULL)
+	{
+		db_driver_select("sqlite");
+		return;
+	}
+	CHECK(db_exec(setup, "DROP SCHEMA IF EXISTS lz_init CASCADE; CREATE SCHEMA lz_init") == DB_OK);
+	db_close(setup);
+
+	static char uri[1024];
+	snprintf(uri, sizeof(uri), "%s%coptions=-c%%20search_path%%3Dlz_init", url, strchr(url, '?') != NULL ? '&' : '?');
+	config.files.database.v.s = uri;
+
+	// db_init() creates the current schema in one step
+	db_init();
+	CHECK(!LorentzDBerror());
+	db_conn *db = dbopen(false, false);
+	CHECK(db != NULL);
+	if(db == NULL)
+	{
+		db_driver_select("sqlite");
+		return;
+	}
+	CHECK(db_table_exists(db, "lorentz") && db_table_exists(db, "query_storage") && db_table_exists(db, "queries"));
+	CHECK(db_table_exists(db, "session") && db_table_exists(db, "network_addresses") && db_table_exists(db, "message"));
+	CHECK(db_get_int(db, DB_VERSION) == DB_SCHEMA_VERSION);
+	CHECK(db_query_int(db, "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'lz_init' AND table_type = 'BASE TABLE'") == 12);
+
+	// The helpers of common.c work on it
+	CHECK(db_set_Lorentz_property(db, DB_LASTTIMESTAMP, 1234));
+	CHECK(db_get_int(db, DB_LASTTIMESTAMP) == 1234);
+	CHECK(db_set_Lorentz_property(db, DB_LASTTIMESTAMP, 5678)); // upsert
+	CHECK(db_get_int(db, DB_LASTTIMESTAMP) == 5678);
+	CHECK(db_set_counter(db, DB_TOTALQUERIES, 41));
+	CHECK(db_update_disk_counter(db, DB_TOTALQUERIES, 1));
+	CHECK(db_set_counter(db, DB_BLOCKEDQUERIES, 7));
+	CHECK(db_query_int(db, "SELECT value FROM counters WHERE id = 0") == 42);
+	CHECK(db_query_int_int(db, "SELECT value FROM counters WHERE id = ?", 1) == 7);
+	CHECK(db_query_int_str(db, "SELECT count(*) FROM lorentz WHERE description = ?", "Database version") == 1);
+	CHECK(db_query_int(db, "SELECT value FROM counters WHERE id = 99") == DB_NODATA);
+	CHECK(db_query_int(db, "SELECT nope FROM nothing") == DB_FAILED);
+	CHECK(dbquery(db, "INSERT INTO domain_by_id (domain) VALUES ('%s')", "postgres.example") == DB_OK);
+	CHECK(dbquery(db, "INSERT INTO domain_by_id (domain) VALUES ('postgres.example')") == DB_CONSTRAINT);
+	CHECK(get_row_count("domain_by_id", false) == 1);
+	CHECK(dbquery(db, "INSERT INTO query_storage (id, timestamp, type, status, domain, client) VALUES (0, 1700000000.5, 1, 2, 1, 1)") == DB_OK);
+	CHECK(db_query_int_from_until(db, "SELECT count(*) FROM query_storage WHERE timestamp BETWEEN ? AND ?", 1700000000.0, 1700000001.0) == 1);
+	CHECK(db_query_int_from_until_type(db, "SELECT count(*) FROM query_storage WHERE timestamp BETWEEN ? AND ? AND type = ?", 1700000000.0, 1700000001.0, 1) == 1);
+	dbclose(&db);
+
+	// Starting again finds the schema and keeps everything in it
+	db_init();
+	CHECK(!LorentzDBerror());
+	db = dbopen(false, false);
+	CHECK(db != NULL);
+	if(db != NULL)
+	{
+		CHECK(db_get_int(db, DB_VERSION) == DB_SCHEMA_VERSION);
+		CHECK(db_query_int(db, "SELECT value FROM counters WHERE id = 0") == 42);
+		CHECK(get_row_count("query_storage", false) == 1);
+		dbclose(&db);
+	}
+
+	setup = db_open(url, DB_OPEN_READWRITE);
+	if(setup != NULL)
+	{
+		db_exec(setup, "DROP SCHEMA IF EXISTS lz_init CASCADE");
+		db_close(setup);
+	}
+	db_driver_select("sqlite");
+}
+
 /* ---- main ---- */
 
 int main(void)
@@ -555,8 +758,10 @@ int main(void)
 	test_gravity_database();
 	test_message_session_network();
 	test_gravity_parselist();
+	test_schema_baseline();
 	test_teleporter();
 	test_api_handlers();
+	test_postgres_database();
 
 	char cmd[300];
 	snprintf(cmd, sizeof(cmd), "rm -rf '%s'", tmpdir);

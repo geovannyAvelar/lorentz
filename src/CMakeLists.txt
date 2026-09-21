@@ -614,6 +614,7 @@ if(BUILD_DB_DRIVER_REGRESSION)
             ${PROJECT_SOURCE_DIR}/test/db_driver_regression.c
             ${PROJECT_SOURCE_DIR}/src/database/db-driver.c
             ${PROJECT_SOURCE_DIR}/src/database/db-sqlite.c
+            ${PROJECT_SOURCE_DIR}/src/database/db-schema.c
             $<TARGET_OBJECTS:sqlite3>)
     target_include_directories(db_driver_regression PRIVATE ${PROJECT_SOURCE_DIR}/src)
     # The SQLite object library includes the SQLite shell, which needs whatever
@@ -684,6 +685,7 @@ if(BUILD_DB_POSTGRES_REGRESSION)
             ${PROJECT_SOURCE_DIR}/src/database/db-driver.c
             ${PROJECT_SOURCE_DIR}/src/database/db-sqlite.c
             ${PROJECT_SOURCE_DIR}/src/database/db-postgres.c
+            ${PROJECT_SOURCE_DIR}/src/database/db-schema.c
             $<TARGET_OBJECTS:sqlite3>)
     target_compile_definitions(db_postgres_regression PRIVATE HAVE_POSTGRES)
     target_include_directories(db_postgres_regression PRIVATE ${PROJECT_SOURCE_DIR}/src ${PostgreSQL_INCLUDE_DIRS})

@@ -18,6 +18,9 @@ const run = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "..", "..");
 const harness = process.env.LORENTZ_PG_HARNESS ?? join(repo, "cmake", "db_postgres_regression");
+// The harness of the database layer creates the schema through db_init(). It talks to
+// PostgreSQL only if it was built with -DUSE_POSTGRESQL=ON, otherwise it skips that part.
+const layerHarness = process.env.LORENTZ_LAYER_HARNESS ?? join(repo, "cmake", "db_layer_regression");
 
 // Server versions to run against. PG_IMAGES="postgres:15-alpine,postgres:16-alpine" overrides
 const images = (process.env.PG_IMAGES ?? "postgres:16-alpine,postgres:17-alpine").split(",");
@@ -38,6 +41,24 @@ describe("PostgreSQL driver", () => {
   });
 
   for (const image of images) {
+    it(`creates the long-term schema with db_init() on ${image}`, async (t) => {
+      if (!existsSync(layerHarness)) return t.skip(`not found: ${layerHarness}`);
+      const server = await startPostgres(image);
+      try {
+        const url = `postgresql://postgres:lorentz@${server.getHost()}:${server.getMappedPort(5432)}/lorentz_test`;
+        let result;
+        try {
+          result = await run(layerHarness, [], { env: { ...process.env, POSTGRES_URL: url }, timeout: 300_000 });
+        } catch (error) {
+          assert.fail(`the layer harness failed on ${image}:\n${error.stdout ?? ""}\n${error.stderr ?? ""}`);
+        }
+        assert.match(result.stdout, /DB_LAYER_REGRESSION=PASS/);
+        assert.doesNotMatch(result.stderr, /skipping the PostgreSQL tests/, "the harness was built without USE_POSTGRESQL");
+      } finally {
+        await server.stop();
+      }
+    });
+
     it(`passes its regression harness on ${image}`, async () => {
       const server = await startPostgres(image);
       try {

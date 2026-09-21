@@ -72,6 +72,8 @@ static int64_t scalar(db_conn *db, const char *sql)
 	return v;
 }
 
+#include "../test/db_schema_checks.h"
+
 /* ---- registry and driver lifecycle ---- */
 
 static void test_registry(void)
@@ -647,6 +649,35 @@ static void test_dialect(void)
 	db_close(db);
 }
 
+
+/* ---- baseline schema ---- */
+
+static void test_baseline_schema(void)
+{
+	db_conn *db = open_mem();
+	const char *error = NULL;
+	CHECK(db_schema_baseline(db, &error));
+	if(error != NULL)
+		fprintf(stderr, "baseline: %s\n", error);
+	check_baseline_content(db);
+	check_baseline_behaviour(db);
+
+	// A failed attempt leaves nothing behind: the second call did not change the data
+	CHECK(scalar(db, "SELECT count(*) FROM domain_by_id") == 2);
+
+	// Versions: the current one needs nothing, older ones have no migration yet
+	CHECK(db_schema_migrate(db, DB_SCHEMA_VERSION, &error));
+	CHECK(!db_schema_migrate(db, DB_SCHEMA_VERSION - 1, &error) && strstr(error, "no migration") != NULL);
+	CHECK(!db_schema_migrate(db, DB_SCHEMA_VERSION + 1, &error) && strstr(error, "newer") != NULL);
+	db_close(db);
+
+	// The same schema in a file
+	db = open_file("baseline.db");
+	CHECK(db_schema_baseline(db, &error));
+	CHECK(scalar(db, "SELECT value FROM lorentz WHERE id = 0") == DB_SCHEMA_VERSION);
+	db_close(db);
+}
+
 /* ---- main and stubs ---- */
 
 int main(void)
@@ -671,6 +702,7 @@ int main(void)
 	test_serialize();
 	test_close();
 	test_dialect();
+	test_baseline_schema();
 
 	char cmd[300];
 	snprintf(cmd, sizeof(cmd), "rm -rf '%s'", tmpdir);

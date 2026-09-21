@@ -73,3 +73,19 @@ npm --prefix test/integration run test:postgres
 Set `LORENTZ_PG_HARNESS` if the binary is elsewhere and `PG_IMAGES` (comma
 separated) to pick other server versions. The harness alone can be pointed at
 any throw-away database with `POSTGRES_URL=postgresql://... ./db_postgres_regression`.
+
+### Schema on PostgreSQL
+
+A new PostgreSQL database is created by `db_schema_baseline()`
+(`src/database/db-schema.c`), which builds the current schema (version 22) in
+one transaction using the dialect of the driver. The SQLite migrations of
+`db_init()` stay as they are, and `db_schema_migrate()` refuses anything but the
+current version, so a change of the schema after version 22 has to be written
+for both. Three checks keep the two in step: the driver harnesses compare the
+PostgreSQL columns and indexes with the SQLite baseline, and
+`db_layer_regression` compares a real migrated SQLite file with the baseline
+(the known differences of types are listed in `known_type_difference()`).
+
+`db_init()` on PostgreSQL is tested by `db_layer_regression` when it is built
+with `-DUSE_POSTGRESQL=ON` and given `POSTGRES_URL`; the Testcontainers test
+runs it on each server version.

@@ -84,6 +84,8 @@ static char *text_scalar(db_conn *db, const char *sql)
 }
 
 
+#include "../test/db_schema_checks.h"
+
 /* ---- registry and connection ---- */
 
 static void test_registry_and_open(void)
@@ -697,6 +699,91 @@ static void test_threads_and_big_results(void)
 	db_close(db);
 }
 
+
+/* ---- baseline schema ---- */
+
+// Names in one column of a query, sorted
+static int collect(db_conn *db, const char *sql, const char *arg, char out[64][64])
+{
+	db_stmt *s = db_prepare(db, sql, false);
+	if(s == NULL)
+		return -1;
+	if(arg != NULL)
+		db_bind_text_ref(s, 1, arg);
+	int n = 0;
+	while(n < 64 && db_step(s) == DB_ROW)
+		snprintf(out[n++], 64, "%s", db_column_text(s, 0) != NULL ? db_column_text(s, 0) : "");
+	db_finalize(s);
+	return n;
+}
+
+static int by_name(const void *a, const void *b)
+{
+	return strcmp((const char*)a, (const char*)b);
+}
+
+static void test_baseline_schema(void)
+{
+	db_conn *db = open_pg();
+	CHECK(db_exec(db, "DROP SCHEMA lz_test CASCADE; CREATE SCHEMA lz_test") == DB_OK); // an empty database
+	const char *error = NULL;
+	CHECK(db_schema_baseline(db, &error));
+	if(error != NULL)
+		fprintf(stderr, "baseline: %s\n", error);
+	check_baseline_content(db);
+	check_baseline_behaviour(db);
+	CHECK(db_schema_migrate(db, DB_SCHEMA_VERSION, &error));
+	CHECK(!db_schema_migrate(db, DB_SCHEMA_VERSION - 1, &error) && strstr(error, "no migration") != NULL);
+	CHECK(!db_schema_migrate(db, DB_SCHEMA_VERSION + 1, &error) && strstr(error, "newer") != NULL);
+
+	// A failed baseline rolls back completely: a second schema fails in the first
+	// statement and the data of the first is untouched
+	CHECK(scalar(db, "SELECT count(*) FROM domain_by_id") == 2);
+
+	// The same schema as the one SQLite gets: tables, columns in order,
+	// whether they can be NULL, and the indexes that were created explicitly
+	db_conn *lite = db_driver_sqlite.open(":memory:", DB_OPEN_READWRITE | DB_OPEN_MEMORY, NULL, NULL);
+	CHECK(lite != NULL && db_schema_baseline(lite, &error));
+	for(unsigned int i = 0; lite != NULL && i < sizeof(baseline_tables) / sizeof(baseline_tables[0]); i++)
+	{
+		const char *table = baseline_tables[i];
+		static char sqlite_cols[64][64], pg_cols[64][64];
+		char sql[256];
+
+		// name:notnull, a primary key counts as not null on both
+		snprintf(sql, sizeof(sql), "SELECT lower(name) || ':' || CASE WHEN \"notnull\" = 1 OR pk > 0 THEN 'n' ELSE 'y' END "
+		                           "FROM pragma_table_info('%s') ORDER BY cid", table);
+		const int a = collect(lite, sql, NULL, sqlite_cols);
+		const int b = collect(db,
+			"SELECT column_name || ':' || CASE WHEN is_nullable = 'NO' THEN 'n' ELSE 'y' END "
+			"FROM information_schema.columns WHERE table_schema = 'lz_test' AND table_name = ? ORDER BY ordinal_position",
+			table, pg_cols);
+		CHECK(a > 0 && a == b);
+		for(int c = 0; c < a && c < b; c++)
+			if(strcmp(sqlite_cols[c], pg_cols[c]) != 0)
+			{
+				CHECK(false);
+				fprintf(stderr, "  %s column %d: SQLite %s, PostgreSQL %s\n", table, c, sqlite_cols[c], pg_cols[c]);
+			}
+
+		static char sqlite_idx[64][64], pg_idx[64][64];
+		const int ai = collect(lite, "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND name NOT LIKE 'sqlite_%'", table, sqlite_idx);
+		const int bi = collect(db, "SELECT indexname FROM pg_indexes WHERE schemaname = 'lz_test' AND tablename = ? "
+		                           "AND indexname NOT LIKE '%_pkey' AND indexname NOT LIKE '%_key'", table, pg_idx);
+		CHECK(ai == bi);
+		qsort(sqlite_idx, (size_t)(ai > 0 ? ai : 0), 64, by_name);
+		qsort(pg_idx, (size_t)(bi > 0 ? bi : 0), 64, by_name);
+		for(int c = 0; c < ai && c < bi; c++)
+			if(strcmp(sqlite_idx[c], pg_idx[c]) != 0)
+			{
+				CHECK(false);
+				fprintf(stderr, "  %s index: SQLite %s, PostgreSQL %s\n", table, sqlite_idx[c], pg_idx[c]);
+			}
+	}
+	db_close(lite);
+	db_close(db);
+}
+
 /* ---- main and stubs ---- */
 
 int main(void)
@@ -735,6 +822,7 @@ int main(void)
 	test_format_and_dialect();
 	test_close_and_interrupt();
 	test_threads_and_big_results();
+	test_baseline_schema();
 
 	setup = db_open(url, DB_OPEN_READWRITE);
 	if(setup != NULL)

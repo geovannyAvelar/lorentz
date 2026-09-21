@@ -38,8 +38,9 @@ is SQLite. An experimental PostgreSQL driver (`src/database/db-postgres.c`, on l
 The PostgreSQL driver implements the whole interface (see the comment at the top of the file for the
 differences, for example that there is no `ATTACH` and no in-memory database), and is tested against
 real servers. **Lorentz itself cannot run on PostgreSQL yet**: the queries, migrations and schema of the
-long-term, in-memory and gravity databases are written in SQLite's dialect, and they still have to be
-moved behind the dialect hooks of the driver.
+in-memory and gravity databases and most of the queries are written in SQLite's dialect, and they still
+have to be moved behind the dialect hooks of the driver. The schema of the long-term database is ready:
+on PostgreSQL, `db_init()` creates it with `db_schema_baseline()` (`src/database/db-schema.c`).
 
 ## Documentation
 

@@ -10,6 +10,8 @@
 
 #include "lorentz.h"
 #include "database/common.h"
+// db_schema_baseline(), db_schema_migrate()
+#include "database/db-schema.h"
 // SQLITE_WARNING, SQLITE_NOTICE, SQLITE_SCHEMA for SQLite3LogCallback()
 #include "database/sqlite3.h"
 #include "database/network-table.h"
@@ -391,8 +393,99 @@ void SQLite3LogCallback(void *pArg, int iErrCode, const char *zMsg)
 		log_err("SQLite3: %s (%d)", zMsg, iErrCode);
 }
 
+// The baseline schema and the migrations of a SQLite database end at the same
+// version
+_Static_assert(DB_SCHEMA_VERSION == MEMDB_VERSION, "DB_SCHEMA_VERSION and MEMDB_VERSION differ");
+
+// The tail of db_init() shared by every driver: the database is at the current
+// version, import what the shared memory needs and let go of the connection
+static void db_init_finish(db_conn *db)
+{
+	lock_shm();
+	import_aliasclients(db);
+	unlock_shm();
+
+	// Close database to prevent having it opened all time
+	// We already closed the database when we returned earlier
+	dbclose(&db);
+
+	// Log if users asked us to not use the long-term database for queries
+	// We will still use it to store warnings (Lorentz diagnosis system)
+	if(config.database.maxDBdays.v.ui == 0)
+		log_info("Not using the database for storing queries");
+
+	log_info("Database successfully initialized");
+}
+
+// Initialization for drivers other than SQLite. A server has no history of
+// migrations to replay: an empty database gets the current schema in one
+// step, an older one is migrated by db_schema_migrate(). There is no file to
+// create or to set the permissions of, the "file name" of the database is the
+// connection string of the driver
+static void db_init_server(void)
+{
+	db_conn *db = dbopen(false, true);
+	if(db == NULL)
+	{
+		log_err("Database not available!");
+		DBerror = true;
+		return;
+	}
+
+	const char *error = NULL;
+	int dbversion;
+	if(!db_table_exists(db, "lorentz"))
+	{
+		log_info("Creating the long-term database (version %d)", DB_SCHEMA_VERSION);
+		if(!db_schema_baseline(db, &error))
+		{
+			log_err("Creating the long-term database failed, database not available: %s", error);
+			dbclose(&db);
+			DBerror = true;
+			return;
+		}
+		dbversion = DB_SCHEMA_VERSION;
+	}
+	else
+	{
+		dbversion = db_get_int(db, DB_VERSION);
+		log_info("Database version is %i", dbversion);
+		if(dbversion < 1)
+		{
+			log_err("Cannot read the version of the long-term database, database not available");
+			dbclose(&db);
+			DBerror = true;
+			return;
+		}
+		if(!db_schema_migrate(db, dbversion, &error))
+		{
+			log_err("Updating the long-term database failed, database not available: %s", error);
+			dbclose(&db);
+			DBerror = true;
+			return;
+		}
+	}
+
+	if(dbversion != MEMDB_VERSION)
+	{
+		log_err("Expected query database version %d but found %d, database not available", MEMDB_VERSION, dbversion);
+		dbclose(&db);
+		DBerror = true;
+		return;
+	}
+
+	db_init_finish(db);
+}
+
 void db_init(void)
 {
+	// Only SQLite has a file and a history of migrations to replay
+	if(strcmp(db_driver_active()->name, "sqlite") != 0)
+	{
+		db_init_server();
+		return;
+	}
+
 	// Check if database exists, if not create empty database
 	if(!file_exists(config.files.database.v.s))
 	{
@@ -809,20 +902,7 @@ void db_init(void)
 		return;
 	}
 
-	lock_shm();
-	import_aliasclients(db);
-	unlock_shm();
-
-	// Close database to prevent having it opened all time
-	// We already closed the database when we returned earlier
-	dbclose(&db);
-
-	// Log if users asked us to not use the long-term database for queries
-	// We will still use it to store warnings (Lorentz diagnosis system)
-	if(config.database.maxDBdays.v.ui == 0)
-		log_info("Not using the database for storing queries");
-
-	log_info("Database successfully initialized");
+	db_init_finish(db);
 }
 
 int db_get_int(db_conn *db, const enum lorentz_table_props ID)
@@ -883,9 +963,9 @@ static bool exec_int_int(db_conn *db, const char *sql, const int first, const in
 
 bool db_set_counter(db_conn *db, const enum counters_table_props ID, const int value)
 {
-	// The counter row exists after the first write, INSERT OR REPLACE keeps
-	// this a single statement for both cases
-	return exec_int_int(db, "INSERT OR REPLACE INTO counters (id, value) VALUES (?,?)", ID, value);
+	// The counter row exists after the first write, the upsert keeps this a
+	// single statement for both cases and is understood by every driver
+	return exec_int_int(db, "INSERT INTO counters (id, value) VALUES (?,?) ON CONFLICT (id) DO UPDATE SET value = excluded.value", ID, value);
 }
 
 bool db_update_disk_counter(db_conn *db, const enum counters_table_props ID, const int change)

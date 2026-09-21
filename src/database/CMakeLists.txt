@@ -51,6 +51,8 @@ set(database_sources
         db-driver.c
         db-driver.h
         db-sqlite.c
+        db-schema.c
+        db-schema.h
         )
 
 add_library(database OBJECT ${database_sources})

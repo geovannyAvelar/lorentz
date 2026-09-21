@@ -38,6 +38,8 @@ void test_memory_database(void);
 void test_gravity_database(void);
 void test_message_session_network(void);
 void test_gravity_parselist(void);
+void test_schema_baseline(void);
+void test_postgres_database(void);
 void test_teleporter(void);
 void test_api_handlers(void);
 
