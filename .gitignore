@@ -18,6 +18,7 @@ version~
 /cmake_ci/
 /cmake-build-debug/
 /cmake-build-release/
+/compile_commands.json
 
 # IDE files
 .idea/
@@ -55,3 +56,5 @@ test/libs/
 
 # Compiled LUA scripts
 /src/lua/scripts/*.hex
+
+test/integration/node_modules/
