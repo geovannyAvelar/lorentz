@@ -44,9 +44,20 @@ Point `files.database` (`LORENTZCONF_files_database`) at a connection URI instea
   database = "postgresql://lorentz:password@db.example/lorentz"
 ```
 
+The URI may leave out what the environment supplies: libpq reads `PGHOST`, `PGPORT`, `PGUSER`,
+`PGPASSWORD`, `PGDATABASE`, `PGOPTIONS`, `PGSSLMODE`, `PGPASSFILE`, `PGSERVICE` and its other variables for
+whatever the URI does not say. With `LORENTZCONF_files_database=postgresql://` and the variables set, no
+password is written to `lorentz.toml`:
+
+```bash
+LORENTZCONF_files_database=postgresql://
+PGHOST=db.example PGUSER=lorentz PGPASSWORD=secret PGDATABASE=lorentz
+PGOPTIONS="-c search_path=lorentz"
+```
+
 Lorentz creates its tables on the first start (`db_schema_baseline()` in `src/database/db-schema.c`). Use a
-database or a schema of its own: `?options=-c%20search_path%3Dlorentz` in the URI selects a schema. The
-URI is stored in `lorentz.toml`, where the password is readable to whoever can read that file, and the
+database or a schema of its own: `?options=-c%20search_path%3Dlorentz` in the URI selects a schema. A
+URI that contains the password is stored in `lorentz.toml`, where whoever can read that file can read it, and the
 logs mask it.
 
 What is on PostgreSQL is the **long-term database**: the query history, the counters, the network table,

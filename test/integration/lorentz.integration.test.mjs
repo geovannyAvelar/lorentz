@@ -494,3 +494,52 @@ describe("upgrading a database", () => {
     assert.equal(stats.status, 200);
   });
 });
+
+// The connection data can come from the environment instead of the URI: libpq reads
+// PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGOPTIONS and the rest of its variables
+// for whatever the URI leaves out, so no password has to be written to lorentz.toml
+if (wanted.includes("postgres")) describe("PostgreSQL connection data from the environment", () => {
+  let lorentz;
+  let schema;
+
+  before(async () => {
+    schema = await postgres.schema();
+    lorentz = await startLorentz({
+      LORENTZCONF_files_database: "postgresql://",
+      PGHOST: "pg",
+      PGUSER: "postgres",
+      PGPASSWORD: "lorentz",
+      PGDATABASE: "lorentz_test",
+      PGOPTIONS: `-c search_path=${schema.name}`,
+    }, { network: postgres.network });
+  });
+  after(async () => {
+    await lorentz?.stop();
+  });
+
+  it("connects and creates its tables", async () => {
+    const log = await lorentzLog(lorentz);
+    assert.match(log, /Creating the long-term database \(version 22\)/);
+    assert.match(log, /Database successfully initialized/);
+    assert.deepEqual(errorLines(log), []);
+    assert.equal(await schema.sql("SELECT value FROM lorentz WHERE id = 0"), "22");
+  });
+
+  it("keeps the password out of the configuration and the log", async () => {
+    const toml = await run(lorentz, ["cat", "/etc/lorentz/lorentz.toml"]);
+    assert.match(toml, /database = "postgresql:\/\/"/);
+    assert.doesNotMatch(toml, /PGPASSWORD|lorentz_test/);
+    assert.doesNotMatch(await lorentzLog(lorentz), /PGPASSWORD|:lorentz@/);
+  });
+
+  it("works", async () => {
+    assert.deepEqual(await dig(lorentz, LOCAL_DOMAIN), ["1.2.3.4"]);
+    await eventually("the query in the query log", async () => {
+      const { body } = await api(lorentz, `/api/queries?domain=${LOCAL_DOMAIN}`);
+      return body.queries.length >= 1;
+    });
+    await restartLorentz(lorentz);
+    assert.deepEqual(errorLines(await lorentzLog(lorentz)), []);
+    assert.ok(Number(await schema.sql("SELECT count(*) FROM query_storage")) >= 1);
+  });
+});
