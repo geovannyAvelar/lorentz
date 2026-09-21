@@ -12,6 +12,8 @@
 
 // struct queriesData
 #include "datastructure.h"
+// db_conn
+#include "db-driver.h"
 
 #define CREATE_FTL_TABLE "CREATE TABLE ftl ( id INTEGER PRIMARY KEY NOT NULL, value BLOB NOT NULL );"
 
@@ -105,32 +107,35 @@ const char *index_creation[] = {
 };
 #endif
 
-sqlite3_int64 get_max_db_idx(void) __attribute__((pure));
-void db_counts(sqlite3_int64 *last_idx, sqlite3_int64 *mem_num, sqlite3_int64 *disk_num);
+int64_t get_max_db_idx(void) __attribute__((pure));
+void db_counts(int64_t *last_idx, int64_t *mem_num, int64_t *disk_num);
 bool init_memory_database(void);
-sqlite3 *_get_memdb(const int line, const char *func, const char *file) __attribute__((pure));
-#define get_memdb(void) _get_memdb(__LINE__, __FUNCTION__, __FILE__)
+// The in-memory database is owned by this module as a driver connection
+db_conn *_get_memdb(const int line, const char *func, const char *file) __attribute__((pure));
+#define get_memdb() _get_memdb(__LINE__, __FUNCTION__, __FILE__)
 void close_memory_database(void);
 bool import_queries_from_disk(void);
 void interrupt_memdb(void);
-bool attach_database(sqlite3* db, const char **message, const char *path, const char *alias);
-bool detach_database(sqlite3* db, const char **message, const char *alias);
 void get_db_info(const bool disk, uint64_t *count, double *earliest_timestamp);
 bool export_queries_to_disk(const bool final);
 bool delete_old_queries_from_db(const bool use_memdb, const double mintime);
-bool add_additional_info_column(sqlite3 *db);
 void DB_read_queries(void);
 bool queries_to_database(void);
-bool is_memdb(const sqlite3 *db) __attribute__((pure));
+bool is_memdb(const db_conn *db) __attribute__((pure));
 bool get_memdb_size(size_t *memsize, int *queries);
 
-bool optimize_queries_table(sqlite3 *db);
-bool create_addinfo_table(sqlite3 *db);
-bool add_query_storage_columns(sqlite3 *db);
-bool add_query_storage_column_regex_id(sqlite3 *db);
-bool add_ftl_table_description(sqlite3 *db);
-bool rename_query_storage_column_regex_id(sqlite3 *db);
-bool add_query_storage_column_ede(sqlite3 *db);
-bool replace_queries_view_with_joins(sqlite3 *db);
+bool attach_database(db_conn *db, const char **message, const char *path, const char *alias);
+bool detach_database(db_conn *db, const char **message, const char *alias);
+
+// Database migrations
+bool add_additional_info_column(db_conn *db);
+bool optimize_queries_table(db_conn *db);
+bool create_addinfo_table(db_conn *db);
+bool add_query_storage_columns(db_conn *db);
+bool add_query_storage_column_regex_id(db_conn *db);
+bool add_ftl_table_description(db_conn *db);
+bool rename_query_storage_column_regex_id(db_conn *db);
+bool add_query_storage_column_ede(db_conn *db);
+bool replace_queries_view_with_joins(db_conn *db);
 
 #endif //QUERY_TABLE_PRIVATE_H

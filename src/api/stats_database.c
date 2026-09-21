@@ -40,7 +40,7 @@ int api_history_database(struct ftl_conn *api)
 	}
 
 	// Open the database
-	sqlite3 *db = dbopen(false, false);
+	db_conn *db = dbopen(false, false);
 	if(db == NULL)
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -54,11 +54,11 @@ int api_history_database(struct ftl_conn *api)
 
 
 	// Prepare SQLite statement
-	sqlite3_stmt *stmt = NULL;
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK ){
+	db_stmt *stmt = NULL;
+	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
+	if( rc != DB_OK ){
 		log_err("api_stats_database_history() - SQL error prepare (%i): %s",
-		        rc, sqlite3_errstr(rc));
+		        rc, DB_LAST_ERR(db));
 		dbclose(&db);
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -67,11 +67,11 @@ int api_history_database(struct ftl_conn *api)
 	}
 
 	// Bind interval to prepared statement
-	if((rc = sqlite3_bind_int(stmt, 1, interval)) != SQLITE_OK)
+	if((rc = db_bind_int(stmt, 1, interval)) != DB_OK)
 	{
 		log_err("api_stats_database_history(): Failed to bind interval (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -81,11 +81,11 @@ int api_history_database(struct ftl_conn *api)
 	}
 
 	// Bind from to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 2, from)) != SQLITE_OK)
+	if((rc = db_bind_double(stmt, 2, from)) != DB_OK)
 	{
 		log_err("api_stats_database_history(): Failed to bind from (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -95,11 +95,11 @@ int api_history_database(struct ftl_conn *api)
 	}
 
 	// Bind until to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 3, until)) != SQLITE_OK)
+	if((rc = db_bind_double(stmt, 3, until)) != DB_OK)
 	{
 		log_err("api_stats_database_history(): Failed to bind until (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -113,10 +113,10 @@ int api_history_database(struct ftl_conn *api)
 	cJSON *item = NULL;
 	time_t previous_timeslot = 0u;
 	unsigned int blocked = 0u, total = 0u, cached = 0u, forwarded = 0u;
-	while((rc = sqlite3_step(stmt)) == SQLITE_ROW)
+	while((rc = db_step(stmt)) == DB_ROW)
 	{
 		// Get timestamp and derive timeslot from it
-		const time_t timestamp = sqlite3_column_int64(stmt, 0);
+		const time_t timestamp = db_column_int64(stmt, 0);
 		const time_t timeslot = timestamp - timestamp % interval;
 		// Begin new array item for each new timeslot
 		if(timeslot != previous_timeslot)
@@ -143,8 +143,8 @@ int api_history_database(struct ftl_conn *api)
 			JSON_ADD_NUMBER_TO_OBJECT(item, "timestamp", previous_timeslot);
 		}
 
-		const int status = sqlite3_column_int(stmt, 1);
-		const int count = sqlite3_column_int(stmt, 2);
+		const int status = db_column_int(stmt, 1);
+		const int count = db_column_int(stmt, 2);
 		// Always add to total count
 		total += count;
 
@@ -172,7 +172,7 @@ int api_history_database(struct ftl_conn *api)
 	}
 
 	// Finalize statement and close (= unlock) database connection
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 	dbclose(&db);
 
 	cJSON *json = JSON_NEW_OBJECT();
@@ -216,7 +216,7 @@ int api_stats_database_top_items(struct ftl_conn *api)
 	}
 
 	// Open the database
-	sqlite3 *db = dbopen(false, false);
+	db_conn *db = dbopen(false, false);
 	if(db == NULL)
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -288,11 +288,11 @@ int api_stats_database_top_items(struct ftl_conn *api)
 
 
 	// Prepare SQLite statement
-	sqlite3_stmt *stmt = NULL;
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK ){
+	db_stmt *stmt = NULL;
+	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
+	if( rc != DB_OK ){
 		log_err("api_stats_database_history() - SQL error prepare (%i): %s",
-		        rc, sqlite3_errstr(rc));
+		        rc, DB_LAST_ERR(db));
 
 		dbclose(&db);
 
@@ -303,11 +303,11 @@ int api_stats_database_top_items(struct ftl_conn *api)
 	}
 
 	// Bind from to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 1, from)) != SQLITE_OK)
+	if((rc = db_bind_double(stmt, 1, from)) != DB_OK)
 	{
 		log_err("api_stats_database_history(): Failed to bind from (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -317,11 +317,11 @@ int api_stats_database_top_items(struct ftl_conn *api)
 	}
 
 	// Bind until to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 2, until)) != SQLITE_OK)
+	if((rc = db_bind_double(stmt, 2, until)) != DB_OK)
 	{
 		log_err("api_stats_database_history(): Failed to bind until (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -331,11 +331,11 @@ int api_stats_database_top_items(struct ftl_conn *api)
 	}
 
 	// Bind count limit to prepared statement
-	if((rc = sqlite3_bind_int(stmt, 3, (int)count)) != SQLITE_OK)
+	if((rc = db_bind_int(stmt, 3, (int)count)) != DB_OK)
 	{
 		log_err("api_stats_database_history(): Failed to bind count (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -346,28 +346,28 @@ int api_stats_database_top_items(struct ftl_conn *api)
 
 	// Loop over results (limited by SQL LIMIT :count)
 	cJSON *top_items = JSON_NEW_ARRAY();
-	while((rc = sqlite3_step(stmt)) == SQLITE_ROW)
+	while((rc = db_step(stmt)) == DB_ROW)
 	{
 		// Get count
-		const int cnt = sqlite3_column_int(stmt, 0);
+		const int cnt = db_column_int(stmt, 0);
 		cJSON *item = JSON_NEW_OBJECT();
 		if(domains)
 		{
 			// Add domain to item
-			JSON_COPY_STR_TO_OBJECT(item, "domain", sqlite3_column_text(stmt, 1));
+			JSON_COPY_STR_TO_OBJECT(item, "domain", db_column_text(stmt, 1));
 		}
 		else
 		{
 			// Add client to item
-			JSON_COPY_STR_TO_OBJECT(item, "ip", sqlite3_column_text(stmt, 1));
-			JSON_COPY_STR_TO_OBJECT(item, "name", sqlite3_column_text(stmt, 2));
+			JSON_COPY_STR_TO_OBJECT(item, "ip", db_column_text(stmt, 1));
+			JSON_COPY_STR_TO_OBJECT(item, "name", db_column_text(stmt, 2));
 		}
 		JSON_ADD_NUMBER_TO_OBJECT(item, "count", cnt);
 		JSON_ADD_ITEM_TO_ARRAY(top_items, item);
 	}
 
 	// Finalize statement and close (= unlock) database connection
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 
 	cJSON *json = JSON_NEW_OBJECT();
 	JSON_ADD_ITEM_TO_OBJECT(json, (domains ? "domains" : "clients"), top_items);
@@ -399,7 +399,7 @@ int api_stats_database_summary(struct ftl_conn *api)
 	}
 
 	// Open the database
-	sqlite3 *db = dbopen(false, false);
+	db_conn *db = dbopen(false, false);
 	if(db == NULL)
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -473,7 +473,7 @@ int api_history_database_clients(struct ftl_conn *api)
 	}
 
 	// Open the database
-	sqlite3 *db = dbopen(false, false);
+	db_conn *db = dbopen(false, false);
 	if(db == NULL)
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -486,11 +486,11 @@ int api_history_database_clients(struct ftl_conn *api)
 	                       "ORDER BY client DESC";
 
 	// Prepare SQLite statement
-	sqlite3_stmt *stmt = NULL;
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK ){
+	db_stmt *stmt = NULL;
+	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
+	if( rc != DB_OK ){
 		log_err("api_stats_database_clients() - SQL error prepare outer (%i): %s",
-		        rc, sqlite3_errstr(rc));
+		        rc, DB_LAST_ERR(db));
 		dbclose(&db);
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -499,11 +499,11 @@ int api_history_database_clients(struct ftl_conn *api)
 	}
 
 	// Bind from to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 1, from)) != SQLITE_OK)
+	if((rc = db_bind_double(stmt, 1, from)) != DB_OK)
 	{
 		log_err("api_stats_database_clients(): Failed to bind from (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -513,11 +513,11 @@ int api_history_database_clients(struct ftl_conn *api)
 	}
 
 	// Bind until to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 2, until)) != SQLITE_OK)
+	if((rc = db_bind_double(stmt, 2, until)) != DB_OK)
 	{
 		log_err("api_stats_database_clients(): Failed to bind until (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -528,13 +528,13 @@ int api_history_database_clients(struct ftl_conn *api)
 
 	// Loop over clients and accumulate results
 	cJSON *clients = JSON_NEW_OBJECT();
-	while((rc = sqlite3_step(stmt)) == SQLITE_ROW)
+	while((rc = db_step(stmt)) == DB_ROW)
 	{
 		cJSON *item = JSON_NEW_OBJECT();
-		JSON_COPY_STR_TO_OBJECT(item, "name", sqlite3_column_text(stmt, 2));
-		JSON_ADD_ITEM_TO_OBJECT(clients, (const char*)sqlite3_column_text(stmt, 1), item);
+		JSON_COPY_STR_TO_OBJECT(item, "name", db_column_text(stmt, 2));
+		JSON_ADD_ITEM_TO_OBJECT(clients, (const char*)db_column_text(stmt, 1), item);
 	}
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 
 	// Build SQL string
 	querystr = "SELECT (timestamp/:interval)*:interval interval,client,COUNT(*) FROM query_storage "
@@ -542,10 +542,10 @@ int api_history_database_clients(struct ftl_conn *api)
 	           "GROUP BY interval,client ORDER BY interval DESC, client DESC";
 
 	// Prepare SQLite statement
-	rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK ){
+	rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
+	if( rc != DB_OK ){
 		log_err("api_stats_database_clients() - SQL error prepare (%i): %s",
-		   rc, sqlite3_errstr(rc));
+		   rc, DB_LAST_ERR(db));
 		dbclose(&db);
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -554,11 +554,11 @@ int api_history_database_clients(struct ftl_conn *api)
 	}
 
 	// Bind interval to prepared statement
-	if((rc = sqlite3_bind_int(stmt, 1, interval)) != SQLITE_OK)
+	if((rc = db_bind_int(stmt, 1, interval)) != DB_OK)
 	{
 		log_err("api_stats_database_clients(): Failed to bind interval (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -568,11 +568,11 @@ int api_history_database_clients(struct ftl_conn *api)
 	}
 
 	// Bind from to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 2, from)) != SQLITE_OK)
+	if((rc = db_bind_double(stmt, 2, from)) != DB_OK)
 	{
 		log_err("api_stats_database_clients(): Failed to bind from (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -582,11 +582,11 @@ int api_history_database_clients(struct ftl_conn *api)
 	}
 
 	// Bind until to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 3, until)) != SQLITE_OK)
+	if((rc = db_bind_double(stmt, 3, until)) != DB_OK)
 	{
 		log_err("api_stats_database_clients(): Failed to bind until (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -599,10 +599,10 @@ int api_history_database_clients(struct ftl_conn *api)
 	cJSON *data = NULL;
 	time_t previous_timeslot = 0u;
 	cJSON *over_time = JSON_NEW_ARRAY();
-	while((rc = sqlite3_step(stmt)) == SQLITE_ROW)
+	while((rc = db_step(stmt)) == DB_ROW)
 	{
 		// Get timestamp and derive timeslot from it
-		const time_t timestamp = sqlite3_column_int64(stmt, 0);
+		const time_t timestamp = db_column_int64(stmt, 0);
 		const time_t timeslot = timestamp - timestamp % interval;
 		// Begin new array item for each new timeslot
 		if(timeslot != previous_timeslot)
@@ -620,8 +620,8 @@ int api_history_database_clients(struct ftl_conn *api)
 			JSON_ADD_NUMBER_TO_OBJECT(item, "timestamp", previous_timeslot);
 		}
 
-		const char *client = (char*)sqlite3_column_text(stmt, 1);
-		const int count = sqlite3_column_int(stmt, 2);
+		const char *client = (char*)db_column_text(stmt, 1);
+		const int count = db_column_int(stmt, 2);
 
 		JSON_ADD_NUMBER_TO_OBJECT(data, client, count);
 	}
@@ -634,7 +634,7 @@ int api_history_database_clients(struct ftl_conn *api)
 	}
 
 	// Finalize statement and close (= unlock) database connection
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 	dbclose(&db);
 
 	cJSON *json = JSON_NEW_OBJECT();
@@ -662,7 +662,7 @@ int api_stats_database_query_types(struct ftl_conn *api)
 	}
 
 	// Open the database
-	sqlite3 *db = dbopen(false, false);
+	db_conn *db = dbopen(false, false);
 	if(db == NULL)
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -674,12 +674,12 @@ int api_stats_database_query_types(struct ftl_conn *api)
 	const char *querystr = "SELECT COUNT(*) FROM query_storage "
 	                       "WHERE timestamp >= :from AND timestamp <= :until "
 	                       "AND type = :type";
-	sqlite3_stmt *stmt = NULL;
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if(rc != SQLITE_OK)
+	db_stmt *stmt = NULL;
+	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
+	if(rc != DB_OK)
 	{
 		log_err("api_stats_database_query_types() - SQL error prepare (%i): %s",
-		        rc, sqlite3_errstr(rc));
+		        rc, DB_LAST_ERR(db));
 		dbclose(&db);
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -688,12 +688,12 @@ int api_stats_database_query_types(struct ftl_conn *api)
 	}
 
 	// Bind the fixed parameters once before the loop
-	if((rc = sqlite3_bind_double(stmt, 1, from)) != SQLITE_OK ||
-	   (rc = sqlite3_bind_double(stmt, 2, until)) != SQLITE_OK)
+	if((rc = db_bind_double(stmt, 1, from)) != DB_OK ||
+	   (rc = db_bind_double(stmt, 2, until)) != DB_OK)
 	{
 		log_err("api_stats_database_query_types() - SQL error bind (%i): %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -705,20 +705,20 @@ int api_stats_database_query_types(struct ftl_conn *api)
 	for(int i = TYPE_A; i < TYPE_MAX; i++)
 	{
 		// Add 1 as type is stored one-based in the database for historical reasons
-		if((rc = sqlite3_bind_int(stmt, 3, i + 1)) != SQLITE_OK)
+		if((rc = db_bind_int(stmt, 3, i + 1)) != DB_OK)
 		{
 			log_err("api_stats_database_query_types() - SQL error bind type (%i): %s",
-			        rc, sqlite3_errstr(rc));
+			        rc, DB_LAST_ERR(db));
 			break;
 		}
 		int count = 0;
-		if(sqlite3_step(stmt) == SQLITE_ROW)
-			count = sqlite3_column_int(stmt, 0);
-		sqlite3_reset(stmt);
+		if(db_step(stmt) == DB_ROW)
+			count = db_column_int(stmt, 0);
+		db_reset(stmt);
 		JSON_ADD_NUMBER_TO_OBJECT(types, get_query_type_str(i, NULL, NULL), count);
 	}
 
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 
 	// Close (= unlock) database connection
 	dbclose(&db);
@@ -749,7 +749,7 @@ int api_stats_database_upstreams(struct ftl_conn *api)
 	}
 
 	// Open the database
-	sqlite3 *db = dbopen(false, false);
+	db_conn *db = dbopen(false, false);
 	if(db == NULL)
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -792,11 +792,11 @@ int api_stats_database_upstreams(struct ftl_conn *api)
 	           "GROUP BY forward ORDER BY forward";
 
 	// Prepare SQLite statement
-	sqlite3_stmt *stmt = NULL;
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK ){
+	db_stmt *stmt = NULL;
+	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
+	if( rc != DB_OK ){
 		log_err("api_stats_database_clients() - SQL error prepare (%i): %s",
-		        rc, sqlite3_errstr(rc));
+		        rc, DB_LAST_ERR(db));
 		dbclose(&db);
 		return send_json_error(api, 500,
 		                       "internal_error",
@@ -805,11 +805,11 @@ int api_stats_database_upstreams(struct ftl_conn *api)
 	}
 
 	// Bind from to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 1, from)) != SQLITE_OK)
+	if((rc = db_bind_double(stmt, 1, from)) != DB_OK)
 	{
 		log_err("api_stats_database_clients(): Failed to bind from (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -819,11 +819,11 @@ int api_stats_database_upstreams(struct ftl_conn *api)
 	}
 
 	// Bind until to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 2, until)) != SQLITE_OK)
+	if((rc = db_bind_double(stmt, 2, until)) != DB_OK)
 	{
 		log_err("api_stats_database_clients(): Failed to bind until (error %d) - %s",
-		        rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
+		        rc, DB_LAST_ERR(db));
+		db_finalize(stmt);
 		dbclose(&db);
 
 		return send_json_error(api, 500,
@@ -835,14 +835,14 @@ int api_stats_database_upstreams(struct ftl_conn *api)
 	// Loop over clients and accumulate results
 	cJSON *upstreams = JSON_NEW_ARRAY();
 	int forwarded_queries = 0;
-	while((rc = sqlite3_step(stmt)) == SQLITE_ROW)
+	while((rc = db_step(stmt)) == DB_ROW)
 	{
-		const char *upstream = (char*)sqlite3_column_text(stmt, 0);
+		const char *upstream = (char*)db_column_text(stmt, 0);
 		// A broken row can carry a NULL upstream, which neither sscanf()
 		// nor the JSON output below would survive
 		if(upstream == NULL)
 			upstream = "";
-		const int count = sqlite3_column_int(stmt, 1);
+		const int count = db_column_int(stmt, 1);
 
 		cJSON *item = JSON_NEW_OBJECT();
 		// Needs a signed data type here as -1 means: no port applicable
@@ -869,7 +869,7 @@ int api_stats_database_upstreams(struct ftl_conn *api)
 		JSON_ADD_ITEM_TO_ARRAY(upstreams, item);
 		forwarded_queries += count;
 	}
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 
 	// Add number of forwarded queries to total query count
 	sum_queries += forwarded_queries;

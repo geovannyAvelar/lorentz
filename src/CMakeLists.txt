@@ -283,7 +283,9 @@ target_compile_definitions(core PRIVATE DNSMASQ_VERSION=\"${DNSMASQ_VERSION}\")
 target_include_directories(core PRIVATE ${PROJECT_SOURCE_DIR}/src)
 add_dependencies(core gen_version)
 
-add_executable(pihole-FTL
+# Every object file of the FTL executable. The database layer regression
+# harness (see the end of this file) is linked with the same set
+set(FTL_OBJECT_FILES
         $<TARGET_OBJECTS:core>
         $<TARGET_OBJECTS:api>
         $<TARGET_OBJECTS:api_docs>
@@ -304,6 +306,7 @@ add_executable(pihole-FTL
         $<TARGET_OBJECTS:tools>
         $<TARGET_OBJECTS:ntp>
         )
+add_executable(pihole-FTL ${FTL_OBJECT_FILES})
 if(STATIC)
     set_target_properties(pihole-FTL PROPERTIES LINK_SEARCH_START_STATIC ON)
     set_target_properties(pihole-FTL PROPERTIES LINK_SEARCH_END_STATIC ON)
@@ -583,3 +586,72 @@ find_program(SETCAP setcap)
 install(CODE "execute_process(COMMAND ${SETCAP} CAP_NET_BIND_SERVICE,CAP_NET_RAW,CAP_NET_ADMIN,CAP_SYS_NICE,CAP_CHOWN,CAP_SYS_TIME+eip \${CMAKE_INSTALL_PREFIX}/bin/pihole-FTL)")
 # ... and verify the binary integrity
 install(CODE "execute_process(COMMAND \${CMAKE_INSTALL_PREFIX}/bin/pihole-FTL verify)")
+
+# Standalone regression harness for the database driver layer
+# (src/database/db-driver.c, db-sqlite.c). It links the driver and the SQLite
+# object library only and stubs the few FTL wrappers and the logging entry
+# point the driver needs, so it runs without any FTL configuration. The
+# "Database driver regression harness" bats test runs the resulting binary.
+# Deliberately NOT given the strict EXTRAWARN/-Werror flags applied to FTL code.
+#
+# Only built on request: `./build.sh test` enables it for local runs and the
+# CI Dockerfile passes -DBUILD_DB_DRIVER_REGRESSION=ON at build time.
+option(BUILD_DB_DRIVER_REGRESSION "Build the database driver regression test harness" OFF)
+if(BUILD_DB_DRIVER_REGRESSION)
+    add_executable(db_driver_regression
+            ${PROJECT_SOURCE_DIR}/test/db_driver_regression.c
+            ${PROJECT_SOURCE_DIR}/src/database/db-driver.c
+            ${PROJECT_SOURCE_DIR}/src/database/db-sqlite.c
+            $<TARGET_OBJECTS:sqlite3>)
+    target_include_directories(db_driver_regression PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    # The SQLite object library includes the SQLite shell, which needs whatever
+    # libraries (readline, ...) the FTL executable is linked with
+    target_link_libraries(db_driver_regression Threads::Threads ${CMAKE_DL_LIBS} m
+            $<TARGET_PROPERTY:pihole-FTL,LINK_LIBRARIES>)
+
+    # Optional ASan/UBSan instrumentation for local runs:
+    #   ./build.sh "-DDB_DRIVER_REGRESSION_SANITIZE=ON" test
+    option(DB_DRIVER_REGRESSION_SANITIZE "Build the database driver regression test with ASan/UBSan" OFF)
+    if(DB_DRIVER_REGRESSION_SANITIZE)
+        target_compile_options(db_driver_regression PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(db_driver_regression PRIVATE -fsanitize=address,undefined)
+    endif()
+endif()
+
+# Regression harness for the modules built on the database driver layer: the
+# common helpers, the in-memory query database, the gravity database, the
+# message, session and network tables, gravity_parseList(), the Teleporter
+# database code and the API handlers that read the query databases. It is
+# linked with the complete FTL object set and drives the real code against
+# throw-away databases. The Teleporter and API handler sources are also
+# #included by the test files to reach their file-internal functions, which is
+# why the linker is told to prefer the first definition of a symbol.
+# The "Database layer regression harness" bats test runs the resulting binary
+# from the repository root (it reads test/gravity.db.sql).
+#
+# Only built on request: `./build.sh test` enables it for local runs and the
+# CI Dockerfile passes -DBUILD_DB_LAYER_REGRESSION=ON at build time.
+option(BUILD_DB_LAYER_REGRESSION "Build the database layer regression test harness" OFF)
+if(BUILD_DB_LAYER_REGRESSION)
+    add_executable(db_layer_regression
+            ${PROJECT_SOURCE_DIR}/test/db_layer_regression.c
+            ${PROJECT_SOURCE_DIR}/test/db_layer_teleporter.c
+            ${PROJECT_SOURCE_DIR}/test/db_layer_handlers.c
+            ${FTL_OBJECT_FILES})
+    target_include_directories(db_layer_regression PRIVATE
+            ${PROJECT_SOURCE_DIR}/src
+            ${PROJECT_SOURCE_DIR}/src/api
+            ${PROJECT_SOURCE_DIR}/src/database
+            ${PROJECT_SOURCE_DIR}/src/dnsmasq
+            ${PROJECT_SOURCE_DIR}/src/webserver)
+    target_link_options(db_layer_regression PRIVATE -Wl,--allow-multiple-definition)
+    if(STATIC)
+        set_target_properties(db_layer_regression PROPERTIES LINK_SEARCH_START_STATIC ON)
+        set_target_properties(db_layer_regression PROPERTIES LINK_SEARCH_END_STATIC ON)
+        target_link_libraries(db_layer_regression -static-libgcc -static)
+    endif()
+    # Same libraries as the FTL executable (they are added to it in several
+    # places above, depending on what was found on the build system)
+    target_link_libraries(db_layer_regression Threads::Threads m
+            $<TARGET_PROPERTY:pihole-FTL,LINK_LIBRARIES>)
+endif()

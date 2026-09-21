@@ -24,7 +24,7 @@
 static int add_strings_to_array(struct ftl_conn *api, cJSON *array1, cJSON *array2, const char *querystr, const int max_count)
 {
 
-	sqlite3 *memdb = get_memdb();
+	db_conn *memdb = get_memdb();
 	if(memdb == NULL)
 	{
 		return send_json_error(api, 500, // 500 Internal error
@@ -33,29 +33,29 @@ static int add_strings_to_array(struct ftl_conn *api, cJSON *array1, cJSON *arra
 		                       NULL);
 	}
 
-	sqlite3_stmt *stmt = NULL;
-	int rc = sqlite3_prepare_v2(memdb, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK )
+	db_stmt *stmt = NULL;
+	db_rc rc = (stmt = db_prepare(memdb, querystr, false)) != NULL ? DB_OK : db_last_rc(memdb);
+	if( rc != DB_OK )
 	{
 		return send_json_error(api, 500, // 500 Internal error
 		                       "database_error",
 		                       "Could not prepare in-memory database",
-		                       sqlite3_errstr(rc));
+		                       DB_LAST_ERR(memdb));
 	}
 
 	// Loop through returned rows and add them to the array
 	int counter = 0;
-	while((rc = sqlite3_step(stmt)) == SQLITE_ROW &&
+	while((rc = db_step(stmt)) == DB_ROW &&
 	      (max_count < 0 || ++counter <= max_count))
 	{
-		const char *array1_str = (const char*)sqlite3_column_text(stmt, 0);
+		const char *array1_str = (const char*)db_column_text(stmt, 0);
 		if(array1_str != NULL && array1_str[0] != '\0')
 			// Only add non-empty strings
 			JSON_COPY_STR_TO_ARRAY(array1, array1_str);
 		if(array2 != NULL)
 		{
 			// We have a second array to fill (second column in the query)
-			const char *array2_str = (const char*)sqlite3_column_text(stmt, 1);
+			const char *array2_str = (const char*)db_column_text(stmt, 1);
 			if(array2_str != NULL && array2_str[0] != '\0')
 				// Only add non-empty strings
 				JSON_COPY_STR_TO_ARRAY(array2, array2_str);
@@ -63,19 +63,19 @@ static int add_strings_to_array(struct ftl_conn *api, cJSON *array1, cJSON *arra
 	}
 
 	// Acceptable return codes are either
-	// - SQLITE_DONE: We read all lines, or
-	// - SQLITE_ROW: We ended reading early because of set limit
-	if( rc != SQLITE_DONE && rc != SQLITE_ROW )
+	// - DB_DONE: We read all lines, or
+	// - DB_ROW: We ended reading early because of set limit
+	if( rc != DB_DONE && rc != DB_ROW )
 	{
-		sqlite3_finalize(stmt);
+		db_finalize(stmt);
 		return send_json_error(api, 500, // 500 Internal error
 		                       "database_error",
 		                       "Could not step in-memory database",
-		                       sqlite3_errstr(rc));
+		                       DB_LAST_ERR(memdb));
 	}
 
 	// Finalize SQLite3 statement
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 
 	return 0;
 }
@@ -306,7 +306,7 @@ int api_queries(struct ftl_conn *api)
 	char search[2][512] = { { 0 }, { 0 } };
 
 	// We start with the most recent query at the beginning (until the cursor is changed)
-	sqlite3_int64 largest_db_index, mem_dbnum, disk_dbnum;
+	int64_t largest_db_index, mem_dbnum, disk_dbnum;
 	db_counts(&largest_db_index, &mem_dbnum, &disk_dbnum);
 	unsigned long cursor = (unsigned long)largest_db_index;
 
@@ -560,7 +560,7 @@ int api_queries(struct ftl_conn *api)
 	// Regex filtering? Everything from here leaves through queries_fail, which
 	// releases the statement and the compiled regexes
 	int ret = 200;
-	sqlite3_stmt *read_stmt = NULL;
+	db_stmt *read_stmt = NULL;
 	// Both regex arrays are declared before the first goto below: the
 	// epilogue frees them, and jumping past their declarations would leave
 	// it reading indeterminate values
@@ -594,7 +594,7 @@ int api_queries(struct ftl_conn *api)
 	querystr_finish(querystr, sort_col, sort_dir);
 
 	// Get connection to in-memory database
-	sqlite3 *memdb = get_memdb();
+	db_conn *memdb = get_memdb();
 	if(memdb == NULL)
 	{
 		ret = send_json_error(api, 500, // 500 Internal error
@@ -605,13 +605,13 @@ int api_queries(struct ftl_conn *api)
 	}
 
 	// Prepare SQLite3 statement
-	int rc = sqlite3_prepare_v2(memdb, querystr, -1, &read_stmt, NULL);
-	if( rc != SQLITE_OK )
+	db_rc rc = (read_stmt = db_prepare(memdb, querystr, false)) != NULL ? DB_OK : db_last_rc(memdb);
+	if( rc != DB_OK )
 	{
 		ret = send_json_error(api, 500,
 		                       "internal_error",
 		                       "Internal server error, failed to prepare read SQL query",
-		                       sqlite3_errstr(rc));
+		                       DB_LAST_ERR(memdb));
 		goto queries_fail;
 	}
 
@@ -619,91 +619,91 @@ int api_queries(struct ftl_conn *api)
 	if(api->request->query_string != NULL)
 	{
 		int idx;
-		idx = sqlite3_bind_parameter_index(read_stmt, ":tsfrom");
+		idx = db_param_index(read_stmt, ":tsfrom");
 		if(idx > 0)
 		{
 			log_debug(DEBUG_API, "adding :tsfrom = %lf to query", timestamp_from);
 			filtering = true;
-			if((rc = sqlite3_bind_double(read_stmt, idx, timestamp_from)) != SQLITE_OK)
+			if((rc = db_bind_double(read_stmt, idx, timestamp_from)) != DB_OK)
 			{
 				ret = send_json_error(api, 500,
 				                       "internal_error",
 				                       "Internal server error, failed to bind timestamp:from to SQL query",
-				                       sqlite3_errstr(rc));
+				                       DB_LAST_ERR(memdb));
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":tsuntil");
+		idx = db_param_index(read_stmt, ":tsuntil");
 		if(idx > 0)
 		{
 			log_debug(DEBUG_API, "adding :tsuntil = %lf to query", timestamp_until);
 			filtering = true;
-			if((rc = sqlite3_bind_double(read_stmt, idx, timestamp_until)) != SQLITE_OK)
+			if((rc = db_bind_double(read_stmt, idx, timestamp_until)) != DB_OK)
 			{
 				ret = send_json_error(api, 500,
 				                       "internal_error",
 				                       "Internal server error, failed to bind timestamp:until to SQL query",
-				                       sqlite3_errstr(rc));
+				                       DB_LAST_ERR(memdb));
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":domain");
+		idx = db_param_index(read_stmt, ":domain");
 		if(idx > 0)
 		{
 			log_debug(DEBUG_API, "adding :domain = \"%s\" to query", domainname);
 			filtering = true;
-			if((rc = sqlite3_bind_text(read_stmt, idx, domainname, -1, SQLITE_STATIC)) != SQLITE_OK)
+			if((rc = db_bind_text_ref(read_stmt, idx, domainname)) != DB_OK)
 			{
 				ret = send_json_error(api, 500,
 				                       "internal_error",
 				                       "Internal server error, failed to bind domain to SQL query",
-				                       sqlite3_errstr(rc));
+				                       DB_LAST_ERR(memdb));
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":cip");
+		idx = db_param_index(read_stmt, ":cip");
 		if(idx > 0)
 		{
 			log_debug(DEBUG_API, "adding :cip = \"%s\" to query", clientip);
 			filtering = true;
-			if((rc = sqlite3_bind_text(read_stmt, idx, clientip, -1, SQLITE_STATIC)) != SQLITE_OK)
+			if((rc = db_bind_text_ref(read_stmt, idx, clientip)) != DB_OK)
 			{
 				ret = send_json_error(api, 500,
 				                       "internal_error",
 				                       "Internal server error, failed to bind cip to SQL query",
-				                       sqlite3_errstr(rc));
+				                       DB_LAST_ERR(memdb));
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":cname");
+		idx = db_param_index(read_stmt, ":cname");
 		if(idx > 0)
 		{
 			log_debug(DEBUG_API, "adding :cname = \"%s\" to query", clientname);
 			filtering = true;
-			if((rc = sqlite3_bind_text(read_stmt, idx, clientname, -1, SQLITE_STATIC)) != SQLITE_OK)
+			if((rc = db_bind_text_ref(read_stmt, idx, clientname)) != DB_OK)
 			{
 				ret = send_json_error(api, 500,
 				                       "internal_error",
 				                       "Internal server error, failed to bind client to SQL query",
-				                       sqlite3_errstr(rc));
+				                       DB_LAST_ERR(memdb));
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":upstream");
+		idx = db_param_index(read_stmt, ":upstream");
 		if(idx > 0)
 		{
 			log_debug(DEBUG_API, "adding :upstream = \"%s\" to query", upstreamname);
 			filtering = true;
-			if((rc = sqlite3_bind_text(read_stmt, idx, upstreamname, -1, SQLITE_STATIC)) != SQLITE_OK)
+			if((rc = db_bind_text_ref(read_stmt, idx, upstreamname)) != DB_OK)
 			{
 				ret = send_json_error(api, 500,
 				                       "internal_error",
 				                       "Internal server error, failed to bind upstream to SQL query",
-				                       sqlite3_errstr(rc));
+				                       DB_LAST_ERR(memdb));
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":type");
+		idx = db_param_index(read_stmt, ":type");
 		if(idx > 0)
 		{
 			enum query_type type;
@@ -716,13 +716,13 @@ int api_queries(struct ftl_conn *api)
 			{
 				log_debug(DEBUG_API, "adding :type = %d to query", type);
 				filtering = true;
-				rc = sqlite3_bind_int(read_stmt, idx, type);
-				if(rc != SQLITE_OK)
+				rc = db_bind_int(read_stmt, idx, type);
+				if(rc != DB_OK)
 				{
 					ret = send_json_error(api, 500,
 					                       "internal_error",
 					                       "Internal server error, failed to bind type to SQL query",
-					                       sqlite3_errstr(rc));
+					                       DB_LAST_ERR(memdb));
 					goto queries_fail;
 				}
 			}
@@ -735,7 +735,7 @@ int api_queries(struct ftl_conn *api)
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":status");
+		idx = db_param_index(read_stmt, ":status");
 		if(idx > 0)
 		{
 			enum query_status status;
@@ -748,13 +748,13 @@ int api_queries(struct ftl_conn *api)
 			{
 				log_debug(DEBUG_API, "adding :status = %d to query", status);
 				filtering = true;
-				rc = sqlite3_bind_int(read_stmt, idx, status);
-				if(rc != SQLITE_OK)
+				rc = db_bind_int(read_stmt, idx, status);
+				if(rc != DB_OK)
 				{
 					ret = send_json_error(api, 500,
 					                       "internal_error",
 					                       "Internal server error, failed to bind status to SQL query",
-					                       sqlite3_errstr(rc));
+					                       DB_LAST_ERR(memdb));
 					goto queries_fail;
 				}
 			}
@@ -767,7 +767,7 @@ int api_queries(struct ftl_conn *api)
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":reply_type");
+		idx = db_param_index(read_stmt, ":reply_type");
 		if(idx > 0)
 		{
 			enum reply_type reply;
@@ -780,13 +780,13 @@ int api_queries(struct ftl_conn *api)
 			{
 				log_debug(DEBUG_API, "adding :reply_type = %d to query", reply);
 				filtering = true;
-				rc = sqlite3_bind_int(read_stmt, idx, reply);
-				if(rc != SQLITE_OK)
+				rc = db_bind_int(read_stmt, idx, reply);
+				if(rc != DB_OK)
 				{
 					ret = send_json_error(api, 500,
 					                       "internal_error",
 					                       "Internal server error, failed to bind reply to SQL query",
-					                       sqlite3_errstr(rc));
+					                       DB_LAST_ERR(memdb));
 					goto queries_fail;
 				}
 			}
@@ -799,7 +799,7 @@ int api_queries(struct ftl_conn *api)
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":dnssec");
+		idx = db_param_index(read_stmt, ":dnssec");
 		if(idx > 0)
 		{
 			enum dnssec_status dnssec;
@@ -812,13 +812,13 @@ int api_queries(struct ftl_conn *api)
 			{
 				log_debug(DEBUG_API, "adding :dnssec = %d to query", dnssec);
 				filtering = true;
-				rc = sqlite3_bind_int(read_stmt, idx, dnssec);
-				if(rc != SQLITE_OK)
+				rc = db_bind_int(read_stmt, idx, dnssec);
+				if(rc != DB_OK)
 				{
 					ret = send_json_error(api, 500,
 					                       "internal_error",
 					                       "Internal server error, failed to bind dnssec to SQL query",
-					                       sqlite3_errstr(rc));
+					                       DB_LAST_ERR(memdb));
 					goto queries_fail;
 				}
 			}
@@ -831,46 +831,46 @@ int api_queries(struct ftl_conn *api)
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":cursor");
+		idx = db_param_index(read_stmt, ":cursor");
 		if(idx > 0)
 		{
 			log_debug(DEBUG_API, "adding :cursor = %lu to query", cursor);
 			// Do not set filtering as the cursor is not a filter
-			rc = sqlite3_bind_int64(read_stmt, idx, cursor);
-			if(rc != SQLITE_OK)
+			rc = db_bind_int64(read_stmt, idx, cursor);
+			if(rc != DB_OK)
 			{
 				ret = send_json_error(api, 500,
 				                       "internal_error",
 				                       "Internal server error, failed to bind count to SQL query",
-				                       sqlite3_errstr(rc));
+				                       DB_LAST_ERR(memdb));
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":domain_search");
+		idx = db_param_index(read_stmt, ":domain_search");
 		if(idx > 0)
 		{
 			log_debug(DEBUG_API, "adding :domain_search = \"%s\" to query", search[0]);
 			filtering = true;
-			if((rc = sqlite3_bind_text(read_stmt, idx, search[0], -1, SQLITE_STATIC)) != SQLITE_OK)
+			if((rc = db_bind_text_ref(read_stmt, idx, search[0])) != DB_OK)
 			{
 				ret = send_json_error(api, 500,
 				                       "internal_error",
 				                       "Internal server error, failed to bind domain_search to SQL query",
-				                       sqlite3_errstr(rc));
+				                       DB_LAST_ERR(memdb));
 				goto queries_fail;
 			}
 		}
-		idx = sqlite3_bind_parameter_index(read_stmt, ":client_search");
+		idx = db_param_index(read_stmt, ":client_search");
 		if(idx > 0)
 		{
 			log_debug(DEBUG_API, "adding :client_search = \"%s\" to query", search[1]);
 			filtering = true;
-			if((rc = sqlite3_bind_text(read_stmt, idx, search[1], -1, SQLITE_STATIC)) != SQLITE_OK)
+			if((rc = db_bind_text_ref(read_stmt, idx, search[1])) != DB_OK)
 			{
 				ret = send_json_error(api, 500,
 				                       "internal_error",
 				                       "Internal server error, failed to bind client_search to SQL query",
-				                       sqlite3_errstr(rc));
+				                       DB_LAST_ERR(memdb));
 				goto queries_fail;
 			}
 		}
@@ -883,13 +883,13 @@ int api_queries(struct ftl_conn *api)
 	cJSON *queries = JSON_NEW_ARRAY();
 	unsigned int added = 0, recordsCounted = 0, regex_skipped = 0;
 	bool skipTheRest = false;
-	while((rc = sqlite3_step(read_stmt)) == SQLITE_ROW)
+	while((rc = db_step(read_stmt)) == DB_ROW)
 	{
 		// Increase number of records from the database
 		recordsCounted++;
 
 		// Apply possible domain regex filters to Query Log
-		const char *domain = (const char*)sqlite3_column_text(read_stmt, 4); // d.domain
+		const char *domain = (const char*)db_column_text(read_stmt, 4); // d.domain
 		// A broken row can carry a NULL domain. Substitute an empty string
 		// so neither the regex filters nor the JSON output see a NULL
 		if(domain == NULL)
@@ -919,12 +919,12 @@ int api_queries(struct ftl_conn *api)
 		}
 
 		// Apply possible client regex filters to Query Log
-		const char *client_ip = (const char*)sqlite3_column_text(read_stmt, 10); // c.ip
+		const char *client_ip = (const char*)db_column_text(read_stmt, 10); // c.ip
 		if(client_ip == NULL)
 			client_ip = "";
 		const char *client_name = NULL;
-		if(sqlite3_column_type(read_stmt, 11) == SQLITE_TEXT && sqlite3_column_bytes(read_stmt, 11) > 0)
-			client_name = (const char*)sqlite3_column_text(read_stmt, 11); // c.name
+		if(db_column_type(read_stmt, 11) == DB_TYPE_TEXT && db_column_bytes(read_stmt, 11) > 0)
+			client_name = (const char*)db_column_text(read_stmt, 11); // c.name
 		if(N_regex_clients > 0)
 		{
 			bool match = false;
@@ -1017,27 +1017,27 @@ int api_queries(struct ftl_conn *api)
 		cJSON *item = JSON_NEW_OBJECT();
 		queriesData query = { 0 };
 		char buffer[20] = { 0 };
-		JSON_ADD_NUMBER_TO_OBJECT(item, "id", sqlite3_column_int64(read_stmt, 0)); // q.id);
-		JSON_ADD_NUMBER_TO_OBJECT(item, "time", sqlite3_column_double(read_stmt, 1)); // timestamp
-		query.type = sqlite3_column_int(read_stmt, 2); // type
-		query.status = sqlite3_column_int(read_stmt, 3); // status
-		query.reply = sqlite3_column_int(read_stmt, 7); // reply_type
-		query.dnssec = sqlite3_column_int(read_stmt, 9); // dnssec
+		JSON_ADD_NUMBER_TO_OBJECT(item, "id", db_column_int64(read_stmt, 0)); // q.id);
+		JSON_ADD_NUMBER_TO_OBJECT(item, "time", db_column_double(read_stmt, 1)); // timestamp
+		query.type = db_column_int(read_stmt, 2); // type
+		query.status = db_column_int(read_stmt, 3); // status
+		query.reply = db_column_int(read_stmt, 7); // reply_type
+		query.dnssec = db_column_int(read_stmt, 9); // dnssec
 		// We have to copy the string as TYPExxx string won't be static
 		JSON_COPY_STR_TO_OBJECT(item, "type", get_query_type_str(query.type, &query, buffer));
 		JSON_REF_STR_IN_OBJECT(item, "status", get_query_status_str(query.status));
 		JSON_REF_STR_IN_OBJECT(item, "dnssec", get_query_dnssec_str(query.dnssec));
 		JSON_COPY_STR_TO_OBJECT(item, "domain", domain);
 
-		if(sqlite3_column_type(read_stmt, 5) == SQLITE_TEXT &&
-		   sqlite3_column_bytes(read_stmt, 5) > 0)
-			JSON_COPY_STR_TO_OBJECT(item, "upstream", sqlite3_column_text(read_stmt, 5)); // f.forward
+		if(db_column_type(read_stmt, 5) == DB_TYPE_TEXT &&
+		   db_column_bytes(read_stmt, 5) > 0)
+			JSON_COPY_STR_TO_OBJECT(item, "upstream", db_column_text(read_stmt, 5)); // f.forward
 		else
 			JSON_ADD_NULL_TO_OBJECT(item, "upstream");
 
 		cJSON *reply = JSON_NEW_OBJECT();
 		JSON_REF_STR_IN_OBJECT(reply, "type", get_query_reply_str(query.reply));
-		JSON_ADD_NUMBER_TO_OBJECT(reply, "time", sqlite3_column_double(read_stmt, 8)); // reply_time
+		JSON_ADD_NUMBER_TO_OBJECT(reply, "time", db_column_double(read_stmt, 8)); // reply_time
 		JSON_ADD_ITEM_TO_OBJECT(item, "reply", reply);
 
 		cJSON *client = JSON_NEW_OBJECT();
@@ -1049,13 +1049,13 @@ int api_queries(struct ftl_conn *api)
 		JSON_ADD_ITEM_TO_OBJECT(item, "client", client);
 
 		// Add list_id if it exists
-		if(sqlite3_column_type(read_stmt, 13) == SQLITE_INTEGER)
-			JSON_ADD_NUMBER_TO_OBJECT(item, "list_id", sqlite3_column_int(read_stmt, 13)); // list_id
+		if(db_column_type(read_stmt, 13) == DB_TYPE_INT64)
+			JSON_ADD_NUMBER_TO_OBJECT(item, "list_id", db_column_int(read_stmt, 13)); // list_id
 		else
 			JSON_ADD_NULL_TO_OBJECT(item, "list_id");
 
 		// Add EDE code and text (if applicable)
-		const int ede_code = sqlite3_column_int(read_stmt, 14); // ede_code
+		const int ede_code = db_column_int(read_stmt, 14); // ede_code
 		cJSON *ede = JSON_NEW_OBJECT();
 		JSON_ADD_NUMBER_TO_OBJECT(ede, "code", ede_code);
 		if(ede_code > 0)
@@ -1065,14 +1065,14 @@ int api_queries(struct ftl_conn *api)
 		JSON_ADD_ITEM_TO_OBJECT(item, "ede", ede);
 
 		// Add CNAME information if it exists
-		const unsigned char *cname = NULL;
+		const char *cname = NULL;
 		switch(query.status)
 		{
 			case QUERY_GRAVITY_CNAME:
 			case QUERY_REGEX_CNAME:
 			case QUERY_DENYLIST_CNAME:
 			{
-				cname = sqlite3_column_text(read_stmt, 12); // a.content
+				cname = db_column_text(read_stmt, 12); // a.content
 				break;
 			}
 			case QUERY_UNKNOWN:
@@ -1104,7 +1104,7 @@ int api_queries(struct ftl_conn *api)
 		added++;
 	}
 	log_debug(DEBUG_API, "Sending %u of %lld in memory and %lld on disk queries (counted %u, skipped %u)",
-	          added, mem_dbnum, disk_dbnum, recordsCounted, regex_skipped);
+	          added, (long long)mem_dbnum, (long long)disk_dbnum, recordsCounted, regex_skipped);
 	cJSON *json = JSON_NEW_OBJECT();
 	JSON_ADD_ITEM_TO_OBJECT(json, "queries", queries);
 
@@ -1120,7 +1120,7 @@ int api_queries(struct ftl_conn *api)
 		// Send cursor pointing to the firstID of the data obtained in
 		// this query. This ensures we get a static result by skipping
 		// any newer queries.
-		log_debug(DEBUG_API, "Sending cursor %lld (firstID)", get_max_db_idx());
+		log_debug(DEBUG_API, "Sending cursor %lld (firstID)", (long long)get_max_db_idx());
 		JSON_ADD_NUMBER_TO_OBJECT(json, "cursor", get_max_db_idx());
 	}
 
@@ -1141,14 +1141,14 @@ int api_queries(struct ftl_conn *api)
 	JSON_ADD_NUMBER_TO_OBJECT(json, "earliest_timestamp_disk", earliest_timestamp_disk);
 
 	// Finalize statements
-	sqlite3_finalize(read_stmt);
+	db_finalize(read_stmt);
 	free_filter_regex(regex_domains, N_regex_domains);
 	free_filter_regex(regex_clients, N_regex_clients);
 
 	JSON_SEND_OBJECT(json);
 
 queries_fail:
-	sqlite3_finalize(read_stmt);
+	db_finalize(read_stmt);
 	free_filter_regex(regex_domains, N_regex_domains);
 	free_filter_regex(regex_clients, N_regex_clients);
 	return ret;

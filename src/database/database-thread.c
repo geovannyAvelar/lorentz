@@ -41,7 +41,7 @@ extern void FTL_dump_cache_stats(void);
 // db_import_done
 #include "gc.h"
 
-static bool analyze_database(sqlite3 *db)
+static bool analyze_database(db_conn *db)
 {
 	// Optimize the database by running ANALYZE
 	// The ANALYZE command gathers statistics about tables and indices and
@@ -192,7 +192,7 @@ void *DB_thread(void *val)
 	// This thread runs until shutdown of the process. We keep this thread
 	// running when pihole-FTL.db is corrupted because reloading of privacy
 	// level, and the gravity database (initially and after gravity)
-	sqlite3 *db = NULL;
+	db_conn *db = NULL;
 	while(!killed)
 	{
 		const time_t now = time(NULL);

@@ -10,6 +10,8 @@
 
 #include "FTL.h"
 #include "database/common.h"
+// SQLITE_WARNING, SQLITE_NOTICE, SQLITE_SCHEMA for SQLite3LogCallback()
+#include "database/sqlite3.h"
 #include "database/network-table.h"
 #include "database/message-table.h"
 #include "shmem.h"
@@ -43,16 +45,17 @@ bool __attribute__ ((pure)) FTLDBerror(void)
 	return atomic_load_explicit(&DBerror, memory_order_relaxed);
 }
 
-bool checkFTLDBrc(const int rc)
+// Flag the database as unusable and tell the user why
+static bool check_db_error(const bool corrupt, const bool readonly)
 {
 	// Check if the database file is malformed
-	if(rc == SQLITE_CORRUPT)
+	if(corrupt)
 	{
 		log_warn("Database %s is damaged and cannot be used.", config.files.database.v.s);
 		atomic_store_explicit(&DBerror, true, memory_order_relaxed);
 	}
 	// Check if the database file is read-only
-	if(rc == SQLITE_READONLY)
+	if(readonly)
 	{
 		log_warn("Database %s is read-only and cannot be used.", config.files.database.v.s);
 		atomic_store_explicit(&DBerror, true, memory_order_relaxed);
@@ -61,37 +64,25 @@ bool checkFTLDBrc(const int rc)
 	return atomic_load_explicit(&DBerror, memory_order_relaxed);
 }
 
-// Close a connection owned by the caller. sqlite3_close() refuses while a
-// statement of that connection is still alive, so finalize what was left behind
-// - naming it, as it is a bug - before handing the connection over
-int _dbclose_handle(sqlite3 *db, const char *func, const int line, const char *file)
+bool check_db_rc(const db_rc rc)
 {
-	if(db == NULL)
-		return SQLITE_OK;
-
-	sqlite3_stmt *stmt = NULL;
-	while((stmt = sqlite3_next_stmt(db, NULL)) != NULL)
-	{
-		log_err("Statement not finalized when closing database in %s() (%s:%i): %s",
-		        func, short_path(file), line, sqlite3_sql(stmt));
-		sqlite3_finalize(stmt);
-	}
-
-	const int rc = sqlite3_close_v2(db);
-	if(rc != SQLITE_OK)
-		log_err("Error while trying to close database in %s() (%s:%i): %s",
-		        func, short_path(file), line, sqlite3_errstr(rc));
-
-	return rc;
+	return check_db_error(rc == DB_CORRUPT, rc == DB_READONLY);
 }
 
-void _dbclose(sqlite3 **db, const char *func, const int line, const char *file)
+// Check the most recent error of a connection after a failed operation that
+// did not hand a return code back (e.g. db_prepare())
+static void check_conn_error(db_conn *db)
+{
+	check_db_rc(db->drv->classify_error(db_errcode(db)));
+}
+
+void _dbclose(db_conn **db, const char *func, const int line, const char *file)
 {
 	// The shared in-memory connection is owned by close_memory_database() and
 	// its prepared statements live as long as FTL does. Closing it here would
 	// finalize them behind the back of whoever cached them, so return before
-	// both the NULL assignment and the counter below: the handle stays valid
-	// for its owner, and it never went through dbopen() to be counted
+	// both the NULL assignment and the counter below: the connection stays
+	// valid for its owner, and it never went through dbopen() to be counted
 	if(db != NULL && is_memdb(*db))
 	{
 		log_err("dbclose() called on the in-memory database in %s() (%s:%i)",
@@ -102,21 +93,17 @@ void _dbclose(sqlite3 **db, const char *func, const int line, const char *file)
 	if(config.debug.database.v.b)
 		log_debug(DEBUG_DATABASE, "Closing FTL database in %s() (%s:%i)", func, short_path(file), line);
 
-	// Only try to close an existing database connection
+	// Only try to close an existing database connection. Statements that
+	// were not finalized are finalized (and logged) by the driver. Inside the
+	// guard: dbopen() only counted up when it handed out a connection, so
+	// closing a handle that is already NULL must not decrement the counter
 	if(db != NULL && *db != NULL)
 	{
-		const int rc = _dbclose_handle(*db, func, line, file);
-		if(rc != SQLITE_OK)
-			checkFTLDBrc(rc);
-
-		// Inside the guard: dbopen() only counted up when it handed out
-		// a connection, so closing a handle that is already NULL used to
-		// take a decrement with no increment behind it and drift the
-		// counter down, eventually below zero
+		db_close(*db);
 		atomic_fetch_sub_explicit(&dbopen_cnt, 1, memory_order_relaxed);
 	}
 
-	// Always set database pointer to NULL, even when closing failed
+	// Always set database pointer to NULL
 	if(db) *db = NULL;
 }
 
@@ -181,7 +168,7 @@ int sqliteBusyCallback(void *ptr, int count)
 	return 1;
 }
 
-sqlite3* _dbopen(const bool readonly, const bool create, const char *func, const int line, const char *file)
+db_conn *_dbopen(const bool readonly, const bool create, const char *func, const int line, const char *file)
 {
 	// Silently return NULL if the database is known to be broken
 	if(FTLDBerror())
@@ -191,29 +178,25 @@ sqlite3* _dbopen(const bool readonly, const bool create, const char *func, const
 	log_debug(DEBUG_DATABASE, "Opening FTL database in %s() (node %s%s) (%s:%i)",
 	          func, readonly ? "RO" : "RW", create ? ",C" : "", short_path(file), line);
 
-	// SQLITE_OPEN_NOMUTEX: dbopen() connections are strictly single-
+	// DB_OPEN_NOMUTEX: dbopen() connections are strictly single-
 	// threaded — every caller (civetweb worker, database thread) opens,
 	// uses, and closes the connection within one function scope, so the
 	// serialized-mode per-API-call mutex is pure overhead. The long-lived
 	// shared connections (_memdb in query-table.c, gravity_db) keep the
 	// default serialized mode because they are touched from multiple
 	// threads.
-	int flags = readonly ? SQLITE_OPEN_READONLY : SQLITE_OPEN_READWRITE;
+	unsigned int flags = readonly ? DB_OPEN_READONLY : DB_OPEN_READWRITE;
 	if(create && !readonly)
-		flags |= SQLITE_OPEN_CREATE;
-	flags |= SQLITE_OPEN_NOMUTEX;
+		flags |= DB_OPEN_CREATE;
+	flags |= DB_OPEN_NOMUTEX;
 
-	sqlite3 *db = NULL;
-	int rc = sqlite3_open_v2(config.files.database.v.s, &db, flags, NULL);
-	if( rc != SQLITE_OK )
+	db_rc rc = DB_OK;
+	const char *msg = NULL;
+	db_conn *db = db_open_ex(config.files.database.v.s, flags, &rc, &msg);
+	if(db == NULL)
 	{
-		log_err("Error while trying to open database: %s", sqlite3_errstr(rc));
-
-		// sqlite3_open_v2() associates resources with the handle even
-		// when it fails. dbclose_handle() releases it without the
-		// decrement dbclose() carries, as it is not counted yet
-		dbclose_handle(db);
-		checkFTLDBrc(rc);
+		log_err("Error while trying to open database: %s", msg);
+		check_db_rc(rc);
 		return NULL;
 	}
 
@@ -223,7 +206,7 @@ sqlite3* _dbopen(const bool readonly, const bool create, const char *func, const
 
 	// If the database is opened in read-write mode, actually check if it is
 	// writable. If it is not, close the database and return an error
-	if(!readonly && sqlite3_db_readonly(db, NULL))
+	if(!readonly && db_is_readonly(db))
 	{
 		log_err("Cannot open database in read-write mode");
 		dbclose(&db);
@@ -231,30 +214,29 @@ sqlite3* _dbopen(const bool readonly, const bool create, const char *func, const
 	}
 
 	// Explicitly set busy handler to value defined in FTL.h
-	rc = sqlite3_busy_handler(db, sqliteBusyCallback, NULL);
-	if( rc != SQLITE_OK )
+	rc = db_set_busy_handler(db, sqliteBusyCallback, NULL);
+	if(rc != DB_OK)
 	{
 		log_err("Error while trying to set busy timeout on database: %s",
-		        sqlite3_errstr(rc));
+		        db_errstr(db, db_errcode(db)));
 		dbclose(&db);
-		checkFTLDBrc(rc);
+		check_db_rc(rc);
 		return NULL;
 	}
 
 	return db;
 }
 
-int dbquery(sqlite3* db, const char *format, ...)
+// Run a formatted query
+static db_rc vdbquery(db_conn *db, const char *format, va_list args)
 {
-	va_list args;
-	va_start(args, format);
-	char *query = sqlite3_vmprintf(format, args);
-	va_end(args);
+	const db_driver *drv = db != NULL ? db->drv : db_driver_active();
+	char *query = drv->vmprintf(format, args);
 
 	if(query == NULL)
 	{
 		log_err("Memory allocation failed in dbquery()");
-		return SQLITE_ERROR;
+		return DB_ERROR;
 	}
 
 	// Log generated SQL string when dbquery() is called
@@ -262,31 +244,42 @@ int dbquery(sqlite3* db, const char *format, ...)
 	if(db == NULL)
 	{
 		log_err("dbquery(\"%s\") called but database is not available!", query);
-		sqlite3_free(query);
-		return SQLITE_ERROR;
+		drv->mem_free(query);
+		return DB_ERROR;
 	}
 
 	log_debug(DEBUG_DATABASE, "dbquery: \"%s\"", query);
 
-	int rc = sqlite3_exec(db, query, NULL, NULL, NULL);
-	if( rc != SQLITE_OK ){
+	const db_rc rc = db_exec(db, query);
+	if(rc != DB_OK)
+	{
 		log_err("ERROR: SQL query \"%s\" failed: %s (%s)",
-		        query, sqlite3_errstr(rc), sqlite3ErrName(sqlite3_extended_errcode(db)));
-		sqlite3_free(query);
-		checkFTLDBrc(rc);
+		        query, drv->errstr(db_errcode(db)), drv->errname(db_extended_errcode(db)));
+		drv->mem_free(query);
+		check_db_rc(rc);
 		return rc;
 	}
 
 	// Free allocated memory for query string
-	sqlite3_free(query);
+	drv->mem_free(query);
 
 	log_debug(DEBUG_DATABASE,"         ---> OK");
 
 	// Return success
-	return SQLITE_OK;
+	return DB_OK;
 }
 
-static bool create_counter_table(sqlite3* db)
+int dbquery(db_conn *db, const char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	const db_rc rc = vdbquery(db, format, args);
+	va_end(args);
+
+	return rc;
+}
+
+static bool create_counter_table(db_conn *db)
 {
 	// Start transaction
 	SQL_bool(db, "BEGIN");
@@ -334,7 +327,7 @@ static bool create_counter_table(sqlite3* db)
 // Split from db_create() so that every failure below returns through it and
 // the connection is closed exactly once. SQL_bool() returns on failure, so the
 // close cannot live in here
-static bool db_create_tables(sqlite3 *db)
+static bool db_create_tables(db_conn *db)
 {
 	// Create Queries table in the database
 	SQL_bool(db, CREATE_QUERIES_TABLE_V1);
@@ -358,7 +351,7 @@ static bool db_create_tables(sqlite3 *db)
 
 static bool db_create(void)
 {
-	sqlite3 *db = dbopen(false, true);
+	db_conn *db = dbopen(false, true);
 	if(db == NULL)
 		return false;
 
@@ -419,7 +412,7 @@ void db_init(void)
 		chmod_file(config.files.database.v.s, mode);
 
 	// Open database
-	sqlite3 *db = dbopen(false, true);
+	db_conn *db = dbopen(false, true);
 
 	// Explicitly set permissions if file just created
 	if(file_exists(config.files.database.v.s))
@@ -832,7 +825,7 @@ void db_init(void)
 	log_info("Database successfully initialized");
 }
 
-int db_get_int(sqlite3* db, const enum ftl_table_props ID)
+int db_get_int(db_conn *db, const enum ftl_table_props ID)
 {
 	// Prepare SQL statement
 	char* querystr = NULL;
@@ -850,7 +843,7 @@ int db_get_int(sqlite3* db, const enum ftl_table_props ID)
 	return value;
 }
 
-bool db_set_FTL_property(sqlite3 *db, const enum ftl_table_props ID, const int value)
+bool db_set_FTL_property(db_conn *db, const enum ftl_table_props ID, const int value)
 {
 	// Use UPSERT (https://sqlite.org/lang_upsert.html)
 	// UPSERT is a clause added to INSERT that causes the INSERT to behave
@@ -861,362 +854,232 @@ bool db_set_FTL_property(sqlite3 *db, const enum ftl_table_props ID, const int v
 	return true;
 }
 
-bool db_set_counter(sqlite3 *db, const enum counters_table_props ID, const int value)
+// Run a prepared two-integer statement (bind 1 and 2, expect no rows)
+static bool exec_int_int(db_conn *db, const char *sql, const int first, const int second)
 {
-	sqlite3_stmt *stmt = NULL;
-	int ret = sqlite3_prepare_v2(db, "INSERT OR REPLACE INTO counters (id, value) VALUES (?,?)", -1, &stmt, NULL);
-	if(ret != SQLITE_OK)
-	{
-		checkFTLDBrc(ret);
+	if(db == NULL)
 		return false;
-	}
-	ret = sqlite3_bind_int(stmt, 1, ID);
-	if(ret != SQLITE_OK)
+
+	db_stmt *stmt = db_prepare(db, sql, false);
+	if(stmt == NULL)
 	{
-		checkFTLDBrc(ret);
-		sqlite3_finalize(stmt);
-		return false;
-	}
-	ret = sqlite3_bind_int(stmt, 2, value);
-	if(ret != SQLITE_OK)
-	{
-		checkFTLDBrc(ret);
-		sqlite3_finalize(stmt);
+		check_conn_error(db);
 		return false;
 	}
 
-	ret = sqlite3_step(stmt);
-	if(ret != SQLITE_DONE)
+	db_rc rc;
+	if((rc = db_bind_int(stmt, 1, first)) != DB_OK ||
+	   (rc = db_bind_int(stmt, 2, second)) != DB_OK ||
+	   (rc = db_step(stmt)) != DB_DONE)
 	{
-		checkFTLDBrc(ret);
-		sqlite3_finalize(stmt);
+		check_db_rc(rc);
+		db_finalize(stmt);
 		return false;
 	}
 
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 	return true;
 }
 
-bool db_update_disk_counter(sqlite3 *db, const enum counters_table_props ID, const int change)
+bool db_set_counter(db_conn *db, const enum counters_table_props ID, const int value)
 {
-	sqlite3_stmt *stmt = NULL;
-	int ret = sqlite3_prepare_v2(db, "UPDATE counters SET value = value + ? WHERE id = ?", -1, &stmt, NULL);
-	if(ret != SQLITE_OK)
-	{
-		checkFTLDBrc(ret);
-		return false;
-	}
-	ret = sqlite3_bind_int(stmt, 1, change);
-	if(ret != SQLITE_OK)
-	{
-		checkFTLDBrc(ret);
-		sqlite3_finalize(stmt);
-		return false;
-	}
-	ret = sqlite3_bind_int(stmt, 2, ID);
-	if(ret != SQLITE_OK)
-	{
-		checkFTLDBrc(ret);
-		sqlite3_finalize(stmt);
-		return false;
-	}
-
-	ret = sqlite3_step(stmt);
-	if(ret != SQLITE_DONE)
-	{
-		checkFTLDBrc(ret);
-		sqlite3_finalize(stmt);
-		return false;
-	}
-
-	sqlite3_finalize(stmt);
-	return true;
+	// The counter row exists after the first write, INSERT OR REPLACE keeps
+	// this a single statement for both cases
+	return exec_int_int(db, "INSERT OR REPLACE INTO counters (id, value) VALUES (?,?)", ID, value);
 }
 
-int db_query_int(sqlite3 *db, const char* querystr)
+bool db_update_disk_counter(db_conn *db, const enum counters_table_props ID, const int change)
+{
+	return exec_int_int(db, "UPDATE counters SET value = value + ? WHERE id = ?", change, ID);
+}
+
+// Prepare querystr and bind its parameters through bind(). Steps once and
+// hands the statement back positioned on the first row. Returns NULL when the
+// query failed (the failure is logged with the name of the calling helper) or
+// produced no row, in which case *nodata tells the two apart
+typedef bool (*bind_fn)(db_stmt *stmt, const void *args);
+
+static db_stmt *query_first_row(db_conn *db, const char *caller, const char *querystr,
+                                bind_fn bind, const void *args, bool *nodata)
+{
+	*nodata = false;
+	if(db == NULL)
+		return NULL;
+
+	db_stmt *stmt = db_prepare(db, querystr, false);
+	if(stmt == NULL)
+	{
+		const int code = db_errcode(db);
+		if(db->drv->classify_error(code) != DB_BUSY)
+			log_err("Encountered prepare error in %s(\"%s\"): %s",
+			        caller, querystr, db_errstr(db, code));
+		check_conn_error(db);
+		return NULL;
+	}
+
+	if(bind != NULL && !bind(stmt, args))
+	{
+		log_err("Encountered bind error in %s(\"%s\")", caller, querystr);
+		db_finalize(stmt);
+		return NULL;
+	}
+
+	const db_rc rc = db_step(stmt);
+	if(rc == DB_ROW)
+		return stmt;
+
+	if(rc == DB_DONE)
+		*nodata = true;
+	else
+	{
+		log_err("Encountered step error in %s(\"%s\"): %s",
+		        caller, querystr, db_errstr(db, db_errcode(db)));
+		check_db_rc(rc);
+	}
+
+	db_finalize(stmt);
+	return NULL;
+}
+
+static bool bind_int_arg(db_stmt *stmt, const void *args)
+{
+	return db_bind_int(stmt, 1, *(const int*)args) == DB_OK;
+}
+
+static bool bind_str_arg(db_stmt *stmt, const void *args)
+{
+	return db_bind_text_ref(stmt, 1, (const char*)args) == DB_OK;
+}
+
+struct from_until {
+	double from;
+	double until;
+	int type;
+	bool has_type;
+};
+
+static bool bind_from_until(db_stmt *stmt, const void *args)
+{
+	const struct from_until *fu = args;
+	return db_bind_double(stmt, 1, fu->from) == DB_OK &&
+	       db_bind_double(stmt, 2, fu->until) == DB_OK &&
+	       (!fu->has_type || db_bind_int(stmt, 3, fu->type) == DB_OK);
+}
+
+int db_query_int(db_conn *db, const char* querystr)
 {
 	log_debug(DEBUG_DATABASE, "dbquery_int: \"%s\"", querystr);
 
-	sqlite3_stmt* stmt;
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK )
+	bool nodata;
+	db_stmt *stmt = query_first_row(db, "db_query_int", querystr, NULL, NULL, &nodata);
+	if(stmt == NULL)
 	{
-		if( rc != SQLITE_BUSY )
-			log_err("Encountered prepare error in db_query_int(\"%s\"): %s",
-			        querystr, sqlite3_errstr(rc));
-		return DB_FAILED;
+		if(nodata)
+			log_debug(DEBUG_DATABASE, "         ---> No data");
+		return nodata ? DB_NODATA : DB_FAILED;
 	}
 
-	rc = sqlite3_step(stmt);
-	int result;
-
-	if( rc == SQLITE_ROW )
-	{
-		result = sqlite3_column_int(stmt, 0);
-		log_debug(DEBUG_DATABASE, "         ---> Result %i (int)", result);
-	}
-	else if( rc == SQLITE_DONE )
-	{
-		// No rows available
-		result = DB_NODATA;
-		log_debug(DEBUG_DATABASE, "         ---> No data");
-	}
-	else
-	{
-		log_err("Encountered step error in db_query_int(\"%s\"): %s",
-		        querystr, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
-		return DB_FAILED;
-	}
-
-	sqlite3_finalize(stmt);
+	const int result = db_column_int(stmt, 0);
+	log_debug(DEBUG_DATABASE, "         ---> Result %i (int)", result);
+	db_finalize(stmt);
 	return result;
 }
 
-int db_query_int_int(sqlite3 *db, const char* querystr, const int arg)
+int db_query_int_int(db_conn *db, const char* querystr, const int arg)
 {
 	log_debug(DEBUG_DATABASE, "db_query_int_arg: \"%s\"", querystr);
 
-	sqlite3_stmt* stmt;
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK )
+	bool nodata;
+	db_stmt *stmt = query_first_row(db, "db_query_int_int", querystr, bind_int_arg, &arg, &nodata);
+	if(stmt == NULL)
 	{
-		if( rc != SQLITE_BUSY )
-			log_err("Encountered prepare error in db_query_int(\"%s\"): %s",
-			        querystr, sqlite3_errstr(rc));
-		return DB_FAILED;
+		if(nodata)
+			log_debug(DEBUG_DATABASE, "         ---> No data");
+		return nodata ? DB_NODATA : DB_FAILED;
 	}
 
-	// Bind argument to prepared statement
-	if((rc = sqlite3_bind_int(stmt, 1, arg)) != SQLITE_OK)
-	{
-		log_err("Encountered bind error in db_query_int(\"%s\"): %s",
-		        querystr, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
-		return DB_FAILED;
-	}
-
-	rc = sqlite3_step(stmt);
-	int result;
-
-	if( rc == SQLITE_ROW )
-	{
-		result = sqlite3_column_int(stmt, 0);
-		log_debug(DEBUG_DATABASE, "         ---> Result %i (int)", result);
-	}
-	else if( rc == SQLITE_DONE )
-	{
-		// No rows available
-		result = DB_NODATA;
-		log_debug(DEBUG_DATABASE, "         ---> No data");
-	}
-	else
-	{
-		log_err("Encountered step error in db_query_int(\"%s\"): %s",
-		        querystr, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
-		return DB_FAILED;
-	}
-
-	sqlite3_finalize(stmt);
+	const int result = db_column_int(stmt, 0);
+	log_debug(DEBUG_DATABASE, "         ---> Result %i (int)", result);
+	db_finalize(stmt);
 	return result;
 }
 
-int db_query_int_str(sqlite3 *db, const char* querystr, const char *arg)
+int db_query_int_str(db_conn *db, const char* querystr, const char *arg)
 {
 	log_debug(DEBUG_DATABASE, "db_query_int_str: \"%s\" with \"%s\"", querystr, arg);
 
-	sqlite3_stmt* stmt;
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK )
+	bool nodata;
+	db_stmt *stmt = query_first_row(db, "db_query_int_str", querystr, bind_str_arg, arg, &nodata);
+	if(stmt == NULL)
 	{
-		if( rc != SQLITE_BUSY )
-			log_err("Encountered prepare error in db_query_int(\"%s\"): %s",
-			        querystr, sqlite3_errstr(rc));
-		return DB_FAILED;
+		if(nodata)
+			log_debug(DEBUG_DATABASE, "         ---> No data");
+		return nodata ? DB_NODATA : DB_FAILED;
 	}
 
-	// Bind argument to prepared statement
-	if((rc = sqlite3_bind_text(stmt, 1, arg, -1, SQLITE_STATIC)) != SQLITE_OK)
-	{
-		log_err("Encountered bind error in db_query_int(\"%s\"): %s",
-		        querystr, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
-		return DB_FAILED;
-	}
-
-	rc = sqlite3_step(stmt);
-	int result;
-
-	if( rc == SQLITE_ROW )
-	{
-		result = sqlite3_column_int(stmt, 0);
-		log_debug(DEBUG_DATABASE, "         ---> Result %i (int)", result);
-	}
-	else if( rc == SQLITE_DONE )
-	{
-		// No rows available
-		result = DB_NODATA;
-		log_debug(DEBUG_DATABASE, "         ---> No data");
-	}
-	else
-	{
-		log_err("Encountered step error in db_query_int(\"%s\"): %s",
-		        querystr, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
-		return DB_FAILED;
-	}
-
-	sqlite3_finalize(stmt);
+	const int result = db_column_int(stmt, 0);
+	log_debug(DEBUG_DATABASE, "         ---> Result %i (int)", result);
+	db_finalize(stmt);
 	return result;
 }
 
-double db_query_double(sqlite3 *db, const char* querystr)
+double db_query_double(db_conn *db, const char* querystr)
 {
 	log_debug(DEBUG_DATABASE, "dbquery_double: \"%s\"", querystr);
 
-	sqlite3_stmt* stmt = NULL;
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK )
+	bool nodata;
+	db_stmt *stmt = query_first_row(db, "db_query_double", querystr, NULL, NULL, &nodata);
+	if(stmt == NULL)
 	{
-		if( rc != SQLITE_BUSY )
-		{
-			log_err("Encountered prepare error in get_max_query_ID(): %s", sqlite3_errstr(rc));
-			checkFTLDBrc(rc);
-		}
-
-		return DB_FAILED;
+		if(nodata)
+			log_debug(DEBUG_DATABASE, "         ---> No data");
+		return nodata ? DB_NODATA : DB_FAILED;
 	}
 
-	rc = sqlite3_step(stmt);
-	double result;
-
-	if( rc == SQLITE_ROW )
-	{
-		result = sqlite3_column_double(stmt, 0);
-		log_debug(DEBUG_DATABASE, "         ---> Result %f (double)", result);
-	}
-	else if( rc == SQLITE_DONE )
-	{
-		// No rows available
-		result = DB_NODATA;
-		log_debug(DEBUG_DATABASE, "         ---> No data");
-	}
-	else
-	{
-		log_err("Encountered step error in db_query_double(\"%s\"): %s",
-		        querystr, sqlite3_errstr(rc));
-		checkFTLDBrc(rc);
-		sqlite3_finalize(stmt);
-		return DB_FAILED;
-	}
-
-	sqlite3_finalize(stmt);
+	const double result = db_column_double(stmt, 0);
+	log_debug(DEBUG_DATABASE, "         ---> Result %f (double)", result);
+	db_finalize(stmt);
 	return result;
 }
 
-int db_query_int_from_until(sqlite3 *db, const char* querystr, const double from, const double until)
+int db_query_int_from_until(db_conn *db, const char* querystr, const double from, const double until)
 {
 	log_debug(DEBUG_DATABASE, "db_query_int_from_until: \"%s\" (from: %f, until: %f)", querystr, from, until);
 
-	sqlite3_stmt* stmt;
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK ){
-		log_err("db_query_int_from_until(%s) - SQL error prepare (%i): %s",
-		        querystr, rc, sqlite3_errstr(rc));
-		return DB_FAILED;
-	}
+	const struct from_until fu = { .from = from, .until = until, .has_type = false };
+	bool nodata;
+	db_stmt *stmt = query_first_row(db, "db_query_int_from_until", querystr, bind_from_until, &fu, &nodata);
+	if(stmt == NULL)
+		return nodata ? DB_NODATA : DB_FAILED;
 
-	// Bind from and until to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 1, from))  != SQLITE_OK ||
-	   (rc = sqlite3_bind_double(stmt, 2, until)) != SQLITE_OK)
-	{
-		log_err("db_query_int_from_until(%s) - SQL error bind (%i): %s",
-		        querystr, rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
-		return DB_FAILED;
-	}
-
-	rc = sqlite3_step(stmt);
-	int result;
-
-	if( rc == SQLITE_ROW )
-	{
-		result = sqlite3_column_int(stmt, 0);
-	}
-	else if( rc == SQLITE_DONE )
-	{
-		// No rows available
-		result = DB_NODATA;
-	}
-	else
-	{
-		log_err("db_query_int_from_until(%s) - SQL error step (%i): %s",
-		        querystr, rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
-		return DB_FAILED;
-	}
-
-	sqlite3_finalize(stmt);
-
+	const int result = db_column_int(stmt, 0);
+	db_finalize(stmt);
 	return result;
 }
 
-int db_query_int_from_until_type(sqlite3 *db, const char* querystr, const double from, const double until, const int type)
+int db_query_int_from_until_type(db_conn *db, const char* querystr, const double from, const double until, const int type)
 {
 	log_debug(DEBUG_DATABASE, "db_query_int_from_until_type: \"%s\" (from: %f, until: %f, type: %d)", querystr, from, until, type);
 
-	sqlite3_stmt* stmt;
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK ){
-		log_err("db_query_int_from_until(%s) - SQL error prepare (%i): %s",
-		        querystr, rc, sqlite3_errstr(rc));
-		return DB_FAILED;
-	}
+	const struct from_until fu = { .from = from, .until = until, .type = type, .has_type = true };
+	bool nodata;
+	db_stmt *stmt = query_first_row(db, "db_query_int_from_until_type", querystr, bind_from_until, &fu, &nodata);
+	if(stmt == NULL)
+		return nodata ? DB_NODATA : DB_FAILED;
 
-	// Bind from, until, and type to prepared statement
-	if((rc = sqlite3_bind_double(stmt, 1, from))  != SQLITE_OK ||
-	   (rc = sqlite3_bind_double(stmt, 2, until)) != SQLITE_OK ||
-	   (rc = sqlite3_bind_int(stmt, 3, type)) != SQLITE_OK)
-	{
-		log_err("db_query_int_from_until(%s) - SQL error bind (%i): %s",
-		        querystr, rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
-		return DB_FAILED;
-	}
-
-	rc = sqlite3_step(stmt);
-	int result;
-
-	if( rc == SQLITE_ROW )
-	{
-		result = sqlite3_column_int(stmt, 0);
-	}
-	else if( rc == SQLITE_DONE )
-	{
-		// No rows available
-		result = DB_NODATA;
-	}
-	else
-	{
-		log_err("db_query_int_from_until(%s) - SQL error step (%i): %s",
-		        querystr, rc, sqlite3_errstr(rc));
-		sqlite3_finalize(stmt);
-		return DB_FAILED;
-	}
-	rc = sqlite3_finalize(stmt);
-	checkFTLDBrc(rc);
+	const int result = db_column_int(stmt, 0);
+	db_finalize(stmt);
 	return result;
 }
 
-// Return SQLite3 engine version string
+// Return the version string of the database engine in use
 const char *get_sqlite3_version(void)
 {
-	return sqlite3_libversion();
+	return db_driver_active()->version();
 }
 
 /**
- * get_row_count - Get the row count of an in-memory SQLite table.
+ * get_row_count - Get the row count of a table.
  *
  * Uses the shared in-memory connection or opens a transient read-only one
  * (dbopen(true, false)), prepares and executes a "SELECT COUNT(*) FROM
@@ -1230,36 +1093,36 @@ const char *get_sqlite3_version(void)
  */
 int64_t get_row_count(const char *table_name, const bool memory)
 {
-	sqlite3 *db = memory ? get_memdb() : dbopen(true, false);
+	// The in-memory connection is owned by query-table.c
+	db_conn *db = memory ? get_memdb() : dbopen(true, false);
 	if(!db)
 		return -2;
 
-	sqlite3_stmt *stmt = NULL;
-	const char * const sql = "SELECT COUNT(*) FROM %s;";
-	char * const query = sqlite3_mprintf(sql, table_name);
-	if(sqlite3_prepare_v2(db, query, -1, &stmt, NULL) != SQLITE_OK)
+	char * const query = db->drv->mprintf("SELECT COUNT(*) FROM %s;", table_name);
+	db_stmt *stmt = query != NULL ? db_prepare(db, query, false) : NULL;
+	if(query != NULL)
+		db_free(db, query);
+	if(stmt == NULL)
 	{
 		log_err("Failed to prepare statement to get size of in-memory table %s: %s",
-		        table_name, sqlite3_errmsg(db));
-		sqlite3_free(query);
+		        table_name, db_errmsg(db));
 		if(!memory)
 			dbclose(&db);
 		return -3;
 	}
-	sqlite3_free(query);
 
 	int64_t size = -1;
-	if(sqlite3_step(stmt) == SQLITE_ROW)
+	if(db_step(stmt) == DB_ROW)
 	{
-		size = sqlite3_column_int64(stmt, 0);
+		size = db_column_int64(stmt, 0);
 	}
 	else
 	{
 		log_err("Failed to step statement to get size of in-memory table %s: %s",
-		        table_name, sqlite3_errmsg(db));
+		        table_name, db_errmsg(db));
 	}
 
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 	if(!memory)
 		dbclose(&db);
 	return size;

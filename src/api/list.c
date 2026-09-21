@@ -30,7 +30,7 @@ static int api_list_read(struct ftl_conn *api,
                          cJSON *processed)
 {
 	const char *sql_msg = NULL;
-	sqlite3_stmt *stmt = NULL;
+	db_stmt *stmt = NULL;
 	if(!gravityDB_readTable(NULL, listtype, item, &sql_msg, true, NULL, &stmt))
 	{
 		return send_json_error(api, 500, // 500 Internal Server Error

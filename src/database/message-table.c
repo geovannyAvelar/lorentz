@@ -154,134 +154,134 @@ static enum message_type get_message_type_from_string(const char *typestr)
 static unsigned char message_blob_types[MAX_MESSAGE][5] =
 	{
 		{	// REGEX_MESSAGE: The message column contains the regex text (the erroring regex filter itself)
-			SQLITE_TEXT, // regex type ("deny", "allow")
-			SQLITE_TEXT, // regex warning text
-			SQLITE_INTEGER, // database index of regex (so the dashboard can show a link)
-			SQLITE_NULL, // not used
-			SQLITE_NULL // not used
+			DB_TYPE_TEXT, // regex type ("deny", "allow")
+			DB_TYPE_TEXT, // regex warning text
+			DB_TYPE_INT, // database index of regex (so the dashboard can show a link)
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL // not used
 		},
 		{	// SUBNET_MESSAGE: The message column contains the IP address of the client in question
-			SQLITE_INTEGER, // number of matching
-			SQLITE_TEXT, // comma-separated list of matching subnets (text representation)
-			SQLITE_TEXT, // comma-separated list of matching subnets (database IDs)
-			SQLITE_TEXT, // chosen subnet (text representation)
-			SQLITE_INTEGER // chosen subnet (database ID)
+			DB_TYPE_INT, // number of matching
+			DB_TYPE_TEXT, // comma-separated list of matching subnets (text representation)
+			DB_TYPE_TEXT, // comma-separated list of matching subnets (database IDs)
+			DB_TYPE_TEXT, // chosen subnet (text representation)
+			DB_TYPE_INT // chosen subnet (database ID)
 		},
 		{	// HOSTNAME_MESSAGE: The message column contains the IP address of the device
-			SQLITE_TEXT, // Obtained host name
-			SQLITE_INTEGER, // Position of error in string
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL // not used
+			DB_TYPE_TEXT, // Obtained host name
+			DB_TYPE_INT, // Position of error in string
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL // not used
 		},
 		{	// DNSMASQ_CONFIG_MESSAGE: The message column contains the full message itself
-			SQLITE_NULL, // Not used
-			SQLITE_NULL, // Not used
-			SQLITE_NULL, // Not used
-			SQLITE_NULL, // Not used
-			SQLITE_NULL  // Not used
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL  // Not used
 		},
 		{	// RATE_LIMIT_MESSAGE: The message column contains the IP address of the client in question
-			SQLITE_INTEGER, // Configured maximum number of queries
-			SQLITE_INTEGER, // Configured rate-limiting interval [seconds]
-			SQLITE_INTEGER, // Turnaround time [seconds]
-			SQLITE_NULL, // Not used
-			SQLITE_NULL  // Not used
+			DB_TYPE_INT, // Configured maximum number of queries
+			DB_TYPE_INT, // Configured rate-limiting interval [seconds]
+			DB_TYPE_INT, // Turnaround time [seconds]
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL  // Not used
 		},
 		{	// DNSMASQ_WARN_MESSAGE: The message column contains the full message itself
-			SQLITE_NULL, // Not used
-			SQLITE_NULL, // Not used
-			SQLITE_NULL, // Not used
-			SQLITE_NULL, // Not used
-			SQLITE_NULL  // Not used
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL  // Not used
 		},
 		{	// LOAD_MESSAGE: The message column contains a general message
-			SQLITE_FLOAT, // 15min load average
-			SQLITE_INTEGER, // Number of cores
-			SQLITE_NULL, // Not used
-			SQLITE_NULL, // Not used
-			SQLITE_NULL  // Not used
+			DB_TYPE_DOUBLE, // 15min load average
+			DB_TYPE_INT, // Number of cores
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL  // Not used
 		},
 		{	// SHMEM_MESSAGE: The message column contains the corresponding path
-			SQLITE_INTEGER, // Percentage currently used
-			SQLITE_TEXT, // Human-readable details about memory/disk usage
-			SQLITE_NULL, // Not used
-			SQLITE_NULL, // Not used
-			SQLITE_NULL  // Not used
+			DB_TYPE_INT, // Percentage currently used
+			DB_TYPE_TEXT, // Human-readable details about memory/disk usage
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL  // Not used
 		},
 		{	// DISK_MESSAGE: The message column contains the corresponding path
-			SQLITE_INTEGER, // Percentage currently used
-			SQLITE_TEXT, // Human-readable details about memory/disk usage
-			SQLITE_NULL, // Not used
-			SQLITE_NULL, // Not used
-			SQLITE_NULL  // Not used
+			DB_TYPE_INT, // Percentage currently used
+			DB_TYPE_TEXT, // Human-readable details about memory/disk usage
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL, // Not used
+			DB_TYPE_NULL  // Not used
 		},
 		{	// INACCESSIBLE_ADLIST_MESSAGE: The message column contains the corresponding adlist URL
-			SQLITE_INTEGER, // database index of the adlist (so the dashboard can show a link)
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL // not used
+			DB_TYPE_INT, // database index of the adlist (so the dashboard can show a link)
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL // not used
 		},
 		{
 			// DISK_MESSAGE_EXTENDED: The message column contains the corresponding path
-			SQLITE_INTEGER, // Percentage currently used
-			SQLITE_TEXT, // Human-readable details about memory/disk usage
-			SQLITE_TEXT, // File system type
-			SQLITE_TEXT, // Directory mounted on
-			SQLITE_NULL // not used
+			DB_TYPE_INT, // Percentage currently used
+			DB_TYPE_TEXT, // Human-readable details about memory/disk usage
+			DB_TYPE_TEXT, // File system type
+			DB_TYPE_TEXT, // Directory mounted on
+			DB_TYPE_NULL // not used
 		},
 		{
 			// CERTIFICATE_DOMAIN_MISMATCH_MESSAGE: The message column contains the certificate file
-			SQLITE_TEXT, // domain
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL // not used
+			DB_TYPE_TEXT, // domain
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL // not used
 		},
 		{
 			// CONNECTION_ERROR_MESSAGE: The message column contains the server address
-			SQLITE_TEXT, // reason
-			SQLITE_TEXT, // error message
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL // not used
+			DB_TYPE_TEXT, // reason
+			DB_TYPE_TEXT, // error message
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL // not used
 		},
 		{
 			// NTP: The message column contains the warning/error
-			SQLITE_TEXT, // level (warning/error)
-			SQLITE_TEXT, // component (server/client)
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL // not used
+			DB_TYPE_TEXT, // level (warning/error)
+			DB_TYPE_TEXT, // component (server/client)
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL // not used
 		},
 		{
 			// VERIFY_MESSAGE: The message column contains the error
-			SQLITE_TEXT, // expected checksum
-			SQLITE_TEXT, // actual checksum
-			SQLITE_TEXT, // FTL commit hash
-			SQLITE_TEXT, // FTL architecture
-			SQLITE_NULL // not used
+			DB_TYPE_TEXT, // expected checksum
+			DB_TYPE_TEXT, // actual checksum
+			DB_TYPE_TEXT, // FTL commit hash
+			DB_TYPE_TEXT, // FTL architecture
+			DB_TYPE_NULL // not used
 		},
 		{
 			// GRAVITY_RESTORED_MESSAGE: The message column contains the status
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL // not used
 		},
 		{
 			// TELEPORTER_SKIPPED_MESSAGE: The message column contains the config key
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL, // not used
-			SQLITE_NULL // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL, // not used
+			DB_TYPE_NULL // not used
 		}
 	};
 // Create message table in the database
-bool create_message_table(sqlite3 *db)
+bool create_message_table(db_conn *db)
 {
 	// Start transaction
 	SQL_bool(db, "BEGIN");
@@ -312,7 +312,7 @@ bool create_message_table(sqlite3 *db)
 }
 
 // Flush message table
-bool flush_message_table(sqlite3 *memdb)
+bool flush_message_table(db_conn *memdb)
 {
 	// Flush message table, keeping the messages that state a lasting fact
 	// rather than a condition of the run that just ended.
@@ -360,87 +360,87 @@ static int _add_message(const enum message_type type,
 		return -1;
 	}
 	// No arguments check
-	if(count == 0 && message_blob_types[type][0] != SQLITE_NULL)
+	if(count == 0 && message_blob_types[type][0] != DB_TYPE_NULL)
 	{
 		log_err("add_message(type=%u, message=%s) - Invalid number of arguments: No arguments passed for message type requiring arguments",
 		        type, message);
 		return -1;
 	}
 	// Non-zero arguments check
-	else if(count > 1 && message_blob_types[type][count - 2] == SQLITE_NULL)
+	else if(count > 1 && message_blob_types[type][count - 2] == DB_TYPE_NULL)
 	{
 		log_err("add_message(type=%u, message=%s) - Invalid number of arguments: Too many (%zu) arguments passed for this message type",
 		        type, message, count);
 		return -1;
 	}
 
-	sqlite3 *db = dbopen(false, false);
+	db_conn *db = dbopen(false, false);
 	// Open database connection
 	if(db == NULL)
 		// Reason for failure is logged in dbopen()
 		return -1;
 
 	// Ensure there are no duplicates when adding messages
-	sqlite3_stmt* stmt = NULL;
+	db_stmt* stmt = NULL;
 	const char *querystr = "DELETE FROM message WHERE type = ?1 AND message = ?2";
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK ){
+	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
+	if( rc != DB_OK ){
 		log_err("add_message(type=%u, message=%s) - SQL error prepare DELETE: %s",
-		        type, message, sqlite3_errstr(rc));
+		        type, message, DB_LAST_ERR(db));
 		goto end_of_add_message;
 	}
 
 	// Bind type to prepared statement
-	if((rc = sqlite3_bind_text(stmt, 1, get_message_type_str(type), -1, SQLITE_STATIC)) != SQLITE_OK)
+	if((rc = db_bind_text_ref(stmt, 1, get_message_type_str(type))) != DB_OK)
 	{
 		log_err("add_message(type=%u, message=%s) - Failed to bind type DELETE: %s",
-			type, message, sqlite3_errstr(rc));
+			type, message, DB_LAST_ERR(db));
 		goto end_of_add_message;
 	}
 
 	// Bind message to prepared statement
-	if((rc = sqlite3_bind_text(stmt, 2, message, -1, SQLITE_STATIC)) != SQLITE_OK)
+	if((rc = db_bind_text_ref(stmt, 2, message)) != DB_OK)
 	{
 		log_err("add_message(type=%u, message=%s) - Failed to bind message DELETE: %s",
-			type, message, sqlite3_errstr(rc));
+			type, message, DB_LAST_ERR(db));
 		goto end_of_add_message;
 	}
 
-	// Execute and finalize. sqlite3_step() returns SQLITE_DONE for
+	// Execute and finalize. db_step() returns DB_DONE for
 	// non-SELECT statements (whether or not any rows were deleted).
-	if((rc = sqlite3_step(stmt)) != SQLITE_DONE)
+	if((rc = db_step(stmt)) != DB_DONE)
 	{
 		log_err("add_message(type=%u, message=%s) - SQL error step DELETE: %s",
-			type, message, sqlite3_errstr(rc));
+			type, message, DB_LAST_ERR(db));
 		goto end_of_add_message;
 	}
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 	stmt = NULL;
 
 	// Prepare SQLite statement
 	querystr = "INSERT INTO message (timestamp,type,message,blob1,blob2,blob3,blob4,blob5) "
 	           "VALUES ((cast(strftime('%s', 'now') as int)),?,?,?,?,?,?,?);";
-	rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK )
+	rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
+	if( rc != DB_OK )
 	{
 		log_err("add_message(type=%u, message=%s) - SQL error prepare: %s",
-		        type, message, sqlite3_errstr(rc));
+		        type, message, DB_LAST_ERR(db));
 		goto end_of_add_message;
 	}
 
 	// Bind type to prepared statement
-	if((rc = sqlite3_bind_text(stmt, 1, get_message_type_str(type), -1, SQLITE_STATIC)) != SQLITE_OK)
+	if((rc = db_bind_text_ref(stmt, 1, get_message_type_str(type))) != DB_OK)
 	{
 		log_err("add_message(type=%u, message=%s) - Failed to bind type: %s",
-		        type, message, sqlite3_errstr(rc));
+		        type, message, DB_LAST_ERR(db));
 		goto end_of_add_message;
 	}
 
 	// Bind message to prepared statement
-	if((rc = sqlite3_bind_text(stmt, 2, message, -1, SQLITE_STATIC)) != SQLITE_OK)
+	if((rc = db_bind_text_ref(stmt, 2, message)) != DB_OK)
 	{
 		log_err("add_message(type=%u, message=%s) - Failed to bind message: %s",
-		        type, message, sqlite3_errstr(rc));
+		        type, message, DB_LAST_ERR(db));
 		goto end_of_add_message;
 	}
 
@@ -451,34 +451,34 @@ static int _add_message(const enum message_type type,
 		const unsigned char datatype = message_blob_types[type][j];
 		switch (datatype)
 		{
-			case SQLITE_INTEGER:
-				rc = sqlite3_bind_int(stmt, 3 + j, va_arg(ap, int));
+			case DB_TYPE_INT:
+				rc = db_bind_int(stmt, 3 + j, va_arg(ap, int));
 				break;
 
-			case SQLITE_FLOAT:
-				rc = sqlite3_bind_double(stmt, 3 + j, va_arg(ap, double));
+			case DB_TYPE_DOUBLE:
+				rc = db_bind_double(stmt, 3 + j, va_arg(ap, double));
 				break;
 
-			case SQLITE_TEXT:
-				rc = sqlite3_bind_text(stmt, 3 + j, va_arg(ap, char*), -1, SQLITE_STATIC);
+			case DB_TYPE_TEXT:
+				rc = db_bind_text_ref(stmt, 3 + j, va_arg(ap, char*));
 				break;
 
-			case SQLITE_NULL: /* Fall through */
+			case DB_TYPE_NULL: /* Fall through */
 			default:
 				log_warn("add_message(type=%s, message=%s) - Excess property, binding NULL",
 				         get_message_type_str(type), message);
-				rc = sqlite3_bind_null(stmt, 3 + j);
+				rc = db_bind_null(stmt, 3 + j);
 				break;
 		}
 
 		// Bind message to prepared statement
-		if(rc != SQLITE_OK)
+		if(rc != DB_OK)
 		{
 			log_err("add_message(type=%u, message=%s) - Failed to bind argument %zu (type %u): %s",
-			        type, message, 3 + j, datatype, sqlite3_errstr(rc));
-			sqlite3_finalize(stmt);
+			        type, message, 3 + j, datatype, DB_LAST_ERR(db));
+			db_finalize(stmt);
 			stmt = NULL;
-			checkFTLDBrc(rc);
+			check_db_rc(rc);
 			va_end(ap);
 			goto end_of_add_message;
 		}
@@ -486,29 +486,29 @@ static int _add_message(const enum message_type type,
 	va_end(ap);
 
 	// Step and check if successful
-	rc = sqlite3_step(stmt);
+	rc = db_step(stmt);
 
-	if(rc != SQLITE_DONE)
+	if(rc != DB_DONE)
 	{
-		log_err("Encountered error while trying to store message in long-term database: %s", sqlite3_errstr(rc));
-		checkFTLDBrc(rc);
+		log_err("Encountered error while trying to store message in long-term database: %s", DB_LAST_ERR(db));
+		check_db_rc(rc);
 		goto end_of_add_message;
 	}
 
 	// Get row ID of the newly added message (only on success)
-	rowid = sqlite3_last_insert_rowid(db);
+	rowid = db_last_insert_id(db);
 
 end_of_add_message: // Close database connection
 
 	// Every path that jumps here carries a failing rc, and the duplicate
 	// removing DELETE above is on a hotter path than anything else in this
 	// file - a corrupt database met there has to latch as well
-	if(rc != SQLITE_OK && rc != SQLITE_DONE)
-		checkFTLDBrc(rc);
+	if(rc != DB_OK && rc != DB_DONE)
+		check_db_rc(rc);
 
 	// Final database handling
 	if(stmt != NULL)
-		sqlite3_finalize(stmt);
+		db_finalize(stmt);
 
 	dbclose(&db);
 
@@ -521,7 +521,7 @@ bool delete_message(cJSON *ids, int *deleted)
 	if(FTLDBerror())
 		return false;
 
-	sqlite3 *db;
+	db_conn *db;
 	// Open database connection
 	if((db = dbopen(false, false)) == NULL)
 	{
@@ -529,12 +529,12 @@ bool delete_message(cJSON *ids, int *deleted)
 		return false;
 	}
 
-	sqlite3_stmt *res = NULL;
-	int rc = sqlite3_prepare_v2(db, "DELETE FROM message WHERE id = ?;", -1, &res, 0);
-	if(rc != SQLITE_OK)
+	db_stmt *res = NULL;
+	db_rc rc = (res = db_prepare(db, "DELETE FROM message WHERE id = ?;", false)) != NULL ? DB_OK : db_last_rc(db);
+	if(rc != DB_OK)
 	{
-		log_err("SQL error (%i): %s", sqlite3_errcode(db), sqlite3_errmsg(db));
-		checkFTLDBrc(rc);
+		log_err("SQL error (%i): %s", db_errcode(db), db_errmsg(db));
+		check_db_rc(rc);
 		dbclose(&db);
 		return false;
 	}
@@ -546,34 +546,34 @@ bool delete_message(cJSON *ids, int *deleted)
 	{
 		// Bind id to prepared statement
 		const int idval = cJSON_GetNumberValue(id);
-		rc = sqlite3_bind_int(res, 1, idval);
-		if(rc != SQLITE_OK)
+		rc = db_bind_int(res, 1, idval);
+		if(rc != DB_OK)
 		{
-			log_err("delete_message() - Failed to bind id %d: %s", idval, sqlite3_errmsg(db));
+			log_err("delete_message() - Failed to bind id %d: %s", idval, db_errmsg(db));
 			success = false;
 			break;
 		}
 
 		// Execute and finalize
-		rc = sqlite3_step(res);
-		if(rc != SQLITE_DONE)
+		rc = db_step(res);
+		if(rc != DB_DONE)
 		{
-			log_err("SQL error (%i): %s", sqlite3_errcode(db), sqlite3_errmsg(db));
+			log_err("SQL error (%i): %s", db_errcode(db), db_errmsg(db));
 			success = false;
 			break;
 		}
 
 		// Add to deleted count
-		*deleted += sqlite3_changes(db);
+		*deleted += db_changes(db);
 
-		sqlite3_reset(res);
+		db_reset(res);
 	}
-	sqlite3_finalize(res);
+	db_finalize(res);
 
 	// A corrupt database has to be latched here, or the next caller opens it
 	// again and fails the same way
 	if(!success)
-		checkFTLDBrc(rc);
+		check_db_rc(rc);
 
 	// Close database connection
 	dbclose(&db);
@@ -1089,7 +1089,7 @@ int count_messages(void)
 	if(FTLDBerror())
 		return count;
 
-	sqlite3 *db;
+	db_conn *db;
 	// Open database connection
 	if((db = dbopen(false, false)) == NULL)
 	{
@@ -1098,7 +1098,7 @@ int count_messages(void)
 	}
 
 	// Count messages
-	sqlite3_stmt* stmt = NULL;
+	db_stmt* stmt = NULL;
 	const char *querystr;
 	if(config.misc.hide_dnsmasq_warn.v.b && config.misc.hide_connection_error.v.b)
 		querystr = "SELECT COUNT(*) FROM message WHERE type NOT IN ('DNSMASQ_WARN', 'CONNECTION_ERROR')";
@@ -1109,30 +1109,30 @@ int count_messages(void)
 	else
 		querystr = "SELECT COUNT(*) FROM message";
 
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK ){
+	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
+	if( rc != DB_OK ){
 		log_err("count_messages() - SQL error prepare SELECT: %s",
-		        sqlite3_errstr(rc));
+		        DB_LAST_ERR(db));
 		goto end_of_count_messages;
 	}
 
 	// Execute and finalize
-	rc = sqlite3_step(stmt);
-	if( rc != SQLITE_ROW ){
+	rc = db_step(stmt);
+	if( rc != DB_ROW ){
 		log_err("count_messages() - SQL error step SELECT: %s",
-		        sqlite3_errstr(rc));
+		        DB_LAST_ERR(db));
 		goto end_of_count_messages;
 	}
 
 	// Get count
-	count = sqlite3_column_int(stmt, 0);
+	count = db_column_int(stmt, 0);
 
 end_of_count_messages: // Close database connection
-	if(rc != SQLITE_OK && rc != SQLITE_ROW)
-		checkFTLDBrc(rc);
+	if(rc != DB_OK && rc != DB_ROW)
+		check_db_rc(rc);
 
 	if(stmt != NULL)
-		sqlite3_finalize(stmt);
+		db_finalize(stmt);
 	dbclose(&db);
 
 	return count;
@@ -1146,7 +1146,7 @@ bool format_messages(cJSON *array)
 		return false;
 	}
 
-	sqlite3 *db;
+	db_conn *db;
 	// Open database connection
 	if((db = dbopen(false, false)) == NULL)
 	{
@@ -1155,17 +1155,17 @@ bool format_messages(cJSON *array)
 	}
 
 	// Get message
-	sqlite3_stmt* stmt = NULL;
+	db_stmt* stmt = NULL;
 	const char *querystr = "SELECT id,timestamp,type,message,blob1,blob2,blob3,blob4,blob5 FROM message";
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if( rc != SQLITE_OK ){
+	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
+	if( rc != DB_OK ){
 		log_err("format_messages() - SQL error prepare SELECT: %s",
-		        sqlite3_errstr(rc));
+		        DB_LAST_ERR(db));
 		goto end_of_format_message;
 	}
 
 	// Execute and finalize
-	while((rc = sqlite3_step(stmt)) == SQLITE_ROW)
+	while((rc = db_step(stmt)) == DB_ROW)
 	{
 		// Create JSON object
 		cJSON *item = cJSON_CreateObject();
@@ -1176,13 +1176,13 @@ bool format_messages(cJSON *array)
 		}
 
 		// Add ID
-		cJSON_AddNumberToObject(item, "id", sqlite3_column_int(stmt, 0));
+		cJSON_AddNumberToObject(item, "id", db_column_int(stmt, 0));
 
 		// Add timestamp
-		cJSON_AddNumberToObject(item, "timestamp", sqlite3_column_double(stmt, 1));
+		cJSON_AddNumberToObject(item, "timestamp", db_column_double(stmt, 1));
 
 		// Get message type
-		const char *mtypestr = (const char*)sqlite3_column_text(stmt, 2);
+		const char *mtypestr = (const char*)db_column_text(stmt, 2);
 
 		// Add message type
 		cJSON_AddStringToObject(item, "type", mtypestr);
@@ -1194,10 +1194,10 @@ bool format_messages(cJSON *array)
 		{
 			case REGEX_MESSAGE:
 			{
-				const char *regex = (const char*)sqlite3_column_text(stmt, 3);
-				const char *type = (const char*)sqlite3_column_text(stmt, 4);
-				const char *warning = (const char*)sqlite3_column_text(stmt, 5);
-				const int dbindex = sqlite3_column_int(stmt, 6);
+				const char *regex = (const char*)db_column_text(stmt, 3);
+				const char *type = (const char*)db_column_text(stmt, 4);
+				const char *warning = (const char*)db_column_text(stmt, 5);
+				const int dbindex = db_column_int(stmt, 6);
 
 				format_regex_message(plain, sizeof(plain), html, sizeof(html),
 				                     type, regex, warning, dbindex);
@@ -1207,12 +1207,12 @@ bool format_messages(cJSON *array)
 
 			case SUBNET_MESSAGE:
 			{
-				const char *ip = (const char*)sqlite3_column_text(stmt, 3);
-				const int matching_count = sqlite3_column_int(stmt, 4);
-				const char *names = (const char*)sqlite3_column_text(stmt, 5);
-				const char *matching_ids = (const char*)sqlite3_column_text(stmt, 6);
-				const char *chosen_match_text = (const char*)sqlite3_column_text(stmt, 7);
-				const int chosen_match_id = sqlite3_column_int(stmt, 8);
+				const char *ip = (const char*)db_column_text(stmt, 3);
+				const int matching_count = db_column_int(stmt, 4);
+				const char *names = (const char*)db_column_text(stmt, 5);
+				const char *matching_ids = (const char*)db_column_text(stmt, 6);
+				const char *chosen_match_text = (const char*)db_column_text(stmt, 7);
+				const int chosen_match_id = db_column_int(stmt, 8);
 
 				format_subnet_message(plain, sizeof(plain), html, sizeof(html),
 				                      ip, matching_count, names, matching_ids, chosen_match_text, chosen_match_id);
@@ -1222,9 +1222,9 @@ bool format_messages(cJSON *array)
 
 			case HOSTNAME_MESSAGE:
 			{
-				const char *ip = (const char*)sqlite3_column_text(stmt, 3);
-				const char *name = (const char*)sqlite3_column_text(stmt, 4);
-				const int pos = sqlite3_column_int(stmt, 5);
+				const char *ip = (const char*)db_column_text(stmt, 3);
+				const char *name = (const char*)db_column_text(stmt, 4);
+				const int pos = db_column_int(stmt, 5);
 
 				format_hostname_message(plain, sizeof(plain), html, sizeof(html),
 				                        ip, name, pos);
@@ -1234,7 +1234,7 @@ bool format_messages(cJSON *array)
 
 			case DNSMASQ_CONFIG_MESSAGE:
 			{
-				const char *message = (const char*)sqlite3_column_text(stmt, 3);
+				const char *message = (const char*)db_column_text(stmt, 3);
 
 				format_dnsmasq_config_message(plain, sizeof(plain), html, sizeof(html),
 				                              message);
@@ -1244,10 +1244,10 @@ bool format_messages(cJSON *array)
 
 			case RATE_LIMIT_MESSAGE:
 			{
-				const char *clientIP = (const char*)sqlite3_column_text(stmt, 3);
-				const int count = sqlite3_column_int(stmt, 4);
-				const int interval = sqlite3_column_int(stmt, 5);
-				const int turnaround = sqlite3_column_int(stmt, 6);
+				const char *clientIP = (const char*)db_column_text(stmt, 3);
+				const int count = db_column_int(stmt, 4);
+				const int interval = db_column_int(stmt, 5);
+				const int turnaround = db_column_int(stmt, 6);
 
 				format_rate_limit_message(plain, sizeof(plain), html, sizeof(html),
 				                          clientIP, count, interval, turnaround);
@@ -1257,7 +1257,7 @@ bool format_messages(cJSON *array)
 
 			case DNSMASQ_WARN_MESSAGE:
 			{
-				const char *message = (const char*)sqlite3_column_text(stmt, 3);
+				const char *message = (const char*)db_column_text(stmt, 3);
 
 				format_dnsmasq_warn_message(plain, sizeof(plain), html, sizeof(html),
 				                            message);
@@ -1267,8 +1267,8 @@ bool format_messages(cJSON *array)
 
 			case LOAD_MESSAGE:
 			{
-				const double load = sqlite3_column_double(stmt, 4);
-				const int nprocs = sqlite3_column_int(stmt, 5);
+				const double load = db_column_double(stmt, 4);
+				const int nprocs = db_column_int(stmt, 5);
 
 				format_load_message(plain, sizeof(plain), html, sizeof(html),
 				                    load, nprocs);
@@ -1278,9 +1278,9 @@ bool format_messages(cJSON *array)
 
 			case SHMEM_MESSAGE:
 			{
-				const char *path = (const char*)sqlite3_column_text(stmt, 3);
-				const int shmem = sqlite3_column_int(stmt, 4);
-				const char *msg = (const char*)sqlite3_column_text(stmt, 5);
+				const char *path = (const char*)db_column_text(stmt, 3);
+				const int shmem = db_column_int(stmt, 4);
+				const char *msg = (const char*)db_column_text(stmt, 5);
 
 				format_shmem_message(plain, sizeof(plain), html, sizeof(html),
 				                     path, shmem, msg);
@@ -1291,9 +1291,9 @@ bool format_messages(cJSON *array)
 
 			case DISK_MESSAGE:
 			{
-				const char *path = (const char*)sqlite3_column_text(stmt, 3);
-				const int disk = sqlite3_column_int(stmt, 4);
-				const char *msg = (const char*)sqlite3_column_text(stmt, 5);
+				const char *path = (const char*)db_column_text(stmt, 3);
+				const int disk = db_column_int(stmt, 4);
+				const char *msg = (const char*)db_column_text(stmt, 5);
 
 				format_disk_message(plain, sizeof(plain), html, sizeof(html),
 				                    path, disk, msg);
@@ -1303,10 +1303,10 @@ bool format_messages(cJSON *array)
 
 			case DISK_MESSAGE_EXTENDED:
 			{
-				const int disk = sqlite3_column_int(stmt, 4);
-				const char *msg = (const char*)sqlite3_column_text(stmt, 5);
-				const char *mnt_type = (const char*)sqlite3_column_text(stmt, 6);
-				const char *mnt_dir = (const char*)sqlite3_column_text(stmt, 7);
+				const int disk = db_column_int(stmt, 4);
+				const char *msg = (const char*)db_column_text(stmt, 5);
+				const char *mnt_type = (const char*)db_column_text(stmt, 6);
+				const char *mnt_dir = (const char*)db_column_text(stmt, 7);
 
 				format_disk_message_extended(plain, sizeof(plain), html, sizeof(html),
 				                             disk, msg, mnt_type, mnt_dir);
@@ -1316,8 +1316,8 @@ bool format_messages(cJSON *array)
 
 			case INACCESSIBLE_ADLIST_MESSAGE:
 			{
-				const char *address = (const char*)sqlite3_column_text(stmt, 3);
-				const int dbindex = sqlite3_column_int(stmt, 4);
+				const char *address = (const char*)db_column_text(stmt, 3);
+				const int dbindex = db_column_int(stmt, 4);
 
 				format_inaccessible_adlist_message(plain, sizeof(plain), html, sizeof(html),
 				                                   address, dbindex);
@@ -1327,8 +1327,8 @@ bool format_messages(cJSON *array)
 
 			case CERTIFICATE_DOMAIN_MISMATCH_MESSAGE:
 			{
-				const char *certfile = (const char*)sqlite3_column_text(stmt, 3);
-				const char *domain = (const char*)sqlite3_column_text(stmt, 4);
+				const char *certfile = (const char*)db_column_text(stmt, 3);
+				const char *domain = (const char*)db_column_text(stmt, 4);
 
 				format_certificate_domain_mismatch(plain, sizeof(plain), html, sizeof(html),
 				                                   certfile, domain);
@@ -1338,9 +1338,9 @@ bool format_messages(cJSON *array)
 
 			case CONNECTION_ERROR_MESSAGE:
 			{
-				const char *server = (const char*)sqlite3_column_text(stmt, 3);
-				const char *reason = (const char*)sqlite3_column_text(stmt, 4);
-				const char *error = (const char*)sqlite3_column_text(stmt, 5);
+				const char *server = (const char*)db_column_text(stmt, 3);
+				const char *reason = (const char*)db_column_text(stmt, 4);
+				const char *error = (const char*)db_column_text(stmt, 5);
 
 				format_connection_error(plain, sizeof(plain), html, sizeof(html),
 				                        server, reason, error);
@@ -1350,9 +1350,9 @@ bool format_messages(cJSON *array)
 
 			case NTP_MESSAGE:
 			{
-				const char *message = (const char*)sqlite3_column_text(stmt, 3);
-				const char *level = (const char*)sqlite3_column_text(stmt, 4);
-				const char *who = (const char*)sqlite3_column_text(stmt, 5);
+				const char *message = (const char*)db_column_text(stmt, 3);
+				const char *level = (const char*)db_column_text(stmt, 4);
+				const char *who = (const char*)db_column_text(stmt, 5);
 
 				format_ntp_message(plain, sizeof(plain), html, sizeof(html),
 				                   message, level, who);
@@ -1362,11 +1362,11 @@ bool format_messages(cJSON *array)
 
 			case VERIFY_MESSAGE:
 			{
-				const char *message = (const char*)sqlite3_column_text(stmt, 3);
-				const char *expected = (const char*)sqlite3_column_text(stmt, 4);
-				const char *actual = (const char*)sqlite3_column_text(stmt, 5);
-				const char *hash = (const char*)sqlite3_column_text(stmt, 6);
-				const char *arch = (const char*)sqlite3_column_text(stmt, 7);
+				const char *message = (const char*)db_column_text(stmt, 3);
+				const char *expected = (const char*)db_column_text(stmt, 4);
+				const char *actual = (const char*)db_column_text(stmt, 5);
+				const char *hash = (const char*)db_column_text(stmt, 6);
+				const char *arch = (const char*)db_column_text(stmt, 7);
 
 				format_verify_message(plain, sizeof(plain), html, sizeof(html),
 				                      message, expected, actual, hash, arch);
@@ -1376,7 +1376,7 @@ bool format_messages(cJSON *array)
 
 			case GRAVITY_RESTORED_MESSAGE:
 			{
-				const char *status = (const char*)sqlite3_column_text(stmt, 3);
+				const char *status = (const char*)db_column_text(stmt, 3);
 
 				format_gravity_restored_message(plain, sizeof(plain), html, sizeof(html),
 				                                status);
@@ -1386,7 +1386,7 @@ bool format_messages(cJSON *array)
 
 			case TELEPORTER_SKIPPED_MESSAGE:
 			{
-				const char *key = (const char*)sqlite3_column_text(stmt, 3);
+				const char *key = (const char*)db_column_text(stmt, 3);
 
 				format_teleporter_skipped_message(plain, sizeof(plain), html, sizeof(html),
 				                                  key);
@@ -1424,28 +1424,28 @@ bool format_messages(cJSON *array)
 		cJSON_AddItemToArray(array, item);
 	}
 
-	if(rc != SQLITE_DONE)
+	if(rc != DB_DONE)
 	{
 		log_err("format_messages() - SQL error step SELECT: %s",
-			sqlite3_errstr(rc));
+			DB_LAST_ERR(db));
 		goto end_of_format_message;
 	}
 
 end_of_format_message: // Close database connection
-	// SQLITE_ROW is how the loop above leaves on a failed allocation, not a
+	// DB_ROW is how the loop above leaves on a failed allocation, not a
 	// database error - the sibling in count_messages() excludes it too
-	if(rc != SQLITE_OK && rc != SQLITE_DONE && rc != SQLITE_ROW)
-		checkFTLDBrc(rc);
+	if(rc != DB_OK && rc != DB_DONE && rc != DB_ROW)
+		check_db_rc(rc);
 
 	if(stmt != NULL)
-		sqlite3_finalize(stmt);
+		db_finalize(stmt);
 	dbclose(&db);
 
 	// Only a result set read to its end is an answer. Returning true after
 	// any of the paths above meant `/api/info/messages` served a truncated
 	// array with a 200 and left its 500 branch unreachable, so the request
 	// that met the corruption never heard about it
-	return rc == SQLITE_DONE;
+	return rc == DB_DONE;
 }
 
 void logg_regex_warning(const char *type, const char *warning, const int dbindex, const char *regex)

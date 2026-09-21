@@ -20,7 +20,7 @@
 // getAliasclientIDfromIP()
 #include "network-table.h"
 
-bool create_aliasclients_table(sqlite3 *db)
+bool create_aliasclients_table(db_conn *db)
 {
 	// Start transaction
 	SQL_bool(db, "BEGIN");
@@ -93,47 +93,47 @@ static void recompute_aliasclient(const int aliasclientID)
 }
 
 // Store hostname of device identified by dbID
-bool import_aliasclients(sqlite3 *db)
+bool import_aliasclients(db_conn *db)
 {
 	// Return early if database is known to be broken
 	if(FTLDBerror())
 		return false;
 
-	sqlite3_stmt *stmt = NULL;
+	db_stmt *stmt = NULL;
 	const char querystr[] = "SELECT id,name FROM aliasclient";
 
-	int rc = sqlite3_prepare_v2(db, querystr, -1, &stmt, NULL);
-	if(rc != SQLITE_OK)
+	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);
+	if(rc != DB_OK)
 	{
-		log_err("import_aliasclients() - SQL error prepare: %s", sqlite3_errstr(rc));
-		checkFTLDBrc(rc);
+		log_err("import_aliasclients() - SQL error prepare: %s", DB_LAST_ERR(db));
+		check_db_rc(rc);
 		return false;
 	}
 
 	// Loop until no further data is available
 	int imported = 0;
 	const double now = double_time();
-	while((rc = sqlite3_step(stmt)) != SQLITE_DONE)
+	while((rc = db_step(stmt)) != DB_DONE)
 	{
 		// Check if we ran into an error
-		if(rc != SQLITE_ROW)
+		if(rc != DB_ROW)
 		{
-			log_err("import_aliasclients() - SQL error step: %s", sqlite3_errstr(rc));
-			checkFTLDBrc(rc);
-			sqlite3_finalize(stmt);
+			log_err("import_aliasclients() - SQL error step: %s", DB_LAST_ERR(db));
+			check_db_rc(rc);
+			db_finalize(stmt);
 			return false;
 		}
 
 		// Get hardware address from database and store it as IP + MAC address of this client
-		const int aliasclient_id = sqlite3_column_int(stmt, 0);
+		const int aliasclient_id = db_column_int(stmt, 0);
 
 		// Create a new (super-)client
 		char *aliasclient_str = NULL;
 		if(asprintf(&aliasclient_str, "aliasclient-%i", aliasclient_id) < 10)
 		{
 			log_err("Memory error in import_aliasclients()");
-			checkFTLDBrc(rc);
-			sqlite3_finalize(stmt);
+			check_db_rc(rc);
+			db_finalize(stmt);
 			return false;
 		}
 
@@ -154,7 +154,7 @@ bool import_aliasclients(sqlite3 *db)
 		client->count = 0;
 
 		// Store intended name
-		const char *name = (char*)sqlite3_column_text(stmt, 1);
+		const char *name = (char*)db_column_text(stmt, 1);
 		client->namepos = addstr(name);
 
 		// This is a aliasclient
@@ -169,19 +169,14 @@ bool import_aliasclients(sqlite3 *db)
 	}
 
 	// Finalize statement
-	if ((rc = sqlite3_finalize(stmt)) != SQLITE_OK)
-	{
-		log_err("import_aliasclients() - SQL error finalize: %s", sqlite3_errstr(rc));
-		checkFTLDBrc(rc);
-		return false;
-	}
+	db_finalize(stmt);
 
 	log_debug(DEBUG_ALIASCLIENTS, "Imported %d alias-client%s", imported, (imported != 1) ? "s":"");
 
 	return true;
 }
 
-static int get_aliasclient_ID(sqlite3 *db, const clientsData *client)
+static int get_aliasclient_ID(db_conn *db, const clientsData *client)
 {
 	// Skip alias-clients themselves
 	if(client->flags.aliasclient)
@@ -225,7 +220,7 @@ static int get_aliasclient_ID(sqlite3 *db, const clientsData *client)
 	return -1;
 }
 
-void reset_aliasclient(sqlite3 *db, clientsData *client)
+void reset_aliasclient(db_conn *db, clientsData *client)
 {
 	// Return early if database is known to be broken
 	if(FTLDBerror())
@@ -269,7 +264,7 @@ void reset_aliasclient(sqlite3 *db, clientsData *client)
 // Reimport alias-clients from database
 // Note that this will always only change or add new clients. Alias-clients are
 // removed by nulling them before importing new clients
-void reimport_aliasclients(sqlite3 *db)
+void reimport_aliasclients(db_conn *db)
 {
 	// Return early if database is known to be broken
 	if(FTLDBerror())

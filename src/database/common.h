@@ -12,7 +12,8 @@
 
 // logging routines
 #include "log.h"
-#include "sqlite3.h"
+// Database driver abstraction layer
+#include "db-driver.h"
 // int64_t
 #include <inttypes.h>
 
@@ -30,32 +31,32 @@ enum counters_table_props {
 } __attribute__ ((packed));
 
 void db_init(void);
-int db_get_int(sqlite3* db, const enum ftl_table_props ID);
-int db_get_FTL_property(sqlite3* db, const enum ftl_table_props ID);
-bool db_set_FTL_property(sqlite3* db, const enum ftl_table_props ID, const int value);
 
-/// Execute a formatted SQL query and get the return code
-int dbquery(sqlite3* db, const char *format, ...) __attribute__ ((format (printf, 2, 3)));;
+int db_get_int(db_conn *db, const enum ftl_table_props ID);
+int db_get_FTL_property(db_conn *db, const enum ftl_table_props ID);
+bool db_set_FTL_property(db_conn *db, const enum ftl_table_props ID, const int value);
+
+/// Execute a formatted SQL query and get the return code. The format string
+/// uses the syntax of the database driver (e.g. %q and %Q for SQLite)
+int dbquery(db_conn *db, const char *format, ...) __attribute__ ((format (printf, 2, 3)));
 
 int sqliteBusyCallback(void *ptr, int count);
 #define dbopen(readonly, create) _dbopen(readonly, create, __FUNCTION__, __LINE__, __FILE__)
-sqlite3 *_dbopen(const bool readonly, const bool create, const char *func, const int line, const char *file) __attribute__((warn_unused_result));
+db_conn *_dbopen(const bool readonly, const bool create, const char *func, const int line, const char *file) __attribute__((warn_unused_result));
 #define dbclose(db) _dbclose(db, __FUNCTION__, __LINE__, __FILE__)
-void _dbclose(sqlite3 **db, const char *func, const int line, const char *file);
-#define dbclose_handle(db) _dbclose_handle(db, __FUNCTION__, __LINE__, __FILE__)
-int _dbclose_handle(sqlite3 *db, const char *func, const int line, const char *file);
+void _dbclose(db_conn **db, const char *func, const int line, const char *file);
 
 void piholeFTLDB_reopen(void);
-int db_query_int(sqlite3 *db, const char *querystr);
-int db_query_int_int(sqlite3 *db, const char* querystr, const int arg);
-int db_query_int_str(sqlite3 *db, const char* querystr, const char *arg);
-double db_query_double(sqlite3 *db, const char *querystr);
-int db_query_int_from_until(sqlite3 *db, const char* querystr, const double from, const double until);
-int db_query_int_from_until_type(sqlite3 *db, const char* querystr, const double from, const double until, const int type);
+int db_query_int(db_conn *db, const char *querystr);
+int db_query_int_int(db_conn *db, const char *querystr, const int arg);
+int db_query_int_str(db_conn *db, const char *querystr, const char *arg);
+double db_query_double(db_conn *db, const char *querystr);
+int db_query_int_from_until(db_conn *db, const char *querystr, const double from, const double until);
+int db_query_int_from_until_type(db_conn *db, const char *querystr, const double from, const double until, const int type);
 
 void SQLite3LogCallback(void *pArg, int iErrCode, const char *zMsg);
-bool db_set_counter(sqlite3 *db, const enum counters_table_props ID, const int value);
-bool db_update_disk_counter(sqlite3 *db, const enum counters_table_props ID, const int change);
+bool db_set_counter(db_conn *db, const enum counters_table_props ID, const int value);
+bool db_update_disk_counter(db_conn *db, const enum counters_table_props ID, const int change);
 const char *get_sqlite3_version(void);
 int64_t get_row_count(const char *table_name, const bool memory);
 
@@ -65,17 +66,14 @@ extern bool DBdeleteoldqueries;
 // We abort execution of all database-related activities in this case
 bool FTLDBerror(void) __attribute__ ((pure));
 
-// Check SQLite3 non-success return codes for possible database corruption
-bool checkFTLDBrc(const int rc);
-
-// Get human-readable *extended* error codes (defined in sqlite3.c)
-extern const char *sqlite3ErrName(int rc);
+// Check non-success return codes for possible database corruption
+bool check_db_rc(const db_rc rc);
 
 // Database macros
 #define SQL_bool(db, ...) {\
 	int ret;\
-	if((ret = dbquery(db, __VA_ARGS__)) != SQLITE_OK) {\
-		if(ret == SQLITE_BUSY)\
+	if((ret = dbquery(db, __VA_ARGS__)) != DB_OK) {\
+		if(ret == DB_BUSY)\
 			log_warn("Database busy in %s()!", __FUNCTION__);\
 		else\
 			log_err("%s() failed!", __FUNCTION__);\
@@ -85,8 +83,8 @@ extern const char *sqlite3ErrName(int rc);
 
 #define SQL_void(db, ...) {\
 	int ret;\
-	if((ret = dbquery(db, __VA_ARGS__)) != SQLITE_OK) {\
-		if(ret == SQLITE_BUSY)\
+	if((ret = dbquery(db, __VA_ARGS__)) != DB_OK) {\
+		if(ret == DB_BUSY)\
 			log_warn("Database busy in %s()!", __FUNCTION__);\
 		else\
 			log_err("%s() failed!", __FUNCTION__);\

@@ -173,8 +173,8 @@ static int api_network_devices_GET(struct ftl_conn *api)
 	get_uint_var(api->request->query_string, "max_addresses", &address_count);
 
 	// Open pihole-FTL.db database file
-	sqlite3_stmt *device_stmt = NULL, *ip_stmt = NULL;
-	sqlite3 *db = dbopen(true, false);
+	db_stmt *device_stmt = NULL, *ip_stmt = NULL;
+	db_conn *db = dbopen(true, false);
 	if(db == NULL)
 	{
 		log_warn("Failed to open database in api_network_devices_GET()");
@@ -293,7 +293,7 @@ static int api_network_devices_DELETE(struct ftl_conn *api)
 	}
 
 	// Open pihole-FTL.db database file
-	sqlite3 *db = dbopen(false, false);
+	db_conn *db = dbopen(false, false);
 	if(db == NULL)
 	{
 		log_warn("Failed to open database in api_network_devices_DELETE()");
@@ -362,7 +362,7 @@ int api_client_suggestions(struct ftl_conn *api)
 	get_bool_var(api->request->query_string, "ipv4_only", &ipv4_only);
 
 	// Open pihole-FTL.db database file connection
-	sqlite3 *db = dbopen(true, false);
+	db_conn *db = dbopen(true, false);
 	if(db == NULL)
 	{
 		// The two sibling handlers in this file check this. Without it
@@ -389,7 +389,7 @@ int api_client_suggestions(struct ftl_conn *api)
 	}
 
 	// Prepare SQL statement
-	sqlite3_stmt *stmt = NULL;
+	db_stmt *stmt = NULL;
 	const char *sql = "SELECT n.hwaddr,n.macVendor,n.lastQuery,"
 	                  "(SELECT GROUP_CONCAT(DISTINCT na.ip) "
 	                    "FROM network_addresses na "
@@ -402,43 +402,43 @@ int api_client_suggestions(struct ftl_conn *api)
 	                    "AND n.hwaddr NOT IN (SELECT CONCAT('ip-',lower(ip)) FROM g.client)" // mock hardware addresses built from IP addresses
 	                  "ORDER BY lastQuery DESC LIMIT ?";
 
-	if(sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK)
+	if((stmt = db_prepare(db, sql, false)) == NULL)
 	{
-		log_err("Failed to prepare SQL statement: %s", sqlite3_errmsg(db));
+		log_err("Failed to prepare SQL statement: %s", db_errmsg(db));
 		dbclose(&db);
 		return send_json_error(api, 500,
 		                       "database_error",
 		                       "Could not prepare SQL statement",
-		                       sqlite3_errmsg(db));
+		                       db_errmsg(db));
 	}
 
 	// Bind parameters
-	if(sqlite3_bind_int(stmt, 1, count) != SQLITE_OK)
+	if(db_bind_int(stmt, 1, count) != DB_OK)
 	{
-		log_err("Failed to bind parameter: %s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
+		log_err("Failed to bind parameter: %s", db_errmsg(db));
+		db_finalize(stmt);
 		dbclose(&db);
 		return send_json_error(api, 500,
 		                       "database_error",
 		                       "Could not bind parameter",
-		                       sqlite3_errmsg(db));
+		                       db_errmsg(db));
 	}
 
 	// Execute SQL statement
 	cJSON *clients = JSON_NEW_ARRAY();
-	while(sqlite3_step(stmt) == SQLITE_ROW)
+	while(db_step(stmt) == DB_ROW)
 	{
 		cJSON *client = JSON_NEW_OBJECT();
-		JSON_COPY_STR_TO_OBJECT(client, "hwaddr", sqlite3_column_text(stmt, 0));
-		JSON_COPY_STR_TO_OBJECT(client, "macVendor", sqlite3_column_text(stmt, 1));
-		JSON_ADD_NUMBER_TO_OBJECT(client, "lastQuery", sqlite3_column_int64(stmt, 2));
-		JSON_COPY_STR_TO_OBJECT(client, "addresses", sqlite3_column_text(stmt, 3));
-		JSON_COPY_STR_TO_OBJECT(client, "names", sqlite3_column_text(stmt, 4));
+		JSON_COPY_STR_TO_OBJECT(client, "hwaddr", db_column_text(stmt, 0));
+		JSON_COPY_STR_TO_OBJECT(client, "macVendor", db_column_text(stmt, 1));
+		JSON_ADD_NUMBER_TO_OBJECT(client, "lastQuery", db_column_int64(stmt, 2));
+		JSON_COPY_STR_TO_OBJECT(client, "addresses", db_column_text(stmt, 3));
+		JSON_COPY_STR_TO_OBJECT(client, "names", db_column_text(stmt, 4));
 		JSON_ADD_ITEM_TO_ARRAY(clients, client);
 	}
 
 	// Finalize query
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 
 	// Detach gravity database
 	if(!detach_database(db, &message, "g"))

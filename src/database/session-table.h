@@ -10,14 +10,14 @@
 #ifndef SESSION_TABLE_PRIVATE_H
 #define SESSION_TABLE_PRIVATE_H
 
-#include "sqlite3.h"
+#include "db-driver.h"
 // struct session
 #include "api/auth.h"
 
-bool create_session_table(sqlite3 *db);
-bool add_session_app_column(sqlite3 *db);
-bool add_session_cli_column(sqlite3 *db);
-bool add_session_x_forwarded_for_column(sqlite3 *db);
+bool create_session_table(db_conn *db);
+bool add_session_app_column(db_conn *db);
+bool add_session_cli_column(db_conn *db);
+bool add_session_x_forwarded_for_column(db_conn *db);
 bool backup_db_sessions(struct session *sessions, const uint16_t max_sessions);
 bool restore_db_sessions(struct session *sessions, const uint16_t max_sessions);
 

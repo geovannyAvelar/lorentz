@@ -15,7 +15,7 @@
 // get_memdb()
 #include "database/query-table.h"
 
-bool create_session_table(sqlite3 *db)
+bool create_session_table(db_conn *db)
 {
 	// Start transaction of database update
 	SQL_bool(db, "BEGIN TRANSACTION;");
@@ -45,7 +45,7 @@ bool create_session_table(sqlite3 *db)
 	return true;
 }
 
-bool add_session_app_column(sqlite3 *db)
+bool add_session_app_column(db_conn *db)
 {
 	// Start transaction of database update
 	SQL_bool(db, "BEGIN TRANSACTION;");
@@ -67,7 +67,7 @@ bool add_session_app_column(sqlite3 *db)
 	return true;
 }
 
-bool add_session_cli_column(sqlite3 *db)
+bool add_session_cli_column(db_conn *db)
 {
 	// Start transaction of database update
 	SQL_bool(db, "BEGIN TRANSACTION;");
@@ -89,7 +89,7 @@ bool add_session_cli_column(sqlite3 *db)
 	return true;
 }
 
-bool add_session_x_forwarded_for_column(sqlite3 *db)
+bool add_session_x_forwarded_for_column(db_conn *db)
 {
 	// Start transaction of database update
 	SQL_bool(db, "BEGIN TRANSACTION;");
@@ -120,7 +120,7 @@ bool backup_db_sessions(struct session *sessions, const uint16_t max_sessions)
 		return true;
 	}
 
-	sqlite3 *db = dbopen(false, false);
+	db_conn *db = dbopen(false, false);
 	if(db == NULL)
 	{
 		log_warn("Failed to open database in backup_db_sessions()");
@@ -130,11 +130,11 @@ bool backup_db_sessions(struct session *sessions, const uint16_t max_sessions)
 	// Insert session into database
 	bool success = false;
 	unsigned int api_sessions = 0;
-	sqlite3_stmt *stmt = NULL;
-	if(sqlite3_prepare_v2(db, "INSERT INTO session (login_at, valid_until, remote_addr, user_agent, sid, csrf, tls_login, tls_mixed, app, cli, x_forwarded_for) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", -1, &stmt, 0) != SQLITE_OK)
+	db_stmt *stmt = NULL;
+	if((stmt = db_prepare(db, "INSERT INTO session (login_at, valid_until, remote_addr, user_agent, sid, csrf, tls_login, tls_mixed, app, cli, x_forwarded_for) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", false)) == NULL)
 	{
 		log_err("SQL error in backup_db_sessions(): %s (%d)",
-		        sqlite3_errmsg(db), sqlite3_errcode(db));
+		        db_errmsg(db), db_errcode(db));
 		goto backup_db_sessions_end;
 	}
 
@@ -149,96 +149,96 @@ bool backup_db_sessions(struct session *sessions, const uint16_t max_sessions)
 
 		// Bind values to statement
 		// 1: login_at
-		if(sqlite3_bind_int64(stmt, 1, sess->login_at) != SQLITE_OK)
+		if(db_bind_int64(stmt, 1, sess->login_at) != DB_OK)
 		{
 			log_err("Cannot bind login_at = %ld in backup_db_sessions(): %s (%d)",
-			        (long int)sess->login_at, sqlite3_errmsg(db), sqlite3_errcode(db));
+			        (long int)sess->login_at, db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 		// 2: valid_until
-		if(sqlite3_bind_int64(stmt, 2, sess->valid_until) != SQLITE_OK)
+		if(db_bind_int64(stmt, 2, sess->valid_until) != DB_OK)
 		{
 			log_err("Cannot bind valid_until = %ld in backup_db_sessions(): %s (%d)",
-			        (long int)sess->valid_until, sqlite3_errmsg(db), sqlite3_errcode(db));
+			        (long int)sess->valid_until, db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 		// 3: remote_addr
-		if(sqlite3_bind_text(stmt, 3, sess->remote_addr, -1, SQLITE_STATIC) != SQLITE_OK)
+		if(db_bind_text_ref(stmt, 3, sess->remote_addr) != DB_OK)
 		{
 			log_err("Cannot bind remote_addr = %s in backup_db_sessions(): %s (%d)",
-			        sess->remote_addr, sqlite3_errmsg(db), sqlite3_errcode(db));
+			        sess->remote_addr, db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 		// 4: user_agent
-		if(sqlite3_bind_text(stmt, 4, sess->user_agent, -1, SQLITE_STATIC) != SQLITE_OK)
+		if(db_bind_text_ref(stmt, 4, sess->user_agent) != DB_OK)
 		{
 			log_err("Cannot bind user_agent = %s in backup_db_sessions(): %s (%d)",
-			        sess->user_agent, sqlite3_errmsg(db), sqlite3_errcode(db));
+			        sess->user_agent, db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 		// 5: sid
-		if(sqlite3_bind_text(stmt, 5, sess->sid, -1, SQLITE_STATIC) != SQLITE_OK)
+		if(db_bind_text_ref(stmt, 5, sess->sid) != DB_OK)
 		{
 			log_err("Cannot bind sid = %s in backup_db_sessions(): %s (%d)",
-			        sess->sid, sqlite3_errmsg(db), sqlite3_errcode(db));
+			        sess->sid, db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 		// 6: csrf
-		if(sqlite3_bind_text(stmt, 6, sess->csrf, -1, SQLITE_STATIC) != SQLITE_OK)
+		if(db_bind_text_ref(stmt, 6, sess->csrf) != DB_OK)
 		{
 			log_err("Cannot bind csrf = %s in backup_db_sessions(): %s (%d)",
-			        sess->csrf, sqlite3_errmsg(db), sqlite3_errcode(db));
+			        sess->csrf, db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 		// 7: tls_login
-		if(sqlite3_bind_int(stmt, 7, sess->tls.login ? 1 : 0) != SQLITE_OK)
+		if(db_bind_int(stmt, 7, sess->tls.login ? 1 : 0) != DB_OK)
 		{
 			log_err("Cannot bind tls_login = %d in backup_db_sessions(): %s (%d)",
-			        sess->tls.login ? 1 : 0, sqlite3_errmsg(db), sqlite3_errcode(db));
+			        sess->tls.login ? 1 : 0, db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 		// 8: tls_mixed
-		if(sqlite3_bind_int(stmt, 8, sess->tls.mixed ? 1 : 0) != SQLITE_OK)
+		if(db_bind_int(stmt, 8, sess->tls.mixed ? 1 : 0) != DB_OK)
 		{
 			log_err("Cannot bind tls_mixed = %d in backup_db_sessions(): %s (%d)",
-			        sess->tls.mixed ? 1 : 0, sqlite3_errmsg(db), sqlite3_errcode(db));
+			        sess->tls.mixed ? 1 : 0, db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 		// 9: app
-		if(sqlite3_bind_int(stmt, 9, sess->app ? 1 : 0) != SQLITE_OK)
+		if(db_bind_int(stmt, 9, sess->app ? 1 : 0) != DB_OK)
 		{
 			log_err("Cannot bind app = %d in backup_db_sessions(): %s (%d)",
-			        sess->app ? 1 : 0, sqlite3_errmsg(db), sqlite3_errcode(db));
+			        sess->app ? 1 : 0, db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 		// 10: cli
-		if(sqlite3_bind_int(stmt, 10, sess->cli ? 1 : 0) != SQLITE_OK)
+		if(db_bind_int(stmt, 10, sess->cli ? 1 : 0) != DB_OK)
 		{
 			log_err("Cannot bind cli = %d in backup_db_sessions(): %s (%d)",
-			        sess->cli ? 1 : 0, sqlite3_errmsg(db), sqlite3_errcode(db));
+			        sess->cli ? 1 : 0, db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 		// 11: x_forwarded_for
-		if(sqlite3_bind_text(stmt, 11, sess->x_forwarded_for, -1, SQLITE_STATIC) != SQLITE_OK)
+		if(db_bind_text_ref(stmt, 11, sess->x_forwarded_for) != DB_OK)
 		{
 			log_err("Cannot bind x_forwarded_for = %s in backup_db_sessions(): %s (%d)",
-			        sess->x_forwarded_for, sqlite3_errmsg(db), sqlite3_errcode(db));
+			        sess->x_forwarded_for, db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 
 		// Execute statement
-		if(sqlite3_step(stmt) != SQLITE_DONE)
+		if(db_step(stmt) != DB_DONE)
 		{
 			log_err("SQL error in backup_db_sessions(): %s (%d)",
-			        sqlite3_errmsg(db), sqlite3_errcode(db));
+			        db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 
 		// Reset statement
-		if(sqlite3_reset(stmt) != SQLITE_OK)
+		if(db_reset(stmt) != DB_OK)
 		{
 			log_err("SQL error in backup_db_sessions(): %s (%d)",
-			        sqlite3_errmsg(db), sqlite3_errcode(db));
+			        db_errmsg(db), db_errcode(db));
 			goto backup_db_sessions_end;
 		}
 
@@ -251,7 +251,7 @@ bool backup_db_sessions(struct session *sessions, const uint16_t max_sessions)
 
 backup_db_sessions_end:
 	// Finalize statement and close database connection
-	sqlite3_finalize(stmt);
+	db_finalize(stmt);
 	dbclose(&db);
 
 	return success;
@@ -266,36 +266,36 @@ bool restore_db_sessions(struct session *sessions, const uint16_t max_sessions)
 		return true;
 	}
 
-	sqlite3 *memdb = get_memdb();
+	db_conn *memdb = get_memdb();
 
 	// Remove expired sessions from database
 	SQL_bool(memdb, "DELETE FROM disk.session WHERE valid_until < unixepoch();");
 
 	// Get all sessions from database
-	sqlite3_stmt *stmt = NULL;
-	if(sqlite3_prepare_v2(memdb, "SELECT login_at, valid_until, remote_addr, user_agent, sid, csrf, tls_login, tls_mixed, app, cli, x_forwarded_for FROM disk.session;", -1, &stmt, 0) != SQLITE_OK)
+	db_stmt *stmt = NULL;
+	if((stmt = db_prepare(memdb, "SELECT login_at, valid_until, remote_addr, user_agent, sid, csrf, tls_login, tls_mixed, app, cli, x_forwarded_for FROM disk.session;", false)) == NULL)
 	{
 		log_err("SQL error in restore_db_sessions(): %s (%d)",
-		        sqlite3_errmsg(memdb), sqlite3_errcode(memdb));
+		        db_errmsg(memdb), db_errcode(memdb));
 		return false;
 	}
 
 	// Iterate over all still valid sessions
 	unsigned int i = 0;
-	while(sqlite3_step(stmt) == SQLITE_ROW && i < max_sessions)
+	while(db_step(stmt) == DB_ROW && i < max_sessions)
 	{
 		// Allocate memory for new session
 		struct session *sess = &sessions[i];
 
 		// Get values from database
 		// 1: login_at
-		sess->login_at = sqlite3_column_int64(stmt, 0);
+		sess->login_at = db_column_int64(stmt, 0);
 
 		// 2: valid_until
-		sess->valid_until = sqlite3_column_int64(stmt, 1);
+		sess->valid_until = db_column_int64(stmt, 1);
 
 		// 3: remote_addr
-		const char *remote_addr = (const char *)sqlite3_column_text(stmt, 2);
+		const char *remote_addr = (const char *)db_column_text(stmt, 2);
 		if(remote_addr != NULL)
 		{
 			strncpy(sess->remote_addr, remote_addr, sizeof(sess->remote_addr)-1);
@@ -303,7 +303,7 @@ bool restore_db_sessions(struct session *sessions, const uint16_t max_sessions)
 		}
 
 		// 4: user_agent
-		const char *user_agent = (const char *)sqlite3_column_text(stmt, 3);
+		const char *user_agent = (const char *)db_column_text(stmt, 3);
 		if(user_agent != NULL)
 		{
 			strncpy(sess->user_agent, user_agent, sizeof(sess->user_agent)-1);
@@ -311,7 +311,7 @@ bool restore_db_sessions(struct session *sessions, const uint16_t max_sessions)
 		}
 
 		// 5: sid
-		const char *sid = (const char *)sqlite3_column_text(stmt, 4);
+		const char *sid = (const char *)db_column_text(stmt, 4);
 		if(sid != NULL)
 		{
 			strncpy(sess->sid, sid, sizeof(sess->sid)-1);
@@ -319,7 +319,7 @@ bool restore_db_sessions(struct session *sessions, const uint16_t max_sessions)
 		}
 
 		// 6: csrf
-		const char *csrf = (const char *)sqlite3_column_text(stmt, 5);
+		const char *csrf = (const char *)db_column_text(stmt, 5);
 		if(csrf != NULL)
 		{
 			strncpy(sess->csrf, csrf, sizeof(sess->csrf)-1);
@@ -327,19 +327,19 @@ bool restore_db_sessions(struct session *sessions, const uint16_t max_sessions)
 		}
 
 		// 7: tls_login
-		sess->tls.login = sqlite3_column_int(stmt, 6) == 1 ? true : false;
+		sess->tls.login = db_column_int(stmt, 6) == 1 ? true : false;
 
 		// 8: tls_mixed
-		sess->tls.mixed = sqlite3_column_int(stmt, 7) == 1 ? true : false;
+		sess->tls.mixed = db_column_int(stmt, 7) == 1 ? true : false;
 
 		// 9: app
-		sess->app = sqlite3_column_int(stmt, 8) == 1 ? true : false;
+		sess->app = db_column_int(stmt, 8) == 1 ? true : false;
 
 		// 10: cli
-		sess->cli = sqlite3_column_int(stmt, 9) == 1 ? true : false;
+		sess->cli = db_column_int(stmt, 9) == 1 ? true : false;
 
 		// 11: x_forwarded_for
-		const char *x_forwarded_for = (const char *)sqlite3_column_text(stmt, 10);
+		const char *x_forwarded_for = (const char *)db_column_text(stmt, 10);
 		if(x_forwarded_for != NULL)
 		{
 			strncpy(sess->x_forwarded_for, x_forwarded_for, sizeof(sess->x_forwarded_for)-1);
@@ -356,12 +356,7 @@ bool restore_db_sessions(struct session *sessions, const uint16_t max_sessions)
 	         i, i == 1 ? "" : "s");
 
 	// Finalize statement
-	if(sqlite3_finalize(stmt) != SQLITE_OK)
-	{
-		log_err("SQL error in restore_db_sessions(): %s (%d)",
-		        sqlite3_errmsg(memdb), sqlite3_errcode(memdb));
-		return false;
-	}
+	db_finalize(stmt);
 
 	// Delete all sessions from database after restoring them
 	// We use secure_delete to make sure the sessions are really gone

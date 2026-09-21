@@ -21,7 +21,7 @@
 
 #define MAX_SEARCH_RESULTS 10000u
 
-static int search_table(struct ftl_conn *api, sqlite3 *db, const char *item,
+static int search_table(struct ftl_conn *api, db_conn *db, const char *item,
                         const enum gravity_list_type listtype,
                         char *ids, const unsigned int limit,
                         unsigned int *N, const bool partial, cJSON* json)
@@ -38,7 +38,7 @@ static int search_table(struct ftl_conn *api, sqlite3 *db, const char *item,
 
 	// Check domain against lists table
 	const char *sql_msg = NULL;
-	sqlite3_stmt *stmt = NULL;
+	db_stmt *stmt = NULL;
 	if(!gravityDB_readTable(db, listtype, item, &sql_msg, !partial, ids, &stmt))
 	{
 		return send_json_error(api, 500, // 500 Internal Server Error
@@ -104,7 +104,7 @@ static int search_table(struct ftl_conn *api, sqlite3 *db, const char *item,
 	return 200;
 }
 
-static int search_gravity(struct ftl_conn *api, sqlite3 *db, const char *punycode, cJSON *array,
+static int search_gravity(struct ftl_conn *api, db_conn *db, const char *punycode, cJSON *array,
                           cJSON **abp_patterns, const unsigned int limit, unsigned int *N,
                           const bool partial, const bool antigravity)
 {
@@ -239,7 +239,7 @@ int api_search(struct ftl_conn *api)
 	// whole gravity table, far too long to hold the SHM lock for, and on the
 	// shared connection a reload between two of them shows up as a spurious
 	// 400 or as an answer assembled from two different gravities
-	sqlite3 *db = gravityDB_open_RO();
+	db_conn *db = gravityDB_open_RO();
 	if(db == NULL)
 	{
 		free(punycode);

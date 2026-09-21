@@ -10,8 +10,8 @@
 #ifndef DATASTRUCTURE_H
 #define DATASTRUCTURE_H
 
-// Definition of sqlite3_stmt
-#include "database/sqlite3.h"
+// int64_t
+#include <stdint.h>
 
 // enum privacy_level
 #include "enums.h"
@@ -27,7 +27,7 @@ typedef struct {
 	// x86_64).
 	double response;
 	double timestamp;
-	sqlite3_int64 db;
+	int64_t db;
 	unsigned int domainID;
 	unsigned int clientID;
 	int upstreamID; // -1 if not forwarded

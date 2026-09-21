@@ -38,6 +38,8 @@
 #include "lua/ftl_lua.h"
 // gravity_parseList()
 #include "tools/gravity-parseList.h"
+// sqlite3_libversion(), sqlite3_compileoption_get()
+#include "database/sqlite3.h"
 // run_dhcp_discover()
 #include "tools/dhcp-discover.h"
 // mg_version()

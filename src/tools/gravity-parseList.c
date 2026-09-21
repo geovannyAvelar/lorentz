@@ -10,7 +10,8 @@
 
 #include "tools/gravity-parseList.h"
 #include "args.h"
-#include "database/sqlite3.h"
+// Database driver layer
+#include "database/db-driver.h"
 
 // A list of items of common local hostnames not to report as unusable
 // Some lists (i.e StevenBlack's) contain these as they are supposed to be used as HOST files
@@ -266,10 +267,9 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 	}
 
 	// Open output file (database)
-	sqlite3 *db = NULL;
-	sqlite3_stmt *stmt = NULL;
-	if(!checkOnly && sqlite3_open_v2(outfile, &db,
-	                                 SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, NULL) != SQLITE_OK)
+	db_conn *db = NULL;
+	db_stmt *stmt = NULL;
+	if(!checkOnly && (db = db_open(outfile, DB_OPEN_READWRITE | DB_OPEN_NOMUTEX)) == NULL)
 	{
 		printf("%s  %s Unable to open database file %s for writing\n", over, cross, outfile);
 		fclose(fpin);
@@ -284,11 +284,11 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 	// The OFF journaling mode disables the rollback journal completely. No
 	// rollback journal is ever created and hence there is never a rollback
 	// journal to delete.
-	if(!checkOnly && sqlite3_exec(db, "PRAGMA journal_mode = OFF;", NULL, NULL, NULL) != SQLITE_OK)
+	if(!checkOnly && db_exec(db, "PRAGMA journal_mode = OFF;") != DB_OK)
 	{
 		printf("%s  %s Unable to disable journaling in database file %s\n", over, cross, outfile);
 		fclose(fpin);
-		sqlite3_close(db);
+		db_close(db);
 		return EXIT_FAILURE;
 	}
 
@@ -304,11 +304,11 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 	// If a power loss (or operating system crash) happens, the database
 	// created here will never be swapped into action and is discarded at
 	// the next run of pihole -g.
-	if(!checkOnly && sqlite3_exec(db, "PRAGMA synchronous = OFF;", NULL, NULL, NULL) != SQLITE_OK)
+	if(!checkOnly && db_exec(db, "PRAGMA synchronous = OFF;") != DB_OK)
 	{
 		printf("%s  %s Unable to disable synchronous mode in database file %s\n", over, cross, outfile);
 		fclose(fpin);
-		sqlite3_close(db);
+		db_close(db);
 		return EXIT_FAILURE;
 	}
 
@@ -318,12 +318,12 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 	rewind(fpin);
 
 	// Begin transaction
-	if(!checkOnly && sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL) != SQLITE_OK)
+	if(!checkOnly && db_exec(db, "BEGIN TRANSACTION;") != DB_OK)
 	{
 		printf("%s  %s Unable to begin transaction to insert domains into database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
-		sqlite3_close(db);
+		db_close(db);
 		return EXIT_FAILURE;
 	}
 
@@ -331,26 +331,26 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 	const char *sql = antigravity ?
 		"INSERT INTO antigravity (domain, adlist_id) VALUES (?, ?);" :
 		"INSERT INTO gravity (domain, adlist_id) VALUES (?, ?);";
-	if(!checkOnly && sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK)
+	if(!checkOnly && (stmt = db_prepare(db, sql, false)) == NULL)
 	{
 		printf("%s  %s Unable to prepare SQL statement to insert domains into database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
 		return EXIT_FAILURE;
 	}
 
 	// Bind adlistID
 	const int adlistID = atoi(adlistIDstr);
-	if(!checkOnly && sqlite3_bind_int(stmt, 2, adlistID) != SQLITE_OK)
+	if(!checkOnly && db_bind_int(stmt, 2, adlistID) != DB_OK)
 	{
 		printf("%s  %s Unable to bind adlistID to SQL statement to insert domains into database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
-		sqlite3_finalize(stmt);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
 		return EXIT_FAILURE;
 	}
 
@@ -503,26 +503,26 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 
 				// else: Append domain to database using prepared statement
 				// Append domain to database using prepared statement
-				if(sqlite3_bind_text(stmt, 1, token, token_len, SQLITE_STATIC) != SQLITE_OK)
+				if(db_bind_text_ref(stmt, 1, token) != DB_OK)
 				{
 					printf("%s  %s Unable to bind domain to SQL statement to insert domains into database file %s\n",
 					over, cross, outfile);
 					fclose(fpin);
-					sqlite3_finalize(stmt);
-					sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-					sqlite3_close(db);
+					db_finalize(stmt);
+					db_exec(db, "ROLLBACK");
+					db_close(db);
 					return EXIT_FAILURE;
 				}
-				if(sqlite3_step(stmt) != SQLITE_DONE)
+				if(db_step(stmt) != DB_DONE)
 				{
 					printf("%s  %s Unable to insert domain into database file %s\n", over, cross, outfile);
 					fclose(fpin);
-					sqlite3_finalize(stmt);
-					sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-					sqlite3_close(db);
+					db_finalize(stmt);
+					db_exec(db, "ROLLBACK");
+					db_close(db);
 					return EXIT_FAILURE;
 				}
-				sqlite3_reset(stmt);
+				db_reset(stmt);
 				// Increment counter
 				exact_domains++;
 			}
@@ -538,26 +538,26 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 				}
 
 				// else: Append pattern to database using prepared statement
-				if(sqlite3_bind_text(stmt, 1, token, token_len, SQLITE_STATIC) != SQLITE_OK)
+				if(db_bind_text_ref(stmt, 1, token) != DB_OK)
 				{
 					printf("%s  %s Unable to bind domain to SQL statement to insert domains into database file %s\n",
 					over, cross, outfile);
 					fclose(fpin);
-					sqlite3_finalize(stmt);
-					sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-					sqlite3_close(db);
+					db_finalize(stmt);
+					db_exec(db, "ROLLBACK");
+					db_close(db);
 					return EXIT_FAILURE;
 				}
-				if(sqlite3_step(stmt) != SQLITE_DONE)
+				if(db_step(stmt) != DB_DONE)
 				{
 					printf("%s  %s Unable to insert domain into database file %s\n", over, cross, outfile);
 					fclose(fpin);
-					sqlite3_finalize(stmt);
-					sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-					sqlite3_close(db);
+					db_finalize(stmt);
+					db_exec(db, "ROLLBACK");
+					db_close(db);
 					return EXIT_FAILURE;
 				}
-				sqlite3_reset(stmt);
+				db_reset(stmt);
 				abp_domains++;
 			}
 			else
@@ -604,9 +604,9 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 							{
 								printf("%s  %s Unable to allocate memory for invalid domains list\n", over, cross);
 								fclose(fpin);
-								sqlite3_finalize(stmt);
-								sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-								sqlite3_close(db);
+								db_finalize(stmt);
+								db_exec(db, "ROLLBACK");
+								db_close(db);
 								return EXIT_FAILURE;
 							}
 							memcpy(invalid_domains_list[invalid_domains_list_len], token, token_len);
@@ -641,15 +641,7 @@ next_domain:
 	}
 
 	// Finalize SQL statement
-	if(sqlite3_finalize(stmt) != SQLITE_OK)
-	{
-		printf("%s  %s Unable to finalize SQL statement to insert domains into database file %s\n",
-		       over, cross, outfile);
-		fclose(fpin);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
-		return EXIT_FAILURE;
-	}
+	db_finalize(stmt);
 	stmt = NULL;
 
 	// Skip to end of parseList if we are only checking the list
@@ -661,13 +653,13 @@ next_domain:
 	if(abp_domains > 0)
 	{
 		sql = "INSERT OR REPLACE INTO info (property,value) VALUES ('abp_domains',1);";
-		if(sqlite3_exec(db, sql, NULL, NULL, NULL) != SQLITE_OK)
+		if(db_exec(db, sql) != DB_OK)
 		{
 			printf("%s  %s Unable to update database properties in database file %s\n",
 			       over, cross, outfile);
 			fclose(fpin);
-			sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-			sqlite3_close(db);
+			db_exec(db, "ROLLBACK");
+			db_close(db);
 			return EXIT_FAILURE;
 		}
 	}
@@ -682,84 +674,76 @@ next_domain:
 	// are no changes or the download failed), the `date_updated` column
 	// retains its existing value.
 	sql = "UPDATE adlist SET number = ?, invalid_domains = ?, abp_entries = ?, date_updated = CASE WHEN status = 1 THEN cast(strftime('%s', 'now') as int) ELSE date_updated END WHERE id = ?;";
-	if(sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK)
+	if((stmt = db_prepare(db, sql, false)) == NULL)
 	{
 		printf("%s  %s Unable to prepare SQL statement to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
 		return EXIT_FAILURE;
 	}
 
-	if(sqlite3_bind_int(stmt, 1, exact_domains + abp_domains) != SQLITE_OK)
+	if(db_bind_int(stmt, 1, exact_domains + abp_domains) != DB_OK)
 	{
 		printf("%s  %s Unable to bind number of entries to SQL statement to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
-		sqlite3_finalize(stmt);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
 		return EXIT_FAILURE;
 	}
-	if(sqlite3_bind_int(stmt, 2, invalid_domains) != SQLITE_OK)
+	if(db_bind_int(stmt, 2, invalid_domains) != DB_OK)
 	{
 		printf("%s  %s Unable to bind number of invalid domains to SQL statement to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
-		sqlite3_finalize(stmt);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
 		return EXIT_FAILURE;
 	}
-	if(sqlite3_bind_int(stmt, 3, abp_domains) != SQLITE_OK)
+	if(db_bind_int(stmt, 3, abp_domains) != DB_OK)
 	{
 		printf("%s  %s Unable to bind number of ABP entries to SQL statement to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
-		sqlite3_finalize(stmt);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
 		return EXIT_FAILURE;
 	}
-	if(sqlite3_bind_int(stmt, 4, adlistID) != SQLITE_OK)
+	if(db_bind_int(stmt, 4, adlistID) != DB_OK)
 	{
 		printf("%s  %s Unable to bind adlist ID to SQL statement to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
-		sqlite3_finalize(stmt);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
 		return EXIT_FAILURE;
 	}
-	if(sqlite3_step(stmt) != SQLITE_DONE)
+	if(db_step(stmt) != DB_DONE)
 	{
 		printf("%s  %s Unable to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
-		sqlite3_finalize(stmt);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
 		return EXIT_FAILURE;
 	}
-	if(sqlite3_finalize(stmt) != SQLITE_OK)
-	{
-		printf("%s  %s Unable to finalize SQL statement to update adlist properties in database file %s\n",
-		       over, cross, outfile);
-		fclose(fpin);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
-		return EXIT_FAILURE;
-	}
+	db_finalize(stmt);
 
 	// End transaction
-	if(sqlite3_exec(db, "END", NULL, NULL, NULL) != SQLITE_OK)
+	if(db_exec(db, "END") != DB_OK)
 	{
 		printf("%s  %s Unable to end transaction to insert domains into database file %s (database file may be corrupted)\n",
 		       over, cross, outfile);
 		fclose(fpin);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
 		return EXIT_FAILURE;
 	}
 
@@ -789,7 +773,7 @@ end_of_parseList:
 	// Close files
 	fclose(fpin);
 	if(db != NULL)
-		sqlite3_close(db);
+		db_close(db);
 
 	// Return success
 	return EXIT_SUCCESS;

@@ -10,14 +10,14 @@
 #ifndef MESSAGETABLE_H
 #define MESSAGETABLE_H
 
-#include "sqlite3.h"
+#include "db-driver.h"
 #include "webserver/cJSON/cJSON.h"
 
 int count_messages(void);
 bool format_messages(cJSON *array);
-bool create_message_table(sqlite3 *db);
+bool create_message_table(db_conn *db);
 bool delete_message(cJSON *ids, int *deleted);
-bool flush_message_table(sqlite3 *memdb);
+bool flush_message_table(db_conn *memdb);
 void logg_regex_warning(const char *type, const char *warning, const int dbindex, const char *regex);
 void logg_subnet_warning(const char *ip, const int matching_count, const char *matching_ids,
                          const int matching_bits, const char *chosen_match_text,

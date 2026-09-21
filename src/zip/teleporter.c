@@ -19,8 +19,8 @@
 #include "files.h"
 // DIR, dirent, opendir(), readdir(), closedir()
 #include <dirent.h>
-// sqlite3
-#include "database/sqlite3.h"
+// db_open_ex()
+#include "database/db-driver.h"
 // toml_parse()
 #include "config/tomlc17/tomlc17.h"
 // readFTLtoml()
@@ -78,30 +78,25 @@ static void set_hint(char *hint, const char *src)
 static bool create_teleporter_database(const char *filename, const char **tables, const unsigned int num_tables,
                                        void **buffer, size_t *size)
 {
-	// Open in-memory sqlite3 database
-	sqlite3 *db;
-	if(sqlite3_open_v2(":memory:", &db,
-	                   SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, NULL) != SQLITE_OK)
+	// Open in-memory database
+	const char *open_error = NULL;
+	db_conn *db = db_open_ex(":memory:", DB_OPEN_READWRITE | DB_OPEN_NOMUTEX, NULL, &open_error);
+	if(db == NULL)
 	{
-		log_warn("Failed to open in-memory database: %s", sqlite3_errmsg(db));
+		log_warn("Failed to open in-memory database: %s", open_error);
 		return false;
 	}
-	// Attach the FTL database to the in-memory database
-	char *err = NULL;
-	char attach_stmt[128] = "";
-
-	snprintf(attach_stmt, sizeof(attach_stmt), "ATTACH DATABASE '%s' AS \"disk\";", filename);
 
 	// Set busy timeout to access the database in a
 	// multi-threaded environment
-	if(sqlite3_busy_handler(db, sqliteBusyCallback, NULL) != SQLITE_OK)
-		log_warn("Failed to set busy timeout during creation of in-memory Teleporter database: %s", sqlite3_errmsg(db));
+	if(db_set_busy_handler(db, sqliteBusyCallback, NULL) != DB_OK)
+		log_warn("Failed to set busy timeout during creation of in-memory Teleporter database: %s", db_errmsg(db));
 
-	if(sqlite3_exec(db, attach_stmt, NULL, NULL, &err) != SQLITE_OK)
+	// Attach the FTL database to the in-memory database
+	if(db_attach(db, filename, "disk") != DB_OK)
 	{
-		log_warn("Failed to attach database \"%s\" to in-memory database: %s", filename, err);
-		sqlite3_free(err);
-		sqlite3_close(db);
+		log_warn("Failed to attach database \"%s\" to in-memory database: %s", filename, db_errmsg(db));
+		db_close(db);
 		return false;
 	}
 
@@ -112,26 +107,24 @@ static bool create_teleporter_database(const char *filename, const char **tables
 
 		// Create in-memory table copy
 		snprintf(create_stmt, sizeof(create_stmt), "CREATE TABLE \"%s\" AS SELECT * FROM disk.\"%s\";", tables[i], tables[i]);
-		if(sqlite3_exec(db, create_stmt, NULL, NULL, &err) != SQLITE_OK)
+		if(db_exec(db, create_stmt) != DB_OK)
 		{
-			log_warn("Failed to create %s in in-memory database: %s", tables[i], err);
-			sqlite3_free(err);
-			sqlite3_close(db);
+			log_warn("Failed to create %s in in-memory database: %s", tables[i], db_errmsg(db));
+			db_close(db);
 			return false;
 		}
 	}
 
 	// Detach the FTL database from the in-memory database
-	if(sqlite3_exec(db, "DETACH DATABASE 'disk';", NULL, NULL, &err) != SQLITE_OK)
+	if(db_detach(db, "disk") != DB_OK)
 	{
-		log_warn("Failed to detach FTL database from in-memory database: %s", err);
-		sqlite3_free(err);
-		sqlite3_close(db);
+		log_warn("Failed to detach FTL database from in-memory database: %s", db_errmsg(db));
+		db_close(db);
 		return false;
 	}
 
 	// Serialize the in-memory database to a buffer
-	// The sqlite3_serialize(D,S,P,F) interface returns a pointer to memory that
+	// The serialization interface returns a pointer to memory that
 	// is a serialization of the S database on database connection D. If P is
 	// not a NULL pointer, then the size of the database in bytes is written
 	// into *P.
@@ -139,22 +132,21 @@ static bool create_teleporter_database(const char *filename, const char **tables
 	// of the disk file. For an in-memory database or a "TEMP" database, the
 	// serialization is the same sequence of bytes which would be written to
 	// disk if that database where backed up to disk.
-	// The usual case is that sqlite3_serialize() copies the serialization of
-	// the database into memory obtained from sqlite3_malloc64() and returns a
-	// pointer to that memory. The caller is responsible for freeing the
-	// returned value to avoid a memory leak.
-	sqlite3_int64 isize = 0;
-	*buffer = sqlite3_serialize(db, "main", &isize, 0);
+	// The usual case is that the serialization is copied into memory owned by
+	// the database driver. The caller is responsible for releasing the
+	// returned buffer with db_free_buffer() to avoid a memory leak.
+	int64_t isize = 0;
+	*buffer = db_serialize(db, "main", &isize);
 	*size = isize;
 	if(*buffer == NULL)
 	{
-		log_warn("Failed to serialize in-memory database to buffer: %s", sqlite3_errmsg(db));
-		sqlite3_close(db);
+		log_warn("Failed to serialize in-memory database to buffer: %s", db_errmsg(db));
+		db_close(db);
 		return false;
 	}
 
 	// Close the in-memory database
-	sqlite3_close(db);
+	db_close(db);
 
 	return true;
 }
@@ -240,11 +232,11 @@ const char *generate_teleporter_zip(mz_zip_archive *zip, char filename[128], voi
 			file_path++;
 		if(!mz_zip_writer_add_mem_ex(zip, file_path, dbbuf, dbsize, file_comment, (uint16_t)strlen(file_comment), MZ_BEST_COMPRESSION, 0, 0))
 		{
-			sqlite3_free(dbbuf);
+			db_free_buffer(dbbuf);
 			mz_zip_writer_end(zip);
 			return "Failed to add gravity database to heap ZIP archive!";
 		}
-		sqlite3_free(dbbuf);
+		db_free_buffer(dbbuf);
 	}
 	else
 	{
@@ -261,11 +253,11 @@ const char *generate_teleporter_zip(mz_zip_archive *zip, char filename[128], voi
 			file_path++;
 		if(!mz_zip_writer_add_mem_ex(zip, file_path, dbbuf, dbsize, file_comment, (uint16_t)strlen(file_comment), MZ_BEST_COMPRESSION, 0, 0))
 		{
-			sqlite3_free(dbbuf);
+			db_free_buffer(dbbuf);
 			mz_zip_writer_end(zip);
 			return "Failed to add FTL database to heap ZIP archive!";
 		}
-		sqlite3_free(dbbuf);
+		db_free_buffer(dbbuf);
 	}
 	else
 	{
@@ -495,20 +487,20 @@ static const char *test_and_import_database(void *ptr, size_t size, const char *
 	}
 
 	// Check if the file is a valid SQlite3 database
-	// We do this by trying to deserialize the file into a SQLite3 database
-	// object. If this fails, the file is not a valid SQlite3 database.
-	sqlite3 *database = NULL;
-	if(sqlite3_open_v2(":memory:", &database,
-	                   SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, NULL) != SQLITE_OK)
+	// We do this by trying to deserialize the file into a database object. If
+	// this fails, the file is not a valid SQlite3 database. The buffer is read
+	// in place and never modified, it outlives the connection
+	const char *open_error = NULL;
+	db_conn *database = db_open_ex(":memory:", DB_OPEN_READWRITE | DB_OPEN_NOMUTEX, NULL, &open_error);
+	if(database == NULL)
 	{
-		set_hint(hint, sqlite3_errmsg(database));
-		sqlite3_close(database);
+		set_hint(hint, open_error);
 		return "Failed to open temporary SQLite3 database";
 	}
-	if(sqlite3_deserialize(database, "main", ptr, size, size, SQLITE_DESERIALIZE_READONLY) != SQLITE_OK)
+	if(db_deserialize(database, "main", ptr, size, true) != DB_OK)
 	{
-		set_hint(hint, sqlite3_errmsg(database));
-		sqlite3_close(database);
+		set_hint(hint, db_errmsg(database));
+		db_close(database);
 		return "File etc/pihole/gravity.db in ZIP archive is not a valid SQLite3 database file";
 	}
 
@@ -517,60 +509,53 @@ static const char *test_and_import_database(void *ptr, size_t size, const char *
 	// is "ok". If the database is invalid, the result of the PRAGMA
 	// integrity_check is a string describing the error.
 	// See https://www.sqlite.org/pragma.html#pragma_integrity_check
-	sqlite3_stmt *statement = NULL;
-	if(sqlite3_prepare_v2(database, "PRAGMA integrity_check;", -1, &statement, NULL) != SQLITE_OK)
+	db_stmt *statement = db_prepare(database, "PRAGMA integrity_check;", false);
+	if(statement == NULL)
 	{
-		set_hint(hint, sqlite3_errmsg(database));
-		sqlite3_finalize(statement);
-		sqlite3_close(database);
+		set_hint(hint, db_errmsg(database));
+		db_close(database);
 		return "Failed to prepare PRAGMA integrity_check statement";
 	}
-	if(sqlite3_step(statement) != SQLITE_ROW)
+	if(db_step(statement) != DB_ROW)
 	{
-		set_hint(hint, sqlite3_errmsg(database));
-		sqlite3_finalize(statement);
-		sqlite3_close(database);
+		set_hint(hint, db_errmsg(database));
+		db_finalize(statement);
+		db_close(database);
 		return "Failed to execute PRAGMA integrity_check statement";
 	}
-	if(strcmp((const char *)sqlite3_column_text(statement, 0), "ok") != 0)
+	if(strcmp(db_column_text(statement, 0), "ok") != 0)
 	{
-		set_hint(hint, (const char *)sqlite3_column_text(statement, 0));
-		sqlite3_finalize(statement);
-		sqlite3_close(database);
+		set_hint(hint, db_column_text(statement, 0));
+		db_finalize(statement);
+		db_close(database);
 		return "Database file in ZIP archive is not a valid SQLite3 database (integrity check failed)";
 	}
 	// Finalize statement
-	sqlite3_finalize(statement);
+	db_finalize(statement);
 
 	// When we reach this point, we know that the file is a valid SQLite3 database
 
 	// ATTACH the database file to the in-memory database
-	char *err = NULL;
-	char attach_stmt[128] = "";
-	snprintf(attach_stmt, sizeof(attach_stmt), "ATTACH DATABASE '%s' AS disk;", destination);
-	if(sqlite3_exec(database, attach_stmt, NULL, NULL, &err) != SQLITE_OK)
+	if(db_attach(database, destination, "disk") != DB_OK)
 	{
-		set_hint(hint, err);
-		sqlite3_free(err);
-		sqlite3_close(database);
+		set_hint(hint, db_errmsg(database));
+		db_close(database);
 		return "Failed to attach database file to in-memory SQLite3 database";
 	}
 
 	// Disable foreign key checks for import
-	if(sqlite3_exec(database, "PRAGMA foreign_keys = 0;", NULL, NULL, &err) != SQLITE_OK)
+	if(db_exec(database, "PRAGMA foreign_keys = 0;") != DB_OK)
 	{
-		set_hint(hint, err);
-		sqlite3_free(err);
-		sqlite3_close(database);
+		set_hint(hint, db_errmsg(database));
+		db_close(database);
 		return "Failed to disable foreign key checks for import";
 	}
 
 	// Start transaction
-	if(sqlite3_exec(database, "BEGIN TRANSACTION;", NULL, NULL, &err) != SQLITE_OK)
+	if(db_begin(database, DB_TX_DEFERRED) != DB_OK)
 	{
-		set_hint(hint, err);
-		sqlite3_free(err);
-		sqlite3_close(database);
+		set_hint(hint, db_errmsg(database));
+		db_close(database);
 		return "Failed to start transaction";
 	}
 
@@ -580,11 +565,10 @@ static const char *test_and_import_database(void *ptr, size_t size, const char *
 		char stmt[256] = "";
 		// Delete all rows in the disk table
 		snprintf(stmt, sizeof(stmt), "DELETE FROM disk.\"%s\";", tables[i]);
-		if(sqlite3_exec(database, stmt, NULL, NULL, &err) != SQLITE_OK)
+		if(db_exec(database, stmt) != DB_OK)
 		{
-			set_hint(hint, err);
-			sqlite3_free(err);
-			sqlite3_close(database);
+			set_hint(hint, db_errmsg(database));
+			db_close(database);
 			return "Failed to delete from disk database table";
 		}
 
@@ -594,11 +578,10 @@ static const char *test_and_import_database(void *ptr, size_t size, const char *
 		// on (accidental) deletion. This would cause the import to fail due to
 		// a unique constraint violation.
 		snprintf(stmt, sizeof(stmt), "INSERT OR REPLACE INTO disk.\"%s\" SELECT * FROM \"%s\";", tables[i], tables[i]);
-		if(sqlite3_exec(database, stmt, NULL, NULL, &err) != SQLITE_OK)
+		if(db_exec(database, stmt) != DB_OK)
 		{
-			set_hint(hint, err);
-			sqlite3_free(err);
-			sqlite3_close(database);
+			set_hint(hint, db_errmsg(database));
+			db_close(database);
 			return "Failed to insert into disk database table";
 		}
 
@@ -606,25 +589,23 @@ static const char *test_and_import_database(void *ptr, size_t size, const char *
 	}
 
 	// End transaction
-	if(sqlite3_exec(database, "END", NULL, NULL, &err) != SQLITE_OK)
+	if(db_commit(database) != DB_OK)
 	{
-		set_hint(hint, err);
-		sqlite3_free(err);
-		sqlite3_close(database);
+		set_hint(hint, db_errmsg(database));
+		db_close(database);
 		return "Failed to commit transaction";
 	}
 
 	// Detach the database file from the in-memory database
-	if(sqlite3_exec(database, "DETACH DATABASE disk;", NULL, NULL, &err) != SQLITE_OK)
+	if(db_detach(database, "disk") != DB_OK)
 	{
-		set_hint(hint, err);
-		sqlite3_free(err);
-		sqlite3_close(database);
+		set_hint(hint, db_errmsg(database));
+		db_close(database);
 		return "Failed to detach database file from in-memory SQLite3 database";
 	}
 
 	// Close the database
-	sqlite3_close(database);
+	db_close(database);
 
 	// Add event to reload gravity database
 	set_event(RELOAD_GRAVITY);

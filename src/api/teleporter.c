@@ -19,8 +19,8 @@
 #include "zip/gzip.h"
 // find_file_in_tar()
 #include "zip/tar.h"
-// sqlite3_open_v2()
-#include "database/sqlite3.h"
+// db_open_ex()
+#include "database/db-driver.h"
 // dbquery()
 #include "database/common.h"
 // MAX_ROTATIONS
@@ -505,34 +505,33 @@ static bool import_json_table(cJSON *json, struct teleporter_files *file)
 	log_info("import_json_table(%s): JSON array contains %d entr%s", file->filename, num_entries, num_entries == 1 ? "y" : "ies");
 
 	// Open database connection
-	sqlite3 *db = NULL;
-	if(sqlite3_open_v2(config.files.gravity.v.s, &db,
-	                   SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, NULL) != SQLITE_OK)
+	const char *open_error = NULL;
+	db_conn *db = db_open_ex(config.files.gravity.v.s, DB_OPEN_READWRITE | DB_OPEN_NOMUTEX, NULL, &open_error);
+	if(db == NULL)
 	{
 		log_err("import_json_table(%s): Unable to open database file \"%s\": %s",
-		        file->filename, config.files.database.v.s, sqlite3_errmsg(db));
-		sqlite3_close(db);
+		        file->filename, config.files.database.v.s, open_error);
 		return false;
 	}
 
 	// Set busy timeout to access the database in a
 	// multi-threaded environment
-	if(sqlite3_busy_handler(db, sqliteBusyCallback, NULL) != SQLITE_OK)
-		log_warn("import_json_table(%s): Unable to set busy handler: %s", file->filename, sqlite3_errmsg(db));
+	if(db_set_busy_handler(db, sqliteBusyCallback, NULL) != DB_OK)
+		log_warn("import_json_table(%s): Unable to set busy handler: %s", file->filename, db_errmsg(db));
 
 	// Disable foreign key constraints
-	if(sqlite3_exec(db, "PRAGMA foreign_keys = OFF;", NULL, NULL, NULL) != SQLITE_OK)
+	if(db_exec(db, "PRAGMA foreign_keys = OFF;") != DB_OK)
 	{
-		log_err("import_json_table(%s): Unable to disable foreign key constraints: %s", file->filename, sqlite3_errmsg(db));
-		sqlite3_close(db);
+		log_err("import_json_table(%s): Unable to disable foreign key constraints: %s", file->filename, db_errmsg(db));
+		db_close(db);
 		return false;
 	}
 
 	// Start transaction
-	if(sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL) != SQLITE_OK)
+	if(db_exec(db, "BEGIN TRANSACTION;") != DB_OK)
 	{
-		log_err("import_json_table(%s): Unable to start transaction: %s", file->filename, sqlite3_errmsg(db));
-		sqlite3_close(db);
+		log_err("import_json_table(%s): Unable to start transaction: %s", file->filename, db_errmsg(db));
+		db_close(db);
 		return false;
 	}
 
@@ -541,12 +540,12 @@ static bool import_json_table(cJSON *json, struct teleporter_files *file)
 	{
 		// Delete all entries in the table
 		log_debug(DEBUG_API, "import_json_table(%s): Deleting all entries from table \"%s\"", file->filename, file->table_name);
-		if(dbquery(db, "DELETE FROM \"%s\";", file->table_name) != SQLITE_OK)
+		if(dbquery(db, "DELETE FROM \"%s\";", file->table_name) != DB_OK)
 		{
 			log_err("import_json_table(%s): Unable to delete entries from table \"%s\": %s",
-			        file->filename, file->table_name, sqlite3_errmsg(db));
-			sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-			sqlite3_close(db);
+			        file->filename, file->table_name, db_errmsg(db));
+			db_exec(db, "ROLLBACK");
+			db_close(db);
 			return false;
 		}
 	}
@@ -554,69 +553,69 @@ static bool import_json_table(cJSON *json, struct teleporter_files *file)
 	{
 		// Delete all entries in the table of the same type
 		log_debug(DEBUG_API, "import_json_table(%s): Deleting all entries from table \"%s\" of type %d", file->filename, file->table_name, file->listtype);
-		if(dbquery(db, "DELETE FROM \"%s\" WHERE type = %d;", file->table_name, file->listtype) != SQLITE_OK)
+		if(dbquery(db, "DELETE FROM \"%s\" WHERE type = %d;", file->table_name, file->listtype) != DB_OK)
 		{
 			log_err("import_json_table(%s): Unable to delete entries from table \"%s\": %s",
-			        file->filename, file->table_name, sqlite3_errmsg(db));
-			sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-			sqlite3_close(db);
+			        file->filename, file->table_name, db_errmsg(db));
+			db_exec(db, "ROLLBACK");
+			db_close(db);
 			return false;
 		}
 	}
 
 	// Build dynamic SQL insertion statement
 	// "INSERT OR IGNORE INTO table (column1, column2, ...) VALUES (?, ?, ...);"
-	char *sql = sqlite3_mprintf("INSERT OR IGNORE INTO \"%s\" (", file->table_name);
+	char *sql = db->drv->mprintf("INSERT OR IGNORE INTO \"%s\" (", file->table_name);
 	for(size_t i = 0; i < file->num_columns; i++)
 	{
-		char *sql2 = sqlite3_mprintf("%s%s", sql, file->columns[i]);
-		sqlite3_free(sql);
+		char *sql2 = db->drv->mprintf("%s%s", sql, file->columns[i]);
+		db_free(db, sql);
 		sql = NULL;
 		if(i < file->num_columns - 1)
 		{
-			sql = sqlite3_mprintf("%s, ", sql2);
-			sqlite3_free(sql2);
+			sql = db->drv->mprintf("%s, ", sql2);
+			db_free(db, sql2);
 			sql2 = NULL;
 		}
 		else
 		{
-			sql = sqlite3_mprintf("%s) VALUES (", sql2);
-			sqlite3_free(sql2);
+			sql = db->drv->mprintf("%s) VALUES (", sql2);
+			db_free(db, sql2);
 			sql2 = NULL;
 		}
 	}
 	for(size_t i = 0; i < file->num_columns; i++)
 	{
-		char *sql2 = sqlite3_mprintf("%s?", sql);
-		sqlite3_free(sql);
+		char *sql2 = db->drv->mprintf("%s?", sql);
+		db_free(db, sql);
 		sql = NULL;
 		if(i < file->num_columns - 1)
 		{
-			sql = sqlite3_mprintf("%s, ", sql2);
-			sqlite3_free(sql2);
+			sql = db->drv->mprintf("%s, ", sql2);
+			db_free(db, sql2);
 			sql2 = NULL;
 		}
 		else
 		{
-			sql = sqlite3_mprintf("%s);", sql2);
-			sqlite3_free(sql2);
+			sql = db->drv->mprintf("%s);", sql2);
+			db_free(db, sql2);
 			sql2 = NULL;
 		}
 	}
 
 	// Prepare SQL statement
-	sqlite3_stmt *stmt = NULL;
-	if(sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK)
+	db_stmt *stmt = NULL;
+	if((stmt = db_prepare(db, sql, false)) == NULL)
 	{
-		log_err("Unable to prepare SQL statement: %s", sqlite3_errmsg(db));
-		sqlite3_free(sql);
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
+		log_err("Unable to prepare SQL statement: %s", db_errmsg(db));
+		db_free(db, sql);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
 		return false;
 	}
 
 	// Free allocated memory
-	sqlite3_free(sql);
+	db_free(db, sql);
 	sql = NULL;
 
 	// Iterate over all JSON objects
@@ -629,90 +628,84 @@ static bool import_json_table(cJSON *json, struct teleporter_files *file)
 			if(cJSON_IsString(json_value))
 			{
 				// Bind string value
-				if(sqlite3_bind_text(stmt, i + 1, json_value->valuestring, -1, SQLITE_STATIC) != SQLITE_OK)
+				if(db_bind_text_ref(stmt, i + 1, json_value->valuestring) != DB_OK)
 				{
-					log_err("Unable to bind text value to SQL statement: %s", sqlite3_errmsg(db));
-					sqlite3_finalize(stmt);
-					sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-					sqlite3_close(db);
+					log_err("Unable to bind text value to SQL statement: %s", db_errmsg(db));
+					db_finalize(stmt);
+					db_exec(db, "ROLLBACK");
+					db_close(db);
 					return false;
 				}
 			}
 			else if(cJSON_IsNumber(json_value))
 			{
 				// Bind integer value
-				if(sqlite3_bind_int(stmt, i + 1, json_value->valueint) != SQLITE_OK)
+				if(db_bind_int(stmt, i + 1, json_value->valueint) != DB_OK)
 				{
-					log_err("Unable to bind integer value to SQL statement: %s", sqlite3_errmsg(db));
-					sqlite3_finalize(stmt);
-					sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-					sqlite3_close(db);
+					log_err("Unable to bind integer value to SQL statement: %s", db_errmsg(db));
+					db_finalize(stmt);
+					db_exec(db, "ROLLBACK");
+					db_close(db);
 					return false;
 				}
 			}
 			else if(cJSON_IsNull(json_value))
 			{
 				// Bind NULL value
-				if(sqlite3_bind_null(stmt, i + 1) != SQLITE_OK)
+				if(db_bind_null(stmt, i + 1) != DB_OK)
 				{
-					log_err("Unable to bind NULL value to SQL statement: %s", sqlite3_errmsg(db));
-					sqlite3_finalize(stmt);
-					sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-					sqlite3_close(db);
+					log_err("Unable to bind NULL value to SQL statement: %s", db_errmsg(db));
+					db_finalize(stmt);
+					db_exec(db, "ROLLBACK");
+					db_close(db);
 					return false;
 				}
 			}
 			else
 			{
 				log_err("Unable to bind value to SQL statement: type = %X", (unsigned int)json_value->type & 0xFF);
-				sqlite3_finalize(stmt);
-				sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-				sqlite3_close(db);
+				db_finalize(stmt);
+				db_exec(db, "ROLLBACK");
+				db_close(db);
 				return false;
 			}
 		}
 
 		// Execute SQL statement
-		if(sqlite3_step(stmt) != SQLITE_DONE)
+		if(db_step(stmt) != DB_DONE)
 		{
-			log_err("Unable to execute SQL statement: %s", sqlite3_errmsg(db));
-			sqlite3_finalize(stmt);
-			sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-			sqlite3_close(db);
+			log_err("Unable to execute SQL statement: %s", db_errmsg(db));
+			db_finalize(stmt);
+			db_exec(db, "ROLLBACK");
+			db_close(db);
 			return false;
 		}
 
 		// Reset SQL statement
-		if(sqlite3_reset(stmt) != SQLITE_OK)
+		if(db_reset(stmt) != DB_OK)
 		{
-			log_err("Unable to reset SQL statement: %s", sqlite3_errmsg(db));
-			sqlite3_finalize(stmt);
-			sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-			sqlite3_close(db);
+			log_err("Unable to reset SQL statement: %s", db_errmsg(db));
+			db_finalize(stmt);
+			db_exec(db, "ROLLBACK");
+			db_close(db);
 			return false;
 		}
 	}
 
 	// Finalize SQL statement
-	if(sqlite3_finalize(stmt) != SQLITE_OK)
-	{
-		log_err("Unable to finalize SQL statement: %s", sqlite3_errmsg(db));
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
-		return false;
-	}
+	db_finalize(stmt);
 
 	// Commit transaction
-	if(sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL) != SQLITE_OK)
+	if(db_exec(db, "COMMIT;") != DB_OK)
 	{
-		log_err("Unable to commit transaction: %s", sqlite3_errmsg(db));
-		sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
-		sqlite3_close(db);
+		log_err("Unable to commit transaction: %s", db_errmsg(db));
+		db_exec(db, "ROLLBACK");
+		db_close(db);
 		return false;
 	}
 
 	// Close database connection
-	sqlite3_close(db);
+	db_close(db);
 
 	return true;
 }
