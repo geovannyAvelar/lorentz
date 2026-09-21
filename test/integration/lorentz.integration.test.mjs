@@ -128,6 +128,20 @@ for (const backend of backends) describe(`a fresh lorentz (${backend.name})`, ()
       assert.equal(body.lorentz.database.domains.denied.total, 2);
     });
 
+    if (backend.name === "postgres") it("reuses its connections to the server", async () => {
+      // Every API request opens a connection to the long-term database. With the
+      // pool they share a few sessions instead of opening one each
+      const sessions = async () => {
+        await sleep(1500); // the server publishes its statistics with a delay
+        return Number(await lorentz.longterm.query("SELECT sessions FROM pg_stat_database WHERE datname = current_database()"));
+      };
+      await api(lorentz, "/api/info/messages/count");
+      const before = await sessions();
+      for (let i = 0; i < 40; i++) assert.equal((await api(lorentz, "/api/info/messages/count")).status, 200);
+      const opened = (await sessions()) - before;
+      assert.ok(opened < 10, `${opened} sessions opened for 40 requests`);
+    });
+
     if (backend.name === "sqlite") it("reports the SQLite version", async () => {
       const { status, body } = await api(lorentz, "/api/info/version");
       assert.equal(status, 200);

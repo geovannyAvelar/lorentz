@@ -112,3 +112,24 @@ const char *db_uri_display(const char *uri)
 	}
 	return buf;
 }
+
+void db_driver_configure_pool(unsigned int max_idle, unsigned int idle_seconds)
+{
+#ifdef HAVE_POSTGRES
+	db_postgres_configure_pool(max_idle, idle_seconds);
+#else
+	(void)max_idle;
+	(void)idle_seconds;
+#endif
+}
+
+bool db_driver_pool_stats(struct db_pool_stats *stats)
+{
+#ifdef HAVE_POSTGRES
+	db_postgres_pool_stats(stats);
+	return true;
+#else
+	(void)stats;
+	return false;
+#endif
+}

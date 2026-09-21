@@ -482,6 +482,7 @@ void db_init(void)
 	// Only a SQLite file has a history of migrations to replay
 	if(db_uri_is_remote(config.files.database.v.s))
 	{
+		db_driver_configure_pool(config.database.pool.size.v.ui, config.database.pool.idleTimeout.v.ui);
 		db_init_server();
 		return;
 	}

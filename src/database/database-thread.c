@@ -136,6 +136,10 @@ static void log_used_memory(void)
 	double db_size_formatted = 0.0;
 	format_memory_size(db_size_prefix, st.st_size, &db_size_formatted);
 	log_debug(DEBUG_TIMING, "  SQLite3 (on-disk): %.2f %sB", db_size_formatted, db_size_prefix);
+	struct db_pool_stats pool;
+	if(db_uri_is_remote(config.files.database.v.s) && db_driver_pool_stats(&pool))
+		log_debug(DEBUG_TIMING, "  PostgreSQL pool: %u of %u idle, %"PRIu64" reused, %"PRIu64" opened, %"PRIu64" closed",
+		          pool.idle, pool.max_idle, pool.hits, pool.misses, pool.dropped);
 	log_debug(DEBUG_TIMING, "    Table sizes: "
 	         "domain_by_id=%"PRId64", client_by_id=%"PRId64", forward_by_id=%"PRId64", addinfo_by_id=%"PRId64", query_storage=%"PRId64"",
 	          get_row_count("domain_by_id", false),

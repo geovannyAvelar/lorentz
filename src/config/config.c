@@ -1063,6 +1063,23 @@ void initConfig(struct config *conf)
 	conf->database.network.expire.d.ui = conf->database.maxDBdays.d.ui;
 	conf->database.network.expire.c = validate_stub; // Only type-based checking
 
+	// sub-struct database.pool
+	conf->database.pool.size.k = "database.pool.size";
+	conf->database.pool.size.h = "How many idle connections should Lorentz keep open to a PostgreSQL long-term database (files.database is a postgresql:// URI) and reuse for its next requests? Opening a connection is much slower than reusing one, and Lorentz opens one for every API request. Set to 0 to close each connection right away. This setting has no effect on a SQLite database.";
+	conf->database.pool.size.a = cJSON_CreateStringReference("A positive integer value, or 0 to disable the pool");
+	conf->database.pool.size.t = CONF_UINT;
+	conf->database.pool.size.f = FLAG_RESTART_LORENTZ;
+	conf->database.pool.size.d.ui = 8;
+	conf->database.pool.size.c = validate_stub; // Only type-based checking
+
+	conf->database.pool.idleTimeout.k = "database.pool.idleTimeout";
+	conf->database.pool.idleTimeout.h = "How long may a connection stay idle in the pool before it is closed [seconds]? Keep this below the idle timeout of the database server, a pooler or a firewall in between. 0 keeps connections as long as they work.";
+	conf->database.pool.idleTimeout.a = cJSON_CreateStringReference("A positive integer value in seconds, or 0 for no limit");
+	conf->database.pool.idleTimeout.t = CONF_UINT;
+	conf->database.pool.idleTimeout.f = FLAG_RESTART_LORENTZ;
+	conf->database.pool.idleTimeout.d.ui = 300;
+	conf->database.pool.idleTimeout.c = validate_stub; // Only type-based checking
+
 
 	// struct webserver
 	conf->webserver.domain.k = "webserver.domain";

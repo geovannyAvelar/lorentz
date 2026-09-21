@@ -82,7 +82,7 @@ selects one; `PG_IMAGE` picks the server, `postgres:16-alpine` by default). The 
 built with `-DUSE_POSTGRESQL=ON`. It starts a server and the Lorentz containers on one Docker network, gives
 each Lorentz a schema of its own, and covers startup, DNS, the query log, the statistics of the long-term
 database, the network table, messages, Teleporter, sessions and a restart that has to keep the history. The
-scenario that upgrades an old SQLite database only exists for SQLite.
+scenario that upgrades an old SQLite database only exists for SQLite. One scenario checks that the connection pool works: 40 API requests may open only a few sessions on the server.
 
 ```bash
 LORENTZ_BACKENDS=postgres npm --prefix test/integration test

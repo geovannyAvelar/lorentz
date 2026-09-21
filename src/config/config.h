@@ -259,6 +259,10 @@ struct config {
 			struct conf_item parseARPcache;
 			struct conf_item expire;
 		} network;
+		struct {
+			struct conf_item size;
+			struct conf_item idleTimeout;
+		} pool;
 	} database;
 
 	struct {

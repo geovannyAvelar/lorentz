@@ -868,6 +868,25 @@
     #     A positive integer value in days
     expire = 91
 
+  [database.pool]
+    # How many idle connections should Lorentz keep open to a PostgreSQL long-term database
+    # (files.database is a postgresql:// URI) and reuse for its next requests? Opening a
+    # connection is much slower than reusing one, and Lorentz opens one for every API
+    # request. Set to 0 to close each connection right away. This setting has no effect on
+    # a SQLite database.
+    #
+    # Allowed values are:
+    #     A positive integer value, or 0 to disable the pool
+    size = 8
+
+    # How long may a connection stay idle in the pool before it is closed [seconds]? Keep
+    # this below the idle timeout of the database server, a pooler or a firewall in
+    # between. 0 keeps connections as long as they work.
+    #
+    # Allowed values are:
+    #     A positive integer value in seconds, or 0 for no limit
+    idleTimeout = 300
+
 [webserver]
   # On which domain is the web interface served?
   #

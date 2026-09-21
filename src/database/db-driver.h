@@ -201,6 +201,21 @@ extern const db_driver db_driver_sqlite;
 // Only available when built with USE_POSTGRESQL
 extern const db_driver db_driver_postgres;
 const db_driver *db_driver_get(const char *name);
+
+// Connection pool of the PostgreSQL driver. It keeps up to max_idle connections
+// that were closed and hands them out again for the same URI, for at most
+// idle_seconds (0: without a limit) after they were closed. A size of 0 (the
+// default) turns it off. The functions exist when built with USE_POSTGRESQL
+struct db_pool_stats {
+	unsigned int max_idle, idle;
+	uint64_t hits, misses, dropped;
+};
+void db_postgres_configure_pool(unsigned int max_idle, unsigned int idle_seconds);
+void db_postgres_pool_stats(struct db_pool_stats *stats);
+void db_postgres_pool_drain(void);
+// The same for whatever driver is in use, and nothing without PostgreSQL
+void db_driver_configure_pool(unsigned int max_idle, unsigned int idle_seconds);
+bool db_driver_pool_stats(struct db_pool_stats *stats);
 // Select the driver used by db_open(). Defaults to "sqlite"
 bool db_driver_select(const char *name);
 const db_driver *db_driver_active(void);

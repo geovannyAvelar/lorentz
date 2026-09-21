@@ -39,6 +39,8 @@
 //       lock_timeout, which set_busy_handler() sets.
 //     - glob_op() has no equivalent and returns NULL.
 //     - LIKE is rewritten to ILIKE: SQLite's LIKE ignores the case of ASCII letters.
+//     - close() can keep the connection in a pool, see "connection pool" below.
+//       It is off until db_postgres_configure_pool() sets a size.
 //     - The schema version is kept in the table lorentz_schema_version.
 //
 // Errors are reported through SQLSTATE codes, packed into the integer that
@@ -94,6 +96,7 @@ struct pg_stmt;
 typedef struct pg_conn {
 	db_conn base; // must be first
 	PGconn *pg;
+	char *uri; // what pg was opened with, the key of the pool
 	pthread_mutex_t lock;
 	struct pg_stmt *stmts; // statements that are alive
 	unsigned int stmt_seq;
@@ -268,6 +271,7 @@ static int pg_init(void)
 
 static void pg_shutdown(void)
 {
+	db_postgres_pool_drain();
 }
 
 static const char *pg_version(void)
@@ -307,10 +311,207 @@ static inline pg_stmt *st(db_stmt *stmt)
 	return (pg_stmt*)stmt;
 }
 
+/* ---- connection pool ----
+ *
+ * Opening a PostgreSQL connection costs a TCP handshake, authentication and a
+ * server process, and Lorentz opens one for every API request and every pass of
+ * its database thread. So close() does not always close: it keeps up to
+ * pool_max idle connections, and open() takes one of them if the URI is the
+ * same. A connection leaves the pool through a reset (DISCARD ALL, which also
+ * undoes what a caller SET, and the settings of open()), and is dropped when
+ * it was idle for too long or turns out to be dead. The pool is off until
+ * db_postgres_configure_pool() sets a size. */
+typedef struct pool_entry {
+	PGconn *pg;
+	char *uri;
+	time_t idle_since;
+	struct pool_entry *next;
+} pool_entry;
+
+static pthread_mutex_t pool_lock = PTHREAD_MUTEX_INITIALIZER;
+static pool_entry *pool_head = NULL; // most recently used first
+static unsigned int pool_max = 0, pool_idle_seconds = 300, pool_count = 0;
+static uint64_t pool_hits = 0, pool_misses = 0, pool_dropped = 0;
+
+static void pool_entry_free(pool_entry *e)
+{
+	PQfinish(e->pg);
+	free(e->uri);
+	free(e);
+}
+
+// Drop what has been idle for too long and what exceeds the size. pool_lock is held.
+// The entries to close are handed back, closing takes a round trip
+static pool_entry *pool_trim(const time_t now)
+{
+	pool_entry *doomed = NULL;
+	unsigned int kept = 0;
+	pool_entry **link = &pool_head;
+	while(*link != NULL)
+	{
+		pool_entry *e = *link;
+		if(kept >= pool_max || (pool_idle_seconds > 0 && now - e->idle_since > (time_t)pool_idle_seconds))
+		{
+			// Everything behind e is older than e
+			*link = NULL;
+			for(pool_entry *d = e; d != NULL; d = d->next)
+			{
+				pool_count--;
+				pool_dropped++;
+			}
+			doomed = e;
+			break;
+		}
+		kept++;
+		link = &e->next;
+	}
+	return doomed;
+}
+
+static void pool_free_list(pool_entry *e)
+{
+	while(e != NULL)
+	{
+		pool_entry *next = e->next;
+		pool_entry_free(e);
+		e = next;
+	}
+}
+
+void db_postgres_configure_pool(unsigned int max_idle, unsigned int idle_seconds)
+{
+	pthread_mutex_lock(&pool_lock);
+	pool_max = max_idle;
+	pool_idle_seconds = idle_seconds;
+	pool_entry *doomed = pool_trim(time(NULL));
+	pthread_mutex_unlock(&pool_lock);
+	pool_free_list(doomed);
+}
+
+void db_postgres_pool_stats(struct db_pool_stats *stats)
+{
+	pthread_mutex_lock(&pool_lock);
+	stats->max_idle = pool_max;
+	stats->idle = pool_count;
+	stats->hits = pool_hits;
+	stats->misses = pool_misses;
+	stats->dropped = pool_dropped;
+	pthread_mutex_unlock(&pool_lock);
+}
+
+// Close every idle connection
+void db_postgres_pool_drain(void)
+{
+	pthread_mutex_lock(&pool_lock);
+	pool_entry *all = pool_head;
+	pool_head = NULL;
+	pool_dropped += pool_count;
+	pool_count = 0;
+	pthread_mutex_unlock(&pool_lock);
+	pool_free_list(all);
+}
+
+// Take an idle connection for uri and reset it, NULL if there is none that works
+static PGconn *pool_get(const char *uri, const bool readonly)
+{
+	for(;;)
+	{
+		pthread_mutex_lock(&pool_lock);
+		pool_entry **link = &pool_head;
+		while(*link != NULL && strcmp((*link)->uri, uri) != 0)
+			link = &(*link)->next;
+		pool_entry *e = *link;
+		if(e != NULL)
+		{
+			*link = e->next;
+			pool_count--;
+		}
+		else if(pool_max > 0)
+			pool_misses++;
+		pthread_mutex_unlock(&pool_lock);
+
+		if(e == NULL)
+			return NULL;
+
+		// The server may have restarted or closed the connection while it was idle
+		PGconn *pg = e->pg;
+		e->pg = NULL;
+		pool_entry_free(e);
+		bool usable = PQstatus(pg) == CONNECTION_OK && PQtransactionStatus(pg) == PQTRANS_IDLE;
+		if(usable)
+		{
+			PGresult *res = PQexec(pg, "DISCARD ALL");
+			usable = PQresultStatus(res) == PGRES_COMMAND_OK;
+			PQclear(res);
+		}
+		if(usable)
+		{
+			PGresult *res = PQexec(pg, readonly ? "SET client_min_messages = warning; SET default_transaction_read_only = on"
+			                                    : "SET client_min_messages = warning");
+			usable = PQresultStatus(res) == PGRES_COMMAND_OK;
+			PQclear(res);
+		}
+		if(usable)
+		{
+			pthread_mutex_lock(&pool_lock);
+			pool_hits++;
+			pthread_mutex_unlock(&pool_lock);
+			return pg;
+		}
+
+		pthread_mutex_lock(&pool_lock);
+		pool_dropped++;
+		pthread_mutex_unlock(&pool_lock);
+		PQfinish(pg);
+		// Try the next idle connection of this URI
+	}
+}
+
+// Give a connection back. Returns false if the caller has to close it
+static bool pool_put(PGconn *pg, const char *uri)
+{
+	if(pool_max == 0 || uri == NULL || PQstatus(pg) != CONNECTION_OK)
+		return false;
+
+	// A caller that closed in the middle of a transaction leaves it behind
+	PGTransactionStatusType ts = PQtransactionStatus(pg);
+	if(ts == PQTRANS_INTRANS || ts == PQTRANS_INERROR)
+	{
+		PGresult *res = PQexec(pg, "ROLLBACK");
+		PQclear(res);
+		ts = PQtransactionStatus(pg);
+	}
+	if(ts != PQTRANS_IDLE)
+		return false;
+
+	pool_entry *e = calloc(1, sizeof(*e));
+	char *key = strdup(uri);
+	if(e == NULL || key == NULL)
+	{
+		free(e);
+		free(key);
+		return false;
+	}
+	e->pg = pg;
+	e->uri = key;
+	e->idle_since = time(NULL);
+
+	pthread_mutex_lock(&pool_lock);
+	e->next = pool_head;
+	pool_head = e;
+	pool_count++;
+	pool_entry *doomed = pool_trim(e->idle_since);
+	pthread_mutex_unlock(&pool_lock);
+	pool_free_list(doomed);
+	return true;
+}
+
 static void conn_free(pg_conn *c)
 {
-	PQfinish(c->pg);
+	if(!pool_put(c->pg, c->uri))
+		PQfinish(c->pg);
 	pthread_mutex_destroy(&c->lock);
+	free(c->uri);
 	free(c);
 }
 
@@ -333,7 +534,11 @@ static db_conn *pg_open(const char *uri, unsigned int flags, db_rc *rcp, const c
 		return NULL;
 	}
 
-	PGconn *pg = PQconnectdb(uri != NULL ? uri : "");
+	const bool readonly = (flags & DB_OPEN_READONLY) != 0;
+	PGconn *pg = uri != NULL ? pool_get(uri, readonly) : NULL;
+	const bool pooled = pg != NULL;
+	if(pg == NULL)
+		pg = PQconnectdb(uri != NULL ? uri : "");
 	if(pg == NULL || PQstatus(pg) != CONNECTION_OK)
 	{
 		snprintf(message, sizeof(message), "%s", pg != NULL ? PQerrorMessage(pg) : "out of memory");
@@ -360,18 +565,23 @@ static db_conn *pg_open(const char *uri, unsigned int flags, db_rc *rcp, const c
 	}
 	c->base.drv = &db_driver_postgres;
 	c->pg = pg;
+	c->uri = strdup(uri != NULL ? uri : "");
 	c->refs = 1;
 	c->readonly = (flags & DB_OPEN_READONLY) != 0;
 	pthread_mutex_init(&c->lock, NULL);
 	PQsetNoticeProcessor(pg, notice_processor, NULL);
 
-	// Notices are only interesting to the log callback
-	PGresult *res = PQexec(pg, "SET client_min_messages = warning");
-	PQclear(res);
-	if(c->readonly)
+	// Notices are only interesting to the log callback. A connection from the
+	// pool has been set up already
+	if(!pooled)
 	{
-		res = PQexec(pg, "SET default_transaction_read_only = on");
+		PGresult *res = PQexec(pg, "SET client_min_messages = warning");
 		PQclear(res);
+		if(c->readonly)
+		{
+			res = PQexec(pg, "SET default_transaction_read_only = on");
+			PQclear(res);
+		}
 	}
 
 	return &c->base;

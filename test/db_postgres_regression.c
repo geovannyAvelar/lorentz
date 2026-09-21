@@ -20,6 +20,7 @@
 #define _GNU_SOURCE
 #include "database/db-driver.h"
 
+#include <inttypes.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -793,6 +794,198 @@ static void test_baseline_schema(void)
 
 /* ---- main and stubs ---- */
 
+static int pool_worker_failures = 0;
+
+static void *pool_worker(void *arg)
+{
+	(void)arg;
+	for(int i = 0; i < 40; i++)
+	{
+		db_conn *c = db_open(url, DB_OPEN_READWRITE);
+		if(c == NULL || scalar(c, "SELECT 1") != 1)
+			__atomic_fetch_add(&pool_worker_failures, 1, __ATOMIC_RELAXED);
+		db_close(c);
+	}
+	return NULL;
+}
+
+/* ---- connection pool ---- */
+
+static struct db_pool_stats pool_stats(void)
+{
+	struct db_pool_stats st;
+	db_postgres_pool_stats(&st);
+	return st;
+}
+
+static void test_pool(void)
+{
+	// Off by default: closing closes
+	struct db_pool_stats st = pool_stats();
+	CHECK(st.max_idle == 0 && st.idle == 0);
+	db_conn *a = db_open(url, DB_OPEN_READWRITE);
+	CHECK(a != NULL);
+	db_close(a);
+	CHECK(pool_stats().idle == 0);
+
+	db_exec((a = open_pg()), "DROP TABLE IF EXISTS lz_test.pooled; CREATE TABLE lz_test.pooled (v int)");
+	db_close(a);
+
+	db_postgres_configure_pool(2, 0);
+	st = pool_stats();
+	CHECK(st.max_idle == 2 && st.idle == 0);
+	const uint64_t hits0 = st.hits, misses0 = st.misses;
+
+	// A closed connection is reused, the server side session is the same
+	a = db_open(url, DB_OPEN_READWRITE);
+	const int64_t pid = scalar(a, "SELECT pg_backend_pid()");
+	db_close(a);
+	CHECK(pool_stats().idle == 1);
+	db_conn *b = db_open(url, DB_OPEN_READWRITE);
+	CHECK(b != NULL && scalar(b, "SELECT pg_backend_pid()") == pid);
+	st = pool_stats();
+	CHECK(st.idle == 0 && st.hits == hits0 + 1 && st.misses == misses0 + 1);
+
+	// What a caller set, created or left behind does not survive the trip
+	CHECK(db_exec(b, "SET lock_timeout = '7s'") == DB_OK);
+	CHECK(db_exec(b, "SET search_path TO lz_test") == DB_OK);
+	CHECK(db_exec(b, "CREATE TEMP TABLE pooled_tmp (a int)") == DB_OK);
+	db_stmt *kept = db_prepare(b, "SELECT 1", true);
+	CHECK(kept != NULL);
+	db_finalize(kept);
+	db_close(b);
+	b = db_open(url, DB_OPEN_READWRITE);
+	CHECK(b != NULL && scalar(b, "SELECT pg_backend_pid()") == pid);
+	char *timeout = text_scalar(b, "SHOW lock_timeout");
+	CHECK(timeout != NULL && strcmp(timeout, "7s") != 0);
+	free(timeout);
+	CHECK(scalar(b, "SELECT count(*) FROM pg_class WHERE relname = 'pooled_tmp'") == 0);
+	// The statements of a connection do not collide with the ones of its predecessor
+	kept = db_prepare(b, "SELECT 2", true);
+	CHECK(kept != NULL && db_step(kept) == DB_ROW && db_column_int(kept, 0) == 2);
+	db_finalize(kept);
+
+	// An open transaction is rolled back, an aborted one too
+	CHECK(db_begin(b, DB_TX_DEFERRED) == DB_OK);
+	CHECK(db_exec(b, "INSERT INTO lz_test.pooled VALUES (1)") == DB_OK);
+	db_close(b);
+	b = db_open(url, DB_OPEN_READWRITE);
+	CHECK(b != NULL && scalar(b, "SELECT pg_backend_pid()") == pid);
+	CHECK(scalar(b, "SELECT count(*) FROM lz_test.pooled") == 0);
+	CHECK(db_begin(b, DB_TX_DEFERRED) == DB_OK);
+	CHECK(db_exec(b, "SELECT nosuchcolumn") == DB_ERROR);
+	db_close(b);
+	b = db_open(url, DB_OPEN_READWRITE);
+	CHECK(b != NULL && scalar(b, "SELECT pg_backend_pid()") == pid && scalar(b, "SELECT 5") == 5);
+	db_close(b);
+
+	// Read-only is a property of the way it was opened, not of the connection
+	db_conn *ro = db_open(url, DB_OPEN_READONLY);
+	CHECK(ro != NULL && scalar(ro, "SELECT pg_backend_pid()") == pid && db_is_readonly(ro));
+	CHECK(db_exec(ro, "INSERT INTO lz_test.pooled VALUES (1)") == DB_READONLY);
+	db_close(ro);
+	b = db_open(url, DB_OPEN_READWRITE);
+	CHECK(b != NULL && scalar(b, "SELECT pg_backend_pid()") == pid && !db_is_readonly(b));
+	CHECK(db_exec(b, "INSERT INTO lz_test.pooled VALUES (1)") == DB_OK);
+	CHECK(db_exec(b, "DELETE FROM lz_test.pooled") == DB_OK);
+	db_close(b);
+
+	// Another URI is another connection
+	char other[1024];
+	snprintf(other, sizeof(other), "%s%capplication_name=lz_pool_other", url, strchr(url, '?') != NULL ? '&' : '?');
+	b = db_open(other, DB_OPEN_READWRITE);
+	CHECK(b != NULL && scalar(b, "SELECT pg_backend_pid()") != pid);
+	char *app = text_scalar(b, "SHOW application_name");
+	CHECK(app != NULL && strcmp(app, "lz_pool_other") == 0);
+	free(app);
+	db_close(b);
+
+	// Only max_idle are kept
+	db_postgres_pool_drain();
+	CHECK(pool_stats().idle == 0);
+	db_conn *many[4];
+	for(int i = 0; i < 4; i++)
+		many[i] = db_open(url, DB_OPEN_READWRITE);
+	const uint64_t dropped1 = pool_stats().dropped;
+	for(int i = 0; i < 4; i++)
+		db_close(many[i]);
+	st = pool_stats();
+	CHECK(st.idle == 2 && st.dropped == dropped1 + 2);
+
+	// A connection that the server ended is not handed out
+	db_postgres_pool_drain();
+	a = db_open(url, DB_OPEN_READWRITE);
+	const int64_t dead = scalar(a, "SELECT pg_backend_pid()");
+	db_close(a);
+	CHECK(pool_stats().idle == 1);
+	db_conn *killer = db_open(other, DB_OPEN_READWRITE);
+	char sql[128];
+	snprintf(sql, sizeof(sql), "SELECT pg_terminate_backend(%" PRId64 ")", dead);
+	CHECK(killer != NULL && scalar(killer, sql) == 1);
+	usleep(200000);
+	const uint64_t hits1 = pool_stats().hits;
+	b = db_open(url, DB_OPEN_READWRITE);
+	CHECK(b != NULL && scalar(b, "SELECT pg_backend_pid()") != dead && scalar(b, "SELECT 1") == 1);
+	CHECK(pool_stats().hits == hits1);
+	db_close(b);
+	db_close(killer);
+
+	// A connection released while a statement lives goes back when the statement is gone
+	db_postgres_pool_drain();
+	a = db_open(url, DB_OPEN_READWRITE);
+	kept = db_prepare(a, "SELECT 3", false);
+	db_close_deferred(a);
+	CHECK(pool_stats().idle == 0);
+	CHECK(db_step(kept) == DB_ROW && db_column_int(kept, 0) == 3);
+	db_finalize(kept);
+	CHECK(pool_stats().idle == 1);
+
+	// Idle for too long
+	db_postgres_configure_pool(2, 1);
+	sleep(2);
+	const uint64_t dropped2 = pool_stats().dropped;
+	a = db_open(url, DB_OPEN_READWRITE);
+	CHECK(a != NULL && pool_stats().idle == 0);
+	db_close(a);
+	CHECK(pool_stats().idle == 1);
+	sleep(2);
+	db_postgres_configure_pool(2, 1); // trims what is old
+	CHECK(pool_stats().idle == 0 && pool_stats().dropped > dropped2);
+
+	// Shrinking closes the surplus, turning it off closes everything
+	db_postgres_configure_pool(3, 0);
+	for(int i = 0; i < 3; i++)
+		many[i] = db_open(url, DB_OPEN_READWRITE);
+	for(int i = 0; i < 3; i++)
+		db_close(many[i]);
+	CHECK(pool_stats().idle == 3);
+	db_postgres_configure_pool(1, 0);
+	CHECK(pool_stats().idle == 1);
+	db_postgres_configure_pool(0, 0);
+	CHECK(pool_stats().idle == 0);
+	a = db_open(url, DB_OPEN_READWRITE);
+	db_close(a);
+	CHECK(pool_stats().idle == 0);
+
+	// Threads take and give back connections
+	db_postgres_configure_pool(4, 0);
+	pthread_t threads[8];
+	for(int i = 0; i < 8; i++)
+		pthread_create(&threads[i], NULL, pool_worker, NULL);
+	for(int i = 0; i < 8; i++)
+		pthread_join(threads[i], NULL);
+	st = pool_stats();
+	CHECK(st.idle <= 4);
+	CHECK(pool_worker_failures == 0);
+	CHECK(st.hits > 0);
+	db_postgres_pool_drain();
+	db_postgres_configure_pool(0, 0);
+
+	a = open_pg();
+	db_exec(a, "DROP TABLE lz_test.pooled");
+	db_close(a);
+}
+
 int main(void)
 {
 	url = getenv("POSTGRES_URL");
@@ -830,6 +1023,7 @@ int main(void)
 	test_close_and_interrupt();
 	test_threads_and_big_results();
 	test_baseline_schema();
+	test_pool();
 
 	setup = db_open(url, DB_OPEN_READWRITE);
 	if(setup != NULL)
