@@ -125,6 +125,23 @@ LORENTZ_API_URL=http://127.0.0.1 npm run dev
 
 Lorentz has no documentation of its own yet. The documentation of the upstream project, Pi-hole FTLDNS, can be found [here](https://docs.pi-hole.net/ftldns/). It applies only where this fork did not change the behavior (see the notice at the top).
 
+## Docker images
+
+`.github/workflows/docker.yml` builds and publishes two images to GitHub Packages on every push to
+`main` and on version tags:
+
+- `ghcr.io/geovannyavelar/lorentz` - the daemon (root `Dockerfile`), a from-source, statically
+  linked build with the PostgreSQL driver enabled.
+- `ghcr.io/geovannyavelar/lorentz/web` - the web UI (`web/Dockerfile`).
+
+```bash
+docker run --network host ghcr.io/geovannyavelar/lorentz
+docker run -p 3000:3000 -e LORENTZ_API_URL=http://127.0.0.1:80 ghcr.io/geovannyavelar/lorentz/web
+```
+
+Both are also buildable locally with a plain `docker build`; see the `Dockerfile`s themselves and
+`web/README.md` for the details.
+
 ## Installation
 
 Lorentz (`lorentz`) is not installed by Pi-hole. Build it from source with `./build.sh`.
