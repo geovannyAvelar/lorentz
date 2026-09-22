@@ -56,12 +56,12 @@ bool db_driver_select(const char *name)
 	return true;
 }
 
-const db_driver *db_driver_active(void)
+const db_driver *__attribute__((pure)) db_driver_active(void)
 {
 	return active_driver;
 }
 
-bool db_uri_is_remote(const char *uri)
+bool __attribute__((pure)) db_uri_is_remote(const char *uri)
 {
 	return uri != NULL && (strncmp(uri, "postgresql://", 13) == 0 ||
 	                       strncmp(uri, "postgres://", 11) == 0);

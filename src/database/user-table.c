@@ -65,7 +65,7 @@ bool add_users_table(db_conn *db)
 
 /* ---- names ---- */
 
-const char *user_role_str(enum user_role role)
+const char *__attribute__((const)) user_role_str(enum user_role role)
 {
 	return role == USER_ROLE_VIEWER ? "viewer" : "admin";
 }
@@ -83,7 +83,7 @@ bool user_role_parse(const char *str, enum user_role *role)
 	return true;
 }
 
-const char *user_result_str(enum user_result result)
+const char *__attribute__((const)) user_result_str(enum user_result result)
 {
 	switch(result)
 	{

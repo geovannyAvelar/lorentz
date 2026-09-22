@@ -24,7 +24,14 @@ typedef struct db_conn { const db_driver *drv; } db_conn;
 typedef struct db_stmt { const db_driver *drv; } db_stmt;
 
 // Normalized result codes. Raw driver codes come from errcode()
+//
+// _DB_RC_SIGNED is never used: with every real enumerator at 0 or above, GCC
+// is free to give the type an unsigned underlying representation, which then
+// makes -Wformat-signedness reject the (correct) "%d"/"%i" that every
+// log_err() logging a db_rc value uses. One negative enumerator forces a
+// signed representation instead.
 typedef enum {
+	_DB_RC_SIGNED = -1,
 	DB_OK = 0,
 	DB_ROW,
 	DB_DONE,
@@ -218,9 +225,9 @@ void db_driver_configure_pool(unsigned int max_idle, unsigned int idle_seconds);
 bool db_driver_pool_stats(struct db_pool_stats *stats);
 // Select the driver used by db_open(). Defaults to "sqlite"
 bool db_driver_select(const char *name);
-const db_driver *db_driver_active(void);
+const db_driver *db_driver_active(void) __attribute__((pure));
 // Is the database location a connection URI (postgresql://...) rather than the path of a file?
-bool db_uri_is_remote(const char *uri);
+bool db_uri_is_remote(const char *uri) __attribute__((pure));
 // The driver that serves a location: PostgreSQL for a connection URI, SQLite otherwise
 const db_driver *db_driver_for_uri(const char *uri);
 // A location that can be written to a log: the password of a connection URI is masked

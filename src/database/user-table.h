@@ -60,9 +60,9 @@ struct user_changes {
 // Migration to database version 23: the users table and session.user_id
 bool add_users_table(db_conn *db);
 
-const char *user_role_str(enum user_role role);
+const char *user_role_str(enum user_role role) __attribute__((const));
 bool user_role_parse(const char *str, enum user_role *role);
-const char *user_result_str(enum user_result result);
+const char *user_result_str(enum user_result result) __attribute__((const));
 
 // Usernames are case insensitive and stored in lower case. This lowers name in
 // place if it is valid and reports whether it is

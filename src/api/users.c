@@ -395,6 +395,12 @@ int api_users(struct lorentz_conn *api)
 		case HTTP_GET: return get_user(api);
 		case HTTP_PUT: return update_user(api);
 		case HTTP_DELETE: return delete_user(api);
+		// Not allowed on a named account (api_request[] in api.c does not
+		// route these methods here in the first place)
+		case HTTP_UNKNOWN:
+		case HTTP_POST:
+		case HTTP_PATCH:
+		case HTTP_OPTIONS:
 		default: return 0;
 	}
 }

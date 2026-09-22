@@ -57,6 +57,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -1187,7 +1188,7 @@ static db_rc pg_bind_int(db_stmt *stmt, int idx, int value)
 static db_rc pg_bind_double(db_stmt *stmt, int idx, double value)
 {
 	char buf[64];
-	if(value != value)
+	if(isnan(value))
 		snprintf(buf, sizeof(buf), "NaN");
 	else if(value > 1.7976931348623157e308)
 		snprintf(buf, sizeof(buf), "Infinity");
@@ -1273,6 +1274,11 @@ static db_rc pg_bind_array(db_stmt *stmt, int idx, db_type type, const void *val
 			case DB_TYPE_DOUBLE:
 				o += (size_t)snprintf(lit + o, cap - o, "%.17g", ((const double*)values)[i]);
 				break;
+			// An array of blobs or nulls is not a meaningful bind, and text
+			// is already the fallback for anything that is not a number
+			case DB_TYPE_NULL:
+			case DB_TYPE_TEXT:
+			case DB_TYPE_BLOB:
 			default:
 			{
 				const char *text = ((const char *const*)values)[i];
@@ -1678,6 +1684,16 @@ static bool sb_escaped(strbuf *b, const char *s, char quote)
 // printf with the escapes SQL builders of SQLite use: %q doubles single
 // quotes, %Q also adds the quotes (NULL for a NULL pointer), %w doubles
 // double quotes
+//
+// The numeric conversions below build a small format string of their own
+// (spec) at runtime - one conversion at a time, always ending in the one
+// conversion character this switch already matched - and hand it to
+// snprintf(). GCC's own declaration of snprintf() carries a printf format
+// attribute, so passing it anything other than a string literal trips
+// -Wformat-nonliteral even though the format is well-formed; there is no
+// literal to give it, that being the entire point of a printf clone.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
 static char *pg_vmprintf(const char *fmt, va_list ap)
 {
 	strbuf b = { NULL, 0, 0 };
@@ -1813,6 +1829,7 @@ fail:
 	free(b.data);
 	return NULL;
 }
+#pragma GCC diagnostic pop
 
 static char *pg_mprintf(const char *fmt, ...)
 {

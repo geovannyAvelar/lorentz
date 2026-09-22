@@ -323,6 +323,38 @@ if(STATIC)
     set_target_properties(lorentz PROPERTIES LINK_SEARCH_START_STATIC ON)
     set_target_properties(lorentz PROPERTIES LINK_SEARCH_END_STATIC ON)
     target_link_libraries(lorentz -static-libgcc -static)
+    if(USE_POSTGRESQL)
+        # libpq.a alone is not self-contained: its object files call into
+        # libpq's own internal helper libraries (a hostname lookup, error
+        # message formatting, JSON parsing for OAuth, ...) that a dynamic
+        # link resolves through libpq.so itself, but a static one needs
+        # named explicitly. Built alongside libpq.a by every libpq-dev
+        # package this project builds against (Alpine, Debian, Ubuntu).
+        # The plain (non-PIC) libpgcommon.a/libpgport.a some distributions
+        # ship are missing pieces libpq.so itself relies on (e.g. the
+        # encoding-name tables) - built for a different purpose (a static
+        # client executable that never needed those pieces) than the shared
+        # library was. The "_shlib" variants are exactly the objects libpq.so
+        # was built from and are the complete set; a PIC .a links into a
+        # fully static executable without issue, just without that object's
+        # own optimization for it, so they are tried first
+        find_library(PostgreSQL_COMMON_LIBRARY NAMES pgcommon_shlib libpgcommon_shlib.a pgcommon libpgcommon.a)
+        find_library(PostgreSQL_PORT_LIBRARY NAMES pgport_shlib libpgport_shlib.a pgport libpgport.a)
+        if(NOT PostgreSQL_COMMON_LIBRARY OR NOT PostgreSQL_PORT_LIBRARY)
+            message(FATAL_ERROR "Static build with USE_POSTGRESQL needs libpgcommon(_shlib).a and libpgport(_shlib).a (part of libpq-dev)")
+        endif()
+        # libpgcommon/libpgport in turn call into OpenSSL for the password
+        # hashing and constant-time comparisons libpq itself uses - a second,
+        # unrelated TLS library from this project's own mbedTLS (used only
+        # by the webserver above), needed purely to satisfy libpq's own
+        # static link, not for any TLS Lorentz initiates itself.
+        find_library(PostgreSQL_SSL_LIBRARY NAMES ssl libssl.a)
+        find_library(PostgreSQL_CRYPTO_LIBRARY NAMES crypto libcrypto.a)
+        if(NOT PostgreSQL_SSL_LIBRARY OR NOT PostgreSQL_CRYPTO_LIBRARY)
+            message(FATAL_ERROR "Static build with USE_POSTGRESQL needs libssl.a and libcrypto.a (from OpenSSL)")
+        endif()
+        target_link_libraries(lorentz ${PostgreSQL_COMMON_LIBRARY} ${PostgreSQL_PORT_LIBRARY} ${PostgreSQL_SSL_LIBRARY} ${PostgreSQL_CRYPTO_LIBRARY})
+    endif()
     set(LIBRARY_SUFFIX "${CMAKE_STATIC_LIBRARY_SUFFIX}")
 else()
     find_library(LIBMATH m)
