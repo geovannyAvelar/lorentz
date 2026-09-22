@@ -1,11 +1,9 @@
 "use client";
 
 import useSWR from "swr";
+import { Card, Group, Text, Table, Button, Center, Loader, EmptyState, ScrollArea } from "@mantine/core";
 import { api, fetcher } from "@/lib/client";
 import { useSession } from "@/hooks/useSession";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Spinner, EmptyState } from "@/components/ui/Feedback";
 import type { NetworkResponse } from "@/lib/types";
 
 function timeString(unixSeconds: number) {
@@ -23,59 +21,64 @@ export default function NetworkPage() {
   }
 
   return (
-    <Card>
-      <CardHeader title="Network" description="Devices Lorentz has seen on your network" />
-      {isLoading || !data ? (
-        <div className="flex justify-center py-16">
-          <Spinner />
+    <Card withBorder padding={0}>
+      <Group justify="space-between" p="md">
+        <div>
+          <Text fw={600}>Network</Text>
+          <Text size="xs" c="dimmed">Devices Lorentz has seen on your network</Text>
         </div>
+      </Group>
+      {isLoading || !data ? (
+        <Center py="xl">
+          <Loader />
+        </Center>
       ) : data.devices.length === 0 ? (
-        <EmptyState title="No devices recorded yet" />
+        <EmptyState title="No devices recorded yet" p="xl" />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-border text-xs uppercase text-muted">
-              <tr>
-                <th className="px-4 py-2 font-medium">Device</th>
-                <th className="px-4 py-2 font-medium">IP addresses</th>
-                <th className="px-4 py-2 font-medium">Interface</th>
-                <th className="px-4 py-2 font-medium">Queries</th>
-                <th className="px-4 py-2 font-medium">Last seen</th>
-                {isAdmin && <th className="px-4 py-2 font-medium">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+        <ScrollArea>
+          <Table striped highlightOnHover verticalSpacing="xs">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Device</Table.Th>
+                <Table.Th>IP addresses</Table.Th>
+                <Table.Th>Interface</Table.Th>
+                <Table.Th>Queries</Table.Th>
+                <Table.Th>Last seen</Table.Th>
+                {isAdmin && <Table.Th>Actions</Table.Th>}
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
               {data.devices.map((device) => (
-                <tr key={device.id}>
-                  <td className="px-4 py-2">
-                    <div className="font-mono text-xs">{device.hwaddr}</div>
+                <Table.Tr key={device.id}>
+                  <Table.Td>
+                    <Text ff="monospace" size="xs">{device.hwaddr}</Text>
                     {device.macVendor && (
-                      <div className="text-xs text-muted">{device.macVendor}</div>
+                      <Text size="xs" c="dimmed">{device.macVendor}</Text>
                     )}
-                  </td>
-                  <td className="px-4 py-2 text-muted">
+                  </Table.Td>
+                  <Table.Td c="dimmed">
                     {device.ips.map((ip) => (
-                      <div key={ip.ip}>
+                      <Text size="sm" key={ip.ip}>
                         {ip.ip}
-                        {ip.name && <span className="ml-1 text-xs">({ip.name})</span>}
-                      </div>
+                        {ip.name && <Text span size="xs"> ({ip.name})</Text>}
+                      </Text>
                     ))}
-                  </td>
-                  <td className="px-4 py-2 text-muted">{device.interface}</td>
-                  <td className="px-4 py-2 text-muted">{device.numQueries.toLocaleString()}</td>
-                  <td className="px-4 py-2 text-muted">{timeString(device.lastQuery)}</td>
+                  </Table.Td>
+                  <Table.Td c="dimmed">{device.interface}</Table.Td>
+                  <Table.Td c="dimmed">{device.numQueries.toLocaleString()}</Table.Td>
+                  <Table.Td c="dimmed">{timeString(device.lastQuery)}</Table.Td>
                   {isAdmin && (
-                    <td className="px-4 py-2">
-                      <Button size="sm" variant="danger" onClick={() => remove(device.id, device.hwaddr)}>
+                    <Table.Td>
+                      <Button size="xs" color="red" variant="light" onClick={() => remove(device.id, device.hwaddr)}>
                         Delete
                       </Button>
-                    </td>
+                    </Table.Td>
                   )}
-                </tr>
+                </Table.Tr>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </Table.Tbody>
+          </Table>
+        </ScrollArea>
       )}
     </Card>
   );

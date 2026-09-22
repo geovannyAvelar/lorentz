@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import { Button, Badge, Group, UnstyledButton, Text } from "@mantine/core";
+import { IconLogout } from "@tabler/icons-react";
 import type { Session } from "@/lib/types";
 
 export function Topbar({ session }: { session: Session | undefined }) {
@@ -25,21 +25,29 @@ export function Topbar({ session }: { session: Session | undefined }) {
       : "";
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-4">
-      <div />
-      <div className="flex items-center gap-3">
+    <Group h="100%" px="md" justify="space-between">
+      <Text fw={600}>Lorentz</Text>
+      <Group gap="sm">
         {label && (
-          <Link href="/account" className="flex items-center gap-2 text-sm text-foreground hover:underline">
-            {label}
-            <Badge tone={session?.user?.role === "viewer" ? "neutral" : "accent"}>
-              {session?.user?.role ?? "admin"}
-            </Badge>
-          </Link>
+          <UnstyledButton component={Link} href="/account">
+            <Group gap="xs">
+              <Text size="sm">{label}</Text>
+              <Badge color={session?.user?.role === "viewer" ? "gray" : "blue"}>
+                {session?.user?.role ?? "admin"}
+              </Badge>
+            </Group>
+          </UnstyledButton>
         )}
-        <Button size="sm" onClick={logout} loading={loggingOut}>
+        <Button
+          size="xs"
+          variant="default"
+          leftSection={<IconLogout size={16} />}
+          onClick={logout}
+          loading={loggingOut}
+        >
           Sign out
         </Button>
-      </div>
-    </header>
+      </Group>
+    </Group>
   );
 }

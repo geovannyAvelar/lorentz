@@ -396,7 +396,9 @@ static int get_session_object(struct lorentz_conn *api, cJSON *json, const int u
 {
 	cJSON *session = JSON_NEW_OBJECT();
 
-	// Authentication not needed
+	// Authentication not needed. No account is asking, so this counts as
+	// admin, same as a login with the configured password below -
+	// api_role_allows() in api/users.c already treats a null user that way
 	if(user_id == API_AUTH_EMPTYPASS)
 	{
 		JSON_ADD_BOOL_TO_OBJECT(session, "valid", true);
@@ -404,6 +406,7 @@ static int get_session_object(struct lorentz_conn *api, cJSON *json, const int u
 		JSON_ADD_NULL_TO_OBJECT(session, "sid");
 		JSON_ADD_NUMBER_TO_OBJECT(session, "validity", -1);
 		JSON_REF_STR_IN_OBJECT(session, "message", api->message);
+		JSON_ADD_NULL_TO_OBJECT(session, "user");
 		JSON_ADD_ITEM_TO_OBJECT(json, "session", session);
 		return 0;
 	}
@@ -430,6 +433,7 @@ static int get_session_object(struct lorentz_conn *api, cJSON *json, const int u
 	JSON_ADD_NULL_TO_OBJECT(session, "sid");
 	JSON_ADD_NUMBER_TO_OBJECT(session, "validity", -1);
 	JSON_REF_STR_IN_OBJECT(session, "message", api->message);
+	JSON_ADD_NULL_TO_OBJECT(session, "user");
 	JSON_ADD_ITEM_TO_OBJECT(json, "session", session);
 	return 0;
 }

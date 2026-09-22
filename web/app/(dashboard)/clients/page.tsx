@@ -2,13 +2,24 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import {
+  Card,
+  Group,
+  Stack,
+  Text,
+  Table,
+  Button,
+  Modal,
+  TextInput,
+  Textarea,
+  Alert,
+  Center,
+  Loader,
+  EmptyState,
+} from "@mantine/core";
+import { IconPlus, IconAlertCircle } from "@tabler/icons-react";
 import { api, ApiError, fetcher } from "@/lib/client";
 import { useSession } from "@/hooks/useSession";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Input, Textarea, Labeled } from "@/components/ui/Field";
-import { Modal } from "@/components/ui/Modal";
-import { ErrorBanner, Spinner, EmptyState } from "@/components/ui/Feedback";
 import { GroupPicker } from "@/components/GroupPicker";
 import type { Client, ClientsResponse } from "@/lib/types";
 
@@ -25,55 +36,67 @@ export default function ClientsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader
-          title="Clients"
-          description="Clients configured here get non-default group assignments"
-          actions={isAdmin && <Button size="sm" variant="primary" onClick={() => setAdding(true)}>Add client</Button>}
-        />
-        {isLoading || !data ? (
-          <div className="flex justify-center py-16">
-            <Spinner />
+    <Stack>
+      <Card withBorder padding={0}>
+        <Group justify="space-between" p="md">
+          <div>
+            <Text fw={600}>Clients</Text>
+            <Text size="xs" c="dimmed">
+              Clients configured here get non-default group assignments
+            </Text>
           </div>
+          {isAdmin && (
+            <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => setAdding(true)}>
+              Add client
+            </Button>
+          )}
+        </Group>
+        {isLoading || !data ? (
+          <Center py="xl">
+            <Loader />
+          </Center>
         ) : data.clients.length === 0 ? (
-          <EmptyState title="No clients configured yet" description="Every client uses the default group until it is added here" />
+          <EmptyState
+            title="No clients configured yet"
+            description="Every client uses the default group until it is added here"
+            p="xl"
+          />
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-border text-xs uppercase text-muted">
-              <tr>
-                <th className="px-4 py-2 font-medium">Client</th>
-                <th className="px-4 py-2 font-medium">Comment</th>
-                <th className="px-4 py-2 font-medium">Groups</th>
-                {isAdmin && <th className="px-4 py-2 font-medium">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+          <Table striped highlightOnHover verticalSpacing="xs">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Client</Table.Th>
+                <Table.Th>Comment</Table.Th>
+                <Table.Th>Groups</Table.Th>
+                {isAdmin && <Table.Th>Actions</Table.Th>}
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
               {data.clients.map((client) => (
-                <tr key={client.id}>
-                  <td className="px-4 py-2 font-mono text-xs">{client.client}</td>
-                  <td className="px-4 py-2 text-muted">{client.comment || "—"}</td>
-                  <td className="px-4 py-2 text-muted">{client.groups.length}</td>
+                <Table.Tr key={client.id}>
+                  <Table.Td ff="monospace" fz="xs">{client.client}</Table.Td>
+                  <Table.Td c="dimmed">{client.comment || "—"}</Table.Td>
+                  <Table.Td c="dimmed">{client.groups.length}</Table.Td>
                   {isAdmin && (
-                    <td className="px-4 py-2">
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={() => setEditing(client)}>
+                    <Table.Td>
+                      <Group gap="xs" wrap="nowrap">
+                        <Button size="xs" variant="default" onClick={() => setEditing(client)}>
                           Edit
                         </Button>
-                        <Button size="sm" variant="danger" onClick={() => remove(client)}>
+                        <Button size="xs" color="red" variant="light" onClick={() => remove(client)}>
                           Delete
                         </Button>
-                      </div>
-                    </td>
+                      </Group>
+                    </Table.Td>
                   )}
-                </tr>
+                </Table.Tr>
               ))}
-            </tbody>
-          </table>
+            </Table.Tbody>
+          </Table>
         )}
       </Card>
 
-      <AddClientModal open={adding} onClose={() => setAdding(false)} onSaved={mutate} />
+      <AddClientModal opened={adding} onClose={() => setAdding(false)} onSaved={mutate} />
       {editing && (
         <EditClientModal
           client={editing}
@@ -84,16 +107,16 @@ export default function ClientsPage() {
           }}
         />
       )}
-    </div>
+    </Stack>
   );
 }
 
 function AddClientModal({
-  open,
+  opened,
   onClose,
   onSaved,
 }: {
-  open: boolean;
+  opened: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -132,25 +155,32 @@ function AddClientModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Add client">
-      <div className="flex flex-col gap-3">
-        <Labeled label="Client" hint="IP, MAC, hostname or interface (name:eth0). One per line for several at once">
-          <Textarea value={client} onChange={(e) => setClient(e.target.value)} rows={3} required />
-        </Labeled>
-        <Labeled label="Comment">
-          <Input value={comment} onChange={(e) => setComment(e.target.value)} />
-        </Labeled>
-        <Labeled label="Groups">
-          <GroupPicker value={groups} onChange={setGroups} />
-        </Labeled>
-        <ErrorBanner>{error}</ErrorBanner>
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={submit}>
+    <Modal opened={opened} onClose={onClose} title="Add client">
+      <Stack>
+        <Textarea
+          label="Client"
+          description="IP, MAC, hostname or interface (name:eth0). One per line for several at once"
+          value={client}
+          onChange={(e) => setClient(e.currentTarget.value)}
+          rows={3}
+          required
+        />
+        <TextInput label="Comment" value={comment} onChange={(e) => setComment(e.currentTarget.value)} />
+        <GroupPicker value={groups} onChange={setGroups} />
+        {error && (
+          <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            {error}
+          </Alert>
+        )}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button loading={saving} onClick={submit}>
             Add
           </Button>
-        </div>
-      </div>
+        </Group>
+      </Stack>
     </Modal>
   );
 }
@@ -186,22 +216,24 @@ function EditClientModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={client.client}>
-      <div className="flex flex-col gap-3">
-        <Labeled label="Comment">
-          <Input value={comment} onChange={(e) => setComment(e.target.value)} />
-        </Labeled>
-        <Labeled label="Groups">
-          <GroupPicker value={groups} onChange={setGroups} />
-        </Labeled>
-        <ErrorBanner>{error}</ErrorBanner>
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={submit}>
+    <Modal opened onClose={onClose} title={client.client}>
+      <Stack>
+        <TextInput label="Comment" value={comment} onChange={(e) => setComment(e.currentTarget.value)} />
+        <GroupPicker value={groups} onChange={setGroups} />
+        {error && (
+          <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            {error}
+          </Alert>
+        )}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button loading={saving} onClick={submit}>
             Save
           </Button>
-        </div>
-      </div>
+        </Group>
+      </Stack>
     </Modal>
   );
 }

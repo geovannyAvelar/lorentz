@@ -3,7 +3,10 @@
 A [Next.js](https://nextjs.org) admin console for a Lorentz instance: dashboard,
 query log, domains, groups, lists, clients, network devices and user accounts.
 Built on the REST API in `../src/api` (see `../src/api/docs` for the full
-reference, served by Lorentz itself at `/api/docs`).
+reference, served by Lorentz itself at `/api/docs`). The design system is
+[Mantine](https://mantine.dev) - components come straight from `@mantine/core`,
+with `lib/theme.ts` holding the handful of theme tweaks (primary color, font,
+default radius) and no other styling layer alongside it.
 
 ## Architecture
 

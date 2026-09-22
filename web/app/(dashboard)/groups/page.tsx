@@ -2,23 +2,34 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import {
+  Card,
+  Group,
+  Stack,
+  Text,
+  Table,
+  Badge,
+  Button,
+  Modal,
+  TextInput,
+  Checkbox,
+  Alert,
+  Center,
+  Loader,
+  EmptyState,
+} from "@mantine/core";
+import { IconPlus, IconAlertCircle } from "@tabler/icons-react";
 import { api, ApiError, fetcher } from "@/lib/client";
 import { useSession } from "@/hooks/useSession";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { Input, Checkbox, Labeled } from "@/components/ui/Field";
-import { Modal } from "@/components/ui/Modal";
-import { ErrorBanner, Spinner, EmptyState } from "@/components/ui/Feedback";
-import type { Group, GroupsResponse } from "@/lib/types";
+import type { Group as GroupEntry, GroupsResponse } from "@/lib/types";
 
 export default function GroupsPage() {
   const { isAdmin } = useSession();
   const { data, isLoading, mutate } = useSWR<GroupsResponse>("/groups", fetcher);
   const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState<Group | null>(null);
+  const [editing, setEditing] = useState<GroupEntry | null>(null);
 
-  async function toggle(group: Group) {
+  async function toggle(group: GroupEntry) {
     await api.put(`/groups/${encodeURIComponent(group.name)}`, {
       name: group.name,
       comment: group.comment,
@@ -27,69 +38,77 @@ export default function GroupsPage() {
     mutate();
   }
 
-  async function remove(group: Group) {
+  async function remove(group: GroupEntry) {
     if (!confirm(`Delete group "${group.name}"? Domains, lists and clients keep their other groups.`)) return;
     await api.del(`/groups/${encodeURIComponent(group.name)}`);
     mutate();
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader
-          title="Groups"
-          description="Group 0 is the default group, applied to every client that has no group of its own"
-          actions={isAdmin && <Button size="sm" variant="primary" onClick={() => setAdding(true)}>Add group</Button>}
-        />
-        {isLoading || !data ? (
-          <div className="flex justify-center py-16">
-            <Spinner />
+    <Stack>
+      <Card withBorder padding={0}>
+        <Group justify="space-between" p="md">
+          <div>
+            <Text fw={600}>Groups</Text>
+            <Text size="xs" c="dimmed">
+              Group 0 is the default group, applied to every client that has no group of its own
+            </Text>
           </div>
+          {isAdmin && (
+            <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => setAdding(true)}>
+              Add group
+            </Button>
+          )}
+        </Group>
+        {isLoading || !data ? (
+          <Center py="xl">
+            <Loader />
+          </Center>
         ) : data.groups.length === 0 ? (
-          <EmptyState title="No groups defined yet" />
+          <EmptyState title="No groups defined yet" p="xl" />
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-border text-xs uppercase text-muted">
-              <tr>
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">Comment</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                {isAdmin && <th className="px-4 py-2 font-medium">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+          <Table striped highlightOnHover verticalSpacing="xs">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Name</Table.Th>
+                <Table.Th>Comment</Table.Th>
+                <Table.Th>Status</Table.Th>
+                {isAdmin && <Table.Th>Actions</Table.Th>}
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
               {data.groups.map((group) => (
-                <tr key={group.name}>
-                  <td className="px-4 py-2 font-medium">{group.name}</td>
-                  <td className="px-4 py-2 text-muted">{group.comment || "—"}</td>
-                  <td className="px-4 py-2">
-                    <Badge tone={group.enabled ? "success" : "neutral"}>
+                <Table.Tr key={group.name}>
+                  <Table.Td fw={500}>{group.name}</Table.Td>
+                  <Table.Td c="dimmed">{group.comment || "—"}</Table.Td>
+                  <Table.Td>
+                    <Badge color={group.enabled ? "green" : "gray"}>
                       {group.enabled ? "enabled" : "disabled"}
                     </Badge>
-                  </td>
+                  </Table.Td>
                   {isAdmin && (
-                    <td className="px-4 py-2">
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={() => toggle(group)}>
+                    <Table.Td>
+                      <Group gap="xs" wrap="nowrap">
+                        <Button size="xs" variant="default" onClick={() => toggle(group)}>
                           {group.enabled ? "Disable" : "Enable"}
                         </Button>
-                        <Button size="sm" onClick={() => setEditing(group)}>
+                        <Button size="xs" variant="default" onClick={() => setEditing(group)}>
                           Edit
                         </Button>
-                        <Button size="sm" variant="danger" onClick={() => remove(group)}>
+                        <Button size="xs" color="red" variant="light" onClick={() => remove(group)}>
                           Delete
                         </Button>
-                      </div>
-                    </td>
+                      </Group>
+                    </Table.Td>
                   )}
-                </tr>
+                </Table.Tr>
               ))}
-            </tbody>
-          </table>
+            </Table.Tbody>
+          </Table>
         )}
       </Card>
 
-      <AddGroupModal open={adding} onClose={() => setAdding(false)} onSaved={mutate} />
+      <AddGroupModal opened={adding} onClose={() => setAdding(false)} onSaved={mutate} />
       {editing && (
         <EditGroupModal
           group={editing}
@@ -100,16 +119,16 @@ export default function GroupsPage() {
           }}
         />
       )}
-    </div>
+    </Stack>
   );
 }
 
 function AddGroupModal({
-  open,
+  opened,
   onClose,
   onSaved,
 }: {
-  open: boolean;
+  opened: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -139,22 +158,24 @@ function AddGroupModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Add group">
-      <div className="flex flex-col gap-3">
-        <Labeled label="Name">
-          <Input value={name} onChange={(e) => setName(e.target.value)} required />
-        </Labeled>
-        <Labeled label="Comment">
-          <Input value={comment} onChange={(e) => setComment(e.target.value)} />
-        </Labeled>
-        <ErrorBanner>{error}</ErrorBanner>
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={submit}>
+    <Modal opened={opened} onClose={onClose} title="Add group">
+      <Stack>
+        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} required />
+        <TextInput label="Comment" value={comment} onChange={(e) => setComment(e.currentTarget.value)} />
+        {error && (
+          <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            {error}
+          </Alert>
+        )}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button loading={saving} onClick={submit}>
             Add
           </Button>
-        </div>
-      </div>
+        </Group>
+      </Stack>
     </Modal>
   );
 }
@@ -164,7 +185,7 @@ function EditGroupModal({
   onClose,
   onSaved,
 }: {
-  group: Group;
+  group: GroupEntry;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -192,23 +213,30 @@ function EditGroupModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={group.name}>
-      <div className="flex flex-col gap-3">
-        <Labeled label="Name">
-          <Input value={name} onChange={(e) => setName(e.target.value)} disabled={group.name === "Default"} />
-        </Labeled>
-        <Labeled label="Comment">
-          <Input value={comment} onChange={(e) => setComment(e.target.value)} />
-        </Labeled>
-        <Checkbox checked={enabled} onChange={(e) => setEnabled(e.target.checked)} label="Enabled" />
-        <ErrorBanner>{error}</ErrorBanner>
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={submit}>
+    <Modal opened onClose={onClose} title={group.name}>
+      <Stack>
+        <TextInput
+          label="Name"
+          value={name}
+          onChange={(e) => setName(e.currentTarget.value)}
+          disabled={group.name === "Default"}
+        />
+        <TextInput label="Comment" value={comment} onChange={(e) => setComment(e.currentTarget.value)} />
+        <Checkbox checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} label="Enabled" />
+        {error && (
+          <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            {error}
+          </Alert>
+        )}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button loading={saving} onClick={submit}>
             Save
           </Button>
-        </div>
-      </div>
+        </Group>
+      </Stack>
     </Modal>
   );
 }

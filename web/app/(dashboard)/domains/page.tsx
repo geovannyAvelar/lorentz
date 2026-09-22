@@ -2,17 +2,31 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import {
+  Card,
+  Group,
+  Stack,
+  Text,
+  Table,
+  Tabs,
+  Badge,
+  Button,
+  Modal,
+  TextInput,
+  Textarea,
+  NativeSelect,
+  Checkbox,
+  Alert,
+  Center,
+  Loader,
+  EmptyState,
+  ScrollArea,
+} from "@mantine/core";
+import { IconPlus, IconAlertCircle } from "@tabler/icons-react";
 import { api, fetcher, ApiError } from "@/lib/client";
 import { useSession } from "@/hooks/useSession";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { Input, Textarea, Select, Checkbox, Labeled } from "@/components/ui/Field";
-import { Modal } from "@/components/ui/Modal";
-import { ErrorBanner, Spinner, EmptyState } from "@/components/ui/Feedback";
 import { GroupPicker } from "@/components/GroupPicker";
 import type { DomainEntry, DomainsResponse } from "@/lib/types";
-import { cn } from "@/lib/cn";
 
 type DomainType = "allow" | "deny";
 type DomainKind = "exact" | "regex";
@@ -51,85 +65,88 @@ export default function DomainsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader
-          title="Domains"
-          actions={isAdmin && <Button size="sm" variant="primary" onClick={() => setAdding(true)}>Add domain</Button>}
-        />
-        <div className="flex flex-wrap gap-1 border-b border-border px-4 py-2">
-          {TABS.map((t) => (
-            <button
-              key={`${t.type}-${t.kind}`}
-              onClick={() => setTab(t)}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium",
-                tab.type === t.type && tab.kind === t.kind
-                  ? "bg-accent/15 text-accent"
-                  : "text-muted hover:bg-border/50",
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+    <Stack>
+      <Card withBorder padding={0}>
+        <Group justify="space-between" p="md">
+          <Text fw={600}>Domains</Text>
+          {isAdmin && (
+            <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => setAdding(true)}>
+              Add domain
+            </Button>
+          )}
+        </Group>
+        <Tabs
+          value={`${tab.type}-${tab.kind}`}
+          onChange={(value) => setTab(TABS.find((t) => `${t.type}-${t.kind}` === value) ?? TABS[0])}
+          px="md"
+        >
+          <Tabs.List>
+            {TABS.map((t) => (
+              <Tabs.Tab key={`${t.type}-${t.kind}`} value={`${t.type}-${t.kind}`}>
+                {t.label}
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs>
 
         {isLoading || !data ? (
-          <div className="flex justify-center py-16">
-            <Spinner />
-          </div>
+          <Center py="xl">
+            <Loader />
+          </Center>
         ) : data.domains.length === 0 ? (
-          <EmptyState title="No entries in this list" />
+          <EmptyState title="No entries in this list" p="xl" />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-border text-xs uppercase text-muted">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Domain</th>
-                  <th className="px-4 py-2 font-medium">Comment</th>
-                  <th className="px-4 py-2 font-medium">Groups</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  {isAdmin && <th className="px-4 py-2 font-medium">Actions</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+          <ScrollArea>
+            <Table striped highlightOnHover verticalSpacing="xs">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Domain</Table.Th>
+                  <Table.Th>Comment</Table.Th>
+                  <Table.Th>Groups</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  {isAdmin && <Table.Th>Actions</Table.Th>}
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
                 {data.domains.map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="max-w-sm truncate px-4 py-2 font-mono text-xs" title={entry.domain}>
-                      {entry.domain}
-                    </td>
-                    <td className="px-4 py-2 text-muted">{entry.comment || "—"}</td>
-                    <td className="px-4 py-2 text-muted">{entry.groups.length}</td>
-                    <td className="px-4 py-2">
-                      <Badge tone={entry.enabled ? "success" : "neutral"}>
+                  <Table.Tr key={entry.id}>
+                    <Table.Td maw={320} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <Text ff="monospace" size="xs" truncate="end" title={entry.domain}>
+                        {entry.domain}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td c="dimmed">{entry.comment || "—"}</Table.Td>
+                    <Table.Td c="dimmed">{entry.groups.length}</Table.Td>
+                    <Table.Td>
+                      <Badge color={entry.enabled ? "green" : "gray"}>
                         {entry.enabled ? "enabled" : "disabled"}
                       </Badge>
-                    </td>
+                    </Table.Td>
                     {isAdmin && (
-                      <td className="px-4 py-2">
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={() => toggleEnabled(entry)}>
+                      <Table.Td>
+                        <Group gap="xs" wrap="nowrap">
+                          <Button size="xs" variant="default" onClick={() => toggleEnabled(entry)}>
                             {entry.enabled ? "Disable" : "Enable"}
                           </Button>
-                          <Button size="sm" onClick={() => setEditing(entry)}>
+                          <Button size="xs" variant="default" onClick={() => setEditing(entry)}>
                             Edit
                           </Button>
-                          <Button size="sm" variant="danger" onClick={() => remove(entry)}>
+                          <Button size="xs" color="red" variant="light" onClick={() => remove(entry)}>
                             Delete
                           </Button>
-                        </div>
-                      </td>
+                        </Group>
+                      </Table.Td>
                     )}
-                  </tr>
+                  </Table.Tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </Table.Tbody>
+            </Table>
+          </ScrollArea>
         )}
       </Card>
 
       <AddDomainModal
-        open={adding}
+        opened={adding}
         onClose={() => setAdding(false)}
         defaultType={tab.type}
         defaultKind={tab.kind}
@@ -145,18 +162,18 @@ export default function DomainsPage() {
           }}
         />
       )}
-    </div>
+    </Stack>
   );
 }
 
 function AddDomainModal({
-  open,
+  opened,
   onClose,
   defaultType,
   defaultKind,
   onSaved,
 }: {
-  open: boolean;
+  opened: boolean;
   onClose: () => void;
   defaultType: DomainType;
   defaultKind: DomainKind;
@@ -202,40 +219,53 @@ function AddDomainModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Add domain">
-      <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3">
-          <Labeled label="List">
-            <Select value={type} onChange={(e) => setType(e.target.value as DomainType)}>
-              <option value="deny">Deny</option>
-              <option value="allow">Allow</option>
-            </Select>
-          </Labeled>
-          <Labeled label="Kind">
-            <Select value={kind} onChange={(e) => setKind(e.target.value as DomainKind)}>
-              <option value="exact">Exact</option>
-              <option value="regex">Regex</option>
-            </Select>
-          </Labeled>
-        </div>
-        <Labeled label="Domain" hint="One per line to add several at once">
-          <Textarea value={domain} onChange={(e) => setDomain(e.target.value)} rows={3} required />
-        </Labeled>
-        <Labeled label="Comment">
-          <Input value={comment} onChange={(e) => setComment(e.target.value)} />
-        </Labeled>
-        <Labeled label="Groups">
-          <GroupPicker value={groups} onChange={setGroups} />
-        </Labeled>
-        <Checkbox checked={enabled} onChange={(e) => setEnabled(e.target.checked)} label="Enabled" />
-        <ErrorBanner>{error}</ErrorBanner>
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={submit}>
+    <Modal opened={opened} onClose={onClose} title="Add domain">
+      <Stack>
+        <Group grow>
+          <NativeSelect
+            label="List"
+            data={[
+              { value: "deny", label: "Deny" },
+              { value: "allow", label: "Allow" },
+            ]}
+            value={type}
+            onChange={(e) => setType(e.currentTarget.value as DomainType)}
+          />
+          <NativeSelect
+            label="Kind"
+            data={[
+              { value: "exact", label: "Exact" },
+              { value: "regex", label: "Regex" },
+            ]}
+            value={kind}
+            onChange={(e) => setKind(e.currentTarget.value as DomainKind)}
+          />
+        </Group>
+        <Textarea
+          label="Domain"
+          description="One per line to add several at once"
+          value={domain}
+          onChange={(e) => setDomain(e.currentTarget.value)}
+          rows={3}
+          required
+        />
+        <TextInput label="Comment" value={comment} onChange={(e) => setComment(e.currentTarget.value)} />
+        <GroupPicker value={groups} onChange={setGroups} />
+        <Checkbox checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} label="Enabled" />
+        {error && (
+          <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            {error}
+          </Alert>
+        )}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button loading={saving} onClick={submit}>
             Add
           </Button>
-        </div>
-      </div>
+        </Group>
+      </Stack>
     </Modal>
   );
 }
@@ -275,23 +305,25 @@ function EditDomainModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={entry.domain}>
-      <div className="flex flex-col gap-3">
-        <Labeled label="Comment">
-          <Input value={comment} onChange={(e) => setComment(e.target.value)} />
-        </Labeled>
-        <Labeled label="Groups">
-          <GroupPicker value={groups} onChange={setGroups} />
-        </Labeled>
-        <Checkbox checked={enabled} onChange={(e) => setEnabled(e.target.checked)} label="Enabled" />
-        <ErrorBanner>{error}</ErrorBanner>
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={submit}>
+    <Modal opened onClose={onClose} title={entry.domain}>
+      <Stack>
+        <TextInput label="Comment" value={comment} onChange={(e) => setComment(e.currentTarget.value)} />
+        <GroupPicker value={groups} onChange={setGroups} />
+        <Checkbox checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} label="Enabled" />
+        {error && (
+          <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            {error}
+          </Alert>
+        )}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button loading={saving} onClick={submit}>
             Save
           </Button>
-        </div>
-      </div>
+        </Group>
+      </Stack>
     </Modal>
   );
 }

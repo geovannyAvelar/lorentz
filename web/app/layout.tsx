@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ColorSchemeScript, MantineProvider } from "@mantine/core";
+import "@mantine/core/styles.css";
+import { theme } from "@/lib/theme";
 import { SWRProvider } from "@/components/SWRProvider";
 import "./globals.css";
 
@@ -22,10 +25,19 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable}`}
+      // ColorSchemeScript sets data-mantine-color-scheme on <html> before
+      // hydration (to pick light/dark without a flash); React would
+      // otherwise warn about the mismatch with the server-rendered markup.
+      suppressHydrationWarning
     >
-      <body className="flex min-h-full flex-col bg-background text-foreground">
-        <SWRProvider>{children}</SWRProvider>
+      <head>
+        <ColorSchemeScript defaultColorScheme="auto" />
+      </head>
+      <body>
+        <MantineProvider theme={theme} defaultColorScheme="auto">
+          <SWRProvider>{children}</SWRProvider>
+        </MantineProvider>
       </body>
     </html>
   );

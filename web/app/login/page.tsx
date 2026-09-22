@@ -4,10 +4,19 @@ import { Suspense, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
-import { Button } from "@/components/ui/Button";
-import { Input, Labeled } from "@/components/ui/Field";
-import { ErrorBanner, Spinner } from "@/components/ui/Feedback";
-import { Card } from "@/components/ui/Card";
+import {
+  Paper,
+  Title,
+  Text,
+  TextInput,
+  PasswordInput,
+  Button,
+  Alert,
+  Center,
+  Loader,
+  Stack,
+} from "@mantine/core";
+import { IconAlertCircle } from "@tabler/icons-react";
 import { ApiError } from "@/lib/client";
 
 async function fetchBootstrap(): Promise<{ open: boolean }> {
@@ -23,27 +32,29 @@ function LoginPageInner() {
   const open = data?.open ?? false;
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-sm p-6">
-        <h1 className="text-lg font-semibold text-foreground">Lorentz</h1>
-        <p className="mb-4 mt-1 text-sm text-muted">
+    <Center h="100vh" bg="var(--mantine-color-body)">
+      <Paper withBorder shadow="sm" p="xl" radius="md" w={360}>
+        <Title order={2} mb={4}>
+          Lorentz
+        </Title>
+        <Text size="sm" c="dimmed" mb="md">
           {checkingSetup
             ? "Checking the API…"
             : open
               ? "No account exists yet. Create the first admin account."
               : "Sign in to continue."}
-        </p>
+        </Text>
         {checkingSetup ? (
-          <div className="flex justify-center py-6">
-            <Spinner />
-          </div>
+          <Center py="lg">
+            <Loader size="sm" />
+          </Center>
         ) : open ? (
           <BootstrapForm next={next} />
         ) : (
           <LoginForm next={next} />
         )}
-      </Card>
-    </div>
+      </Paper>
+    </Center>
   );
 }
 
@@ -107,38 +118,41 @@ function LoginForm({ next }: { next: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-3">
-      <Labeled label="Username" hint="Leave blank to use the configured API password">
-        <Input
+    <form onSubmit={onSubmit}>
+      <Stack gap="sm">
+        <TextInput
+          label="Username"
+          description="Leave blank to use the configured API password"
           value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          onChange={(e) => setUsername(e.currentTarget.value)}
           autoComplete="username"
           placeholder="(configured password)"
         />
-      </Labeled>
-      <Labeled label="Password">
-        <Input
-          type="password"
+        <PasswordInput
+          label="Password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => setPassword(e.currentTarget.value)}
           autoComplete="current-password"
           required
         />
-      </Labeled>
-      {needsTotp && (
-        <Labeled label="2FA code">
-          <Input
+        {needsTotp && (
+          <TextInput
+            label="2FA code"
             value={totp}
-            onChange={(e) => setTotp(e.target.value)}
+            onChange={(e) => setTotp(e.currentTarget.value)}
             inputMode="numeric"
             autoComplete="one-time-code"
           />
-        </Labeled>
-      )}
-      <ErrorBanner>{error}</ErrorBanner>
-      <Button type="submit" variant="primary" loading={loading} className="mt-1">
-        Sign in
-      </Button>
+        )}
+        {error && (
+          <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            {error}
+          </Alert>
+        )}
+        <Button type="submit" loading={loading} mt={4}>
+          Sign in
+        </Button>
+      </Stack>
     </form>
   );
 }
@@ -180,38 +194,40 @@ function BootstrapForm({ next }: { next: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-3">
-      <Labeled label="Username">
-        <Input
+    <form onSubmit={onSubmit}>
+      <Stack gap="sm">
+        <TextInput
+          label="Username"
           value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          onChange={(e) => setUsername(e.currentTarget.value)}
           autoComplete="username"
           required
         />
-      </Labeled>
-      <Labeled label="Password" hint="8 to 256 characters">
-        <Input
-          type="password"
+        <PasswordInput
+          label="Password"
+          description="8 to 256 characters"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => setPassword(e.currentTarget.value)}
           autoComplete="new-password"
           minLength={8}
           required
         />
-      </Labeled>
-      <Labeled label="Confirm password">
-        <Input
-          type="password"
+        <PasswordInput
+          label="Confirm password"
           value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
+          onChange={(e) => setConfirm(e.currentTarget.value)}
           autoComplete="new-password"
           required
         />
-      </Labeled>
-      <ErrorBanner>{error}</ErrorBanner>
-      <Button type="submit" variant="primary" loading={loading} className="mt-1">
-        Create admin account
-      </Button>
+        {error && (
+          <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            {error}
+          </Alert>
+        )}
+        <Button type="submit" loading={loading} mt={4}>
+          Create admin account
+        </Button>
+      </Stack>
     </form>
   );
 }

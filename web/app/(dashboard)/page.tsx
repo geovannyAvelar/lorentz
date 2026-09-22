@@ -2,12 +2,23 @@
 
 import useSWR from "swr";
 import { useState } from "react";
+import {
+  Card,
+  Group,
+  Text,
+  Badge,
+  Button,
+  SimpleGrid,
+  Stack,
+  Progress,
+  Alert,
+  Center,
+  Loader,
+  EmptyState,
+} from "@mantine/core";
+import { IconAlertCircle } from "@tabler/icons-react";
 import { fetcher, api } from "@/lib/client";
 import { useSession } from "@/hooks/useSession";
-import { Card, CardHeader, StatCard } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { Spinner, EmptyState, ErrorBanner } from "@/components/ui/Feedback";
 import type {
   BlockingStatus,
   StatsSummary,
@@ -64,45 +75,47 @@ export default function DashboardPage() {
   const q = summary?.queries;
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader
-          title="Blocking"
-          description="Enable or disable Lorentz's DNS blocking"
-          actions={
-            blocking && (
-              <>
-                <Badge tone={blocking.blocking === "enabled" ? "success" : "danger"}>
-                  {blocking.blocking}
-                </Badge>
-                {isAdmin && (
-                  <Button
-                    size="sm"
-                    variant={blocking.blocking === "enabled" ? "danger" : "primary"}
-                    loading={toggling}
-                    onClick={toggleBlocking}
-                    disabled={blocking.blocking === "failure"}
-                  >
-                    {blocking.blocking === "enabled" ? "Disable" : "Enable"}
-                  </Button>
-                )}
-              </>
-            )
-          }
-        />
-        {isAdmin && toggleError && (
-          <div className="px-4 py-3">
-            <ErrorBanner>{toggleError}</ErrorBanner>
+    <Stack gap="lg">
+      <Card withBorder>
+        <Group justify="space-between">
+          <div>
+            <Text fw={600}>Blocking</Text>
+            <Text size="xs" c="dimmed">
+              Enable or disable Lorentz&apos;s DNS blocking
+            </Text>
           </div>
+          {blocking && (
+            <Group gap="xs">
+              <Badge color={blocking.blocking === "enabled" ? "green" : "red"}>
+                {blocking.blocking}
+              </Badge>
+              {isAdmin && (
+                <Button
+                  size="xs"
+                  color={blocking.blocking === "enabled" ? "red" : "blue"}
+                  loading={toggling}
+                  onClick={toggleBlocking}
+                  disabled={blocking.blocking === "failure"}
+                >
+                  {blocking.blocking === "enabled" ? "Disable" : "Enable"}
+                </Button>
+              )}
+            </Group>
+          )}
+        </Group>
+        {isAdmin && toggleError && (
+          <Alert color="red" icon={<IconAlertCircle size={16} />} mt="sm">
+            {toggleError}
+          </Alert>
         )}
       </Card>
 
       {loadingSummary || !q ? (
-        <div className="flex justify-center py-12">
-          <Spinner />
-        </div>
+        <Center py="xl">
+          <Loader />
+        </Center>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SimpleGrid cols={{ base: 2, lg: 4 }}>
           <StatCard label="Queries (24h)" value={q.total.toLocaleString()} />
           <StatCard
             label="Blocked"
@@ -110,19 +123,29 @@ export default function DashboardPage() {
           />
           <StatCard label="Unique domains" value={q.unique_domains.toLocaleString()} />
           <StatCard label="Cached" value={q.cached.toLocaleString()} />
-        </div>
+        </SimpleGrid>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Top blocked domains" description="Last 24 hours" />
+      <SimpleGrid cols={{ base: 1, lg: 2 }}>
+        <Card withBorder padding={0}>
+          <Group justify="space-between" p="md" pb="xs">
+            <div>
+              <Text fw={600}>Top blocked domains</Text>
+              <Text size="xs" c="dimmed">Last 24 hours</Text>
+            </div>
+          </Group>
           <TopList
             rows={topDomains?.domains.map((d) => ({ label: d.domain, count: d.count }))}
             empty="No blocked domains in this window."
           />
         </Card>
-        <Card>
-          <CardHeader title="Top clients" description="Last 24 hours" />
+        <Card withBorder padding={0}>
+          <Group justify="space-between" p="md" pb="xs">
+            <div>
+              <Text fw={600}>Top clients</Text>
+              <Text size="xs" c="dimmed">Last 24 hours</Text>
+            </div>
+          </Group>
           <TopList
             rows={topClients?.clients.map((c) => ({
               label: c.name || c.ip,
@@ -131,8 +154,21 @@ export default function DashboardPage() {
             empty="No client activity in this window."
           />
         </Card>
-      </div>
-    </div>
+      </SimpleGrid>
+    </Stack>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <Card withBorder padding="md">
+      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+        {label}
+      </Text>
+      <Text size="xl" fw={700} mt={4}>
+        {value}
+      </Text>
+    </Card>
   );
 }
 
@@ -145,30 +181,27 @@ function TopList({
 }) {
   if (!rows) {
     return (
-      <div className="flex justify-center py-8">
-        <Spinner />
-      </div>
+      <Center py="lg">
+        <Loader size="sm" />
+      </Center>
     );
   }
-  if (rows.length === 0) return <EmptyState title={empty} />;
+  if (rows.length === 0) return <EmptyState title={empty} p="lg" />;
 
   const max = Math.max(...rows.map((r) => r.count), 1);
   return (
-    <ul className="divide-y divide-border">
+    <Stack gap={0}>
       {rows.map((row) => (
-        <li key={row.label} className="flex items-center gap-3 px-4 py-2.5">
-          <span className="w-40 truncate text-sm text-foreground" title={row.label}>
+        <Group key={row.label} px="md" py="xs" wrap="nowrap" gap="sm">
+          <Text size="sm" w={160} truncate="end" title={row.label}>
             {row.label}
-          </span>
-          <div className="h-2 flex-1 overflow-hidden rounded-full bg-border/60">
-            <div
-              className="h-full rounded-full bg-accent"
-              style={{ width: `${(row.count / max) * 100}%` }}
-            />
-          </div>
-          <span className="w-12 text-right text-sm text-muted">{row.count}</span>
-        </li>
+          </Text>
+          <Progress value={(row.count / max) * 100} flex={1} />
+          <Text size="sm" c="dimmed" w={40} ta="right">
+            {row.count}
+          </Text>
+        </Group>
       ))}
-    </ul>
+    </Stack>
   );
 }

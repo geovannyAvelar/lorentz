@@ -2,13 +2,22 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import {
+  Card,
+  Group,
+  Stack,
+  Text,
+  TextInput,
+  PasswordInput,
+  Button,
+  Badge,
+  Alert,
+  Center,
+  Loader,
+} from "@mantine/core";
+import { IconAlertCircle, IconCheck } from "@tabler/icons-react";
 import { api, ApiError, fetcher } from "@/lib/client";
 import { useSession } from "@/hooks/useSession";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { Input, Labeled } from "@/components/ui/Field";
-import { ErrorBanner, Spinner } from "@/components/ui/Feedback";
 import type { UsersResponse } from "@/lib/types";
 
 export default function AccountPage() {
@@ -16,14 +25,14 @@ export default function AccountPage() {
 
   if (!session?.user) {
     return (
-      <Card>
-        <CardHeader title="Account" />
-        <p className="px-4 py-6 text-sm text-muted">
+      <Card withBorder>
+        <Text fw={600} mb="xs">Account</Text>
+        <Text size="sm" c="dimmed">
           You are signed in with the password of the configuration
           (webserver.api.password), not with an account. There is nothing to
           manage here - create an account under Users to get a self-service
           profile with its own password.
-        </p>
+        </Text>
       </Card>
     );
   }
@@ -86,78 +95,78 @@ function AccountDetails({ username }: { username: string }) {
 
   if (!user) {
     return (
-      <div className="flex justify-center py-16">
-        <Spinner />
-      </div>
+      <Center py="xl">
+        <Loader />
+      </Center>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader
-          title={user.username}
-          description={`Account · ${new Date(user.created_at * 1000).toLocaleDateString()}`}
-          actions={<Badge tone={user.role === "admin" ? "accent" : "neutral"}>{user.role}</Badge>}
-        />
-        <div className="flex flex-col gap-3 p-4">
-          <Labeled label="Comment">
-            <Input value={commentValue} onChange={(e) => setComment(e.target.value)} />
-          </Labeled>
+    <Stack>
+      <Card withBorder>
+        <Group justify="space-between" mb="md">
           <div>
-            <Button size="sm" variant="primary" loading={saving} onClick={saveComment}>
+            <Text fw={600}>{user.username}</Text>
+            <Text size="xs" c="dimmed">
+              Account · {new Date(user.created_at * 1000).toLocaleDateString()}
+            </Text>
+          </div>
+          <Badge color={user.role === "admin" ? "blue" : "gray"}>{user.role}</Badge>
+        </Group>
+        <Stack gap="sm" maw={420}>
+          <TextInput label="Comment" value={commentValue} onChange={(e) => setComment(e.currentTarget.value)} />
+          <Group>
+            <Button size="sm" loading={saving} onClick={saveComment}>
               Save comment
             </Button>
-          </div>
-        </div>
+          </Group>
+        </Stack>
       </Card>
 
-      <Card>
-        <CardHeader title="Change password" />
-        <div className="flex max-w-sm flex-col gap-3 p-4">
-          <Labeled label="Current password">
-            <Input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </Labeled>
-          <Labeled label="New password" hint="8 to 256 characters">
-            <Input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              autoComplete="new-password"
-              minLength={8}
-            />
-          </Labeled>
-          <Labeled label="Confirm new password">
-            <Input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              autoComplete="new-password"
-            />
-          </Labeled>
-          {error && <ErrorBanner>{error}</ErrorBanner>}
-          {success && (
-            <p className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
-              {success}
-            </p>
+      <Card withBorder>
+        <Text fw={600} mb="md">Change password</Text>
+        <Stack gap="sm" maw={360}>
+          <PasswordInput
+            label="Current password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.currentTarget.value)}
+            autoComplete="current-password"
+          />
+          <PasswordInput
+            label="New password"
+            description="8 to 256 characters"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.currentTarget.value)}
+            autoComplete="new-password"
+            minLength={8}
+          />
+          <PasswordInput
+            label="Confirm new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.currentTarget.value)}
+            autoComplete="new-password"
+          />
+          {error && (
+            <Alert color="red" icon={<IconAlertCircle size={16} />}>
+              {error}
+            </Alert>
           )}
-          <div>
+          {success && (
+            <Alert color="green" icon={<IconCheck size={16} />}>
+              {success}
+            </Alert>
+          )}
+          <Group>
             <Button
-              variant="primary"
               loading={saving}
               onClick={changePassword}
               disabled={!currentPassword || !newPassword}
             >
               Change password
             </Button>
-          </div>
-        </div>
+          </Group>
+        </Stack>
       </Card>
-    </div>
+    </Stack>
   );
 }

@@ -3,10 +3,10 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+import { AppShell, Center, Loader } from "@mantine/core";
 import { useSession } from "@/hooks/useSession";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
-import { Spinner } from "@/components/ui/Feedback";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { session, isAdmin, isLoading } = useSession();
@@ -23,21 +23,23 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   if (isLoading || !session) {
     return (
-      <div className="flex min-h-dvh items-center justify-center">
-        <Spinner className="h-6 w-6" />
-      </div>
+      <Center h="100vh">
+        <Loader />
+      </Center>
     );
   }
 
   if (!session.valid) return null;
 
   return (
-    <div className="flex min-h-dvh">
-      <Sidebar isAdmin={isAdmin} />
-      <div className="flex min-w-0 flex-1 flex-col">
+    <AppShell header={{ height: 60 }} navbar={{ width: 224, breakpoint: "sm" }} padding="lg">
+      <AppShell.Header>
         <Topbar session={session} />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
-      </div>
-    </div>
+      </AppShell.Header>
+      <AppShell.Navbar p="sm">
+        <Sidebar isAdmin={isAdmin} />
+      </AppShell.Navbar>
+      <AppShell.Main>{children}</AppShell.Main>
+    </AppShell>
   );
 }

@@ -2,14 +2,27 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import {
+  Card,
+  Group,
+  Stack,
+  Text,
+  Table,
+  Badge,
+  Button,
+  Modal,
+  TextInput,
+  PasswordInput,
+  NativeSelect,
+  Checkbox,
+  Alert,
+  Center,
+  Loader,
+  EmptyState,
+} from "@mantine/core";
+import { IconPlus, IconAlertCircle } from "@tabler/icons-react";
 import { api, ApiError, fetcher } from "@/lib/client";
 import { useSession } from "@/hooks/useSession";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { Input, Select, Checkbox, Labeled } from "@/components/ui/Field";
-import { Modal } from "@/components/ui/Modal";
-import { ErrorBanner, Spinner, EmptyState } from "@/components/ui/Feedback";
 import type { User, UsersResponse } from "@/lib/types";
 
 function timeString(unixSeconds: number | null) {
@@ -27,10 +40,11 @@ export default function UsersPage() {
 
   if (!isAdmin) {
     return (
-      <Card>
+      <Card withBorder>
         <EmptyState
           title="Users are managed by an admin"
           description="Your account can change its own password and comment from the Account page."
+          p="xl"
         />
       </Card>
     );
@@ -47,73 +61,78 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader
-          title="Users"
-          description="Accounts that can log in to this API"
-          actions={<Button size="sm" variant="primary" onClick={() => setAdding(true)}>Add user</Button>}
-        />
-        {isLoading || !data ? (
-          <div className="flex justify-center py-16">
-            {error ? <ErrorBanner>Could not load the users</ErrorBanner> : <Spinner />}
+    <Stack>
+      <Card withBorder padding={0}>
+        <Group justify="space-between" p="md">
+          <div>
+            <Text fw={600}>Users</Text>
+            <Text size="xs" c="dimmed">Accounts that can log in to this API</Text>
           </div>
+          <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => setAdding(true)}>
+            Add user
+          </Button>
+        </Group>
+        {isLoading || !data ? (
+          <Center py="xl">
+            {error ? <Alert color="red">Could not load the users</Alert> : <Loader />}
+          </Center>
         ) : data.users.length === 0 ? (
-          <EmptyState title="No accounts yet" />
+          <EmptyState title="No accounts yet" p="xl" />
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-border text-xs uppercase text-muted">
-              <tr>
-                <th className="px-4 py-2 font-medium">Username</th>
-                <th className="px-4 py-2 font-medium">Role</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Last login</th>
-                <th className="px-4 py-2 font-medium">Comment</th>
-                <th className="px-4 py-2 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+          <Table striped highlightOnHover verticalSpacing="xs">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Username</Table.Th>
+                <Table.Th>Role</Table.Th>
+                <Table.Th>Status</Table.Th>
+                <Table.Th>Last login</Table.Th>
+                <Table.Th>Comment</Table.Th>
+                <Table.Th>Actions</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
               {data.users.map((user) => (
-                <tr key={user.id}>
-                  <td className="px-4 py-2 font-medium">
+                <Table.Tr key={user.id}>
+                  <Table.Td fw={500}>
                     {user.username}
                     {user.username === session?.user?.username && (
-                      <span className="ml-1 text-xs text-muted">(you)</span>
+                      <Text span size="xs" c="dimmed"> (you)</Text>
                     )}
-                  </td>
-                  <td className="px-4 py-2">
-                    <Badge tone={user.role === "admin" ? "accent" : "neutral"}>{user.role}</Badge>
-                  </td>
-                  <td className="px-4 py-2">
-                    <Badge tone={user.enabled ? "success" : "neutral"}>
+                  </Table.Td>
+                  <Table.Td>
+                    <Badge color={user.role === "admin" ? "blue" : "gray"}>{user.role}</Badge>
+                  </Table.Td>
+                  <Table.Td>
+                    <Badge color={user.enabled ? "green" : "gray"}>
                       {user.enabled ? "enabled" : "disabled"}
                     </Badge>
-                  </td>
-                  <td className="px-4 py-2 text-muted">{timeString(user.last_login)}</td>
-                  <td className="px-4 py-2 text-muted">{user.comment || "—"}</td>
-                  <td className="px-4 py-2">
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => setEditing(user)}>
+                  </Table.Td>
+                  <Table.Td c="dimmed">{timeString(user.last_login)}</Table.Td>
+                  <Table.Td c="dimmed">{user.comment || "—"}</Table.Td>
+                  <Table.Td>
+                    <Group gap="xs" wrap="nowrap">
+                      <Button size="xs" variant="default" onClick={() => setEditing(user)}>
                         Edit
                       </Button>
                       <Button
-                        size="sm"
-                        variant="danger"
+                        size="xs"
+                        color="red"
+                        variant="light"
                         onClick={() => remove(user)}
                         disabled={user.username === session?.user?.username}
                       >
                         Delete
                       </Button>
-                    </div>
-                  </td>
-                </tr>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
               ))}
-            </tbody>
-          </table>
+            </Table.Tbody>
+          </Table>
         )}
       </Card>
 
-      <AddUserModal open={adding} onClose={() => setAdding(false)} onSaved={mutate} />
+      <AddUserModal opened={adding} onClose={() => setAdding(false)} onSaved={mutate} />
       {editing && (
         <EditUserModal
           user={editing}
@@ -125,16 +144,16 @@ export default function UsersPage() {
           }}
         />
       )}
-    </div>
+    </Stack>
   );
 }
 
 function AddUserModal({
-  open,
+  opened,
   onClose,
   onSaved,
 }: {
-  open: boolean;
+  opened: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -164,38 +183,48 @@ function AddUserModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Add user">
-      <div className="flex flex-col gap-3">
-        <Labeled label="Username" hint="1-64 letters, digits and . _ - @">
-          <Input value={username} onChange={(e) => setUsername(e.target.value)} required />
-        </Labeled>
-        <Labeled label="Password" hint="8 to 256 characters">
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
-            required
-          />
-        </Labeled>
-        <Labeled label="Role">
-          <Select value={role} onChange={(e) => setRole(e.target.value as "admin" | "viewer")}>
-            <option value="viewer">Viewer</option>
-            <option value="admin">Admin</option>
-          </Select>
-        </Labeled>
-        <Labeled label="Comment">
-          <Input value={comment} onChange={(e) => setComment(e.target.value)} />
-        </Labeled>
-        <Checkbox checked={enabled} onChange={(e) => setEnabled(e.target.checked)} label="Enabled" />
-        <ErrorBanner>{error}</ErrorBanner>
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={submit}>
+    <Modal opened={opened} onClose={onClose} title="Add user">
+      <Stack>
+        <TextInput
+          label="Username"
+          description="1-64 letters, digits and . _ - @"
+          value={username}
+          onChange={(e) => setUsername(e.currentTarget.value)}
+          required
+        />
+        <PasswordInput
+          label="Password"
+          description="8 to 256 characters"
+          value={password}
+          onChange={(e) => setPassword(e.currentTarget.value)}
+          minLength={8}
+          required
+        />
+        <NativeSelect
+          label="Role"
+          data={[
+            { value: "viewer", label: "Viewer" },
+            { value: "admin", label: "Admin" },
+          ]}
+          value={role}
+          onChange={(e) => setRole(e.currentTarget.value as "admin" | "viewer")}
+        />
+        <TextInput label="Comment" value={comment} onChange={(e) => setComment(e.currentTarget.value)} />
+        <Checkbox checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} label="Enabled" />
+        {error && (
+          <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            {error}
+          </Alert>
+        )}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button loading={saving} onClick={submit}>
             Add
           </Button>
-        </div>
-      </div>
+        </Group>
+      </Stack>
     </Modal>
   );
 }
@@ -238,54 +267,57 @@ function EditUserModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={user.username}>
-      <div className="flex flex-col gap-3">
+    <Modal opened onClose={onClose} title={user.username}>
+      <Stack>
         {isSelf && (
-          <p className="text-xs text-muted">
+          <Text size="xs" c="dimmed">
             You cannot change your own role or disable your own account.
-          </p>
+          </Text>
         )}
-        <Labeled label="Role">
-          <Select
-            value={role}
-            onChange={(e) => setRole(e.target.value as "admin" | "viewer")}
-            disabled={isSelf}
-          >
-            <option value="viewer">Viewer</option>
-            <option value="admin">Admin</option>
-          </Select>
-        </Labeled>
+        <NativeSelect
+          label="Role"
+          data={[
+            { value: "viewer", label: "Viewer" },
+            { value: "admin", label: "Admin" },
+          ]}
+          value={role}
+          onChange={(e) => setRole(e.currentTarget.value as "admin" | "viewer")}
+          disabled={isSelf}
+        />
         <Checkbox
           checked={enabled}
-          onChange={(e) => setEnabled(e.target.checked)}
+          onChange={(e) => setEnabled(e.currentTarget.checked)}
           label="Enabled"
           disabled={isSelf}
         />
-        <Labeled label="Comment">
-          <Input value={comment} onChange={(e) => setComment(e.target.value)} />
-        </Labeled>
+        <TextInput label="Comment" value={comment} onChange={(e) => setComment(e.currentTarget.value)} />
         {isSelf ? (
-          <p className="text-xs text-muted">
+          <Text size="xs" c="dimmed">
             Change your own password from the Account page.
-          </p>
+          </Text>
         ) : (
-          <Labeled label="New password" hint="Leave blank to keep the current password. Resetting it ends the account's other sessions.">
-            <Input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              minLength={8}
-            />
-          </Labeled>
+          <PasswordInput
+            label="New password"
+            description="Leave blank to keep the current password. Resetting it ends the account's other sessions."
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.currentTarget.value)}
+            minLength={8}
+          />
         )}
-        <ErrorBanner>{error}</ErrorBanner>
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={saving} onClick={submit}>
+        {error && (
+          <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            {error}
+          </Alert>
+        )}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button loading={saving} onClick={submit}>
             Save
           </Button>
-        </div>
-      </div>
+        </Group>
+      </Stack>
     </Modal>
   );
 }
