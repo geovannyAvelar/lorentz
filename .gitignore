@@ -1,5 +1,8 @@
-# Generated binary
-lorentz*
+# Generated binary. Anchored to the root: build.sh only ever places it there
+# (`cp lorentz ../`), and an unanchored "lorentz*" also matches any nested
+# file or directory whose name starts with "lorentz" - e.g. src/lorentz.h or
+# web/app/api/lorentz/ - silently keeping it out of `git add`.
+/lorentz*
 
 # Generated standalone regression test binaries (built via ./build.sh test)
 /tar_regression

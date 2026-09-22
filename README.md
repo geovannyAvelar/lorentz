@@ -109,6 +109,18 @@ are held in memory for the checks of each request, so Lorentz instances that sha
 notice a change of another only after a restart. They are not part of the Teleporter export, the
 two-factor authentication (`webserver.api.totp_secret`) applies to the configured password only.
 
+## Web UI
+
+`web/` has a Next.js admin console (dashboard, query log, domains, groups, lists, clients, network
+devices, user accounts) built on the REST API above. It talks to Lorentz server-side only - the
+browser never sees the Lorentz URL or the session id - so Lorentz needs no CORS configuration. See
+`web/README.md` for the architecture, environment variables and a Docker setup.
+
+```bash
+cd web && npm install
+LORENTZ_API_URL=http://127.0.0.1 npm run dev
+```
+
 ## Documentation
 
 Lorentz has no documentation of its own yet. The documentation of the upstream project, Pi-hole FTLDNS, can be found [here](https://docs.pi-hole.net/ftldns/). It applies only where this fork did not change the behavior (see the notice at the top).
