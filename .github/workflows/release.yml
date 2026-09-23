@@ -43,6 +43,10 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
+      # See docker-unstable.yml for why provenance/sbom are off: without it,
+      # buildx pushes an image index plus a separate attestation manifest,
+      # which GHCR's package-version listing treats as its own, untagged
+      # entry - a hazard if a cleanup step is ever added here too.
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -51,6 +55,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
           cache-from: type=gha,scope=lorentz-release
           cache-to: type=gha,mode=max,scope=lorentz-release
 

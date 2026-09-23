@@ -51,6 +51,13 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: type=raw,value=unstable
 
+      # provenance/sbom off: buildx otherwise pushes an image *index*
+      # referencing the real image plus a separate attestation manifest.
+      # GHCR considers that attestation manifest untagged (only the index
+      # carries "unstable"), so the cleanup job below deletes it as garbage
+      # - which breaks the tag even though it still "exists", since the
+      # content it points to is now gone. A plain single manifest has
+      # nothing untagged left for cleanup to touch.
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -59,6 +66,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
           cache-from: type=gha,scope=lorentz-unstable
           cache-to: type=gha,mode=max,scope=lorentz-unstable
 
@@ -74,13 +83,14 @@ jobs:
       # left the one it used to point to dangling (untagged) in the
       # registry - version tags from release.yml are never untagged, so
       # this can only ever delete old unstable builds, never a release.
+      # (provenance/sbom are off in the build step above so the *current*
+      # image itself never shows up here as an untagged attestation
+      # manifest - that was the actual cause of a broken "unstable" pull.)
       #
-      # min-versions-to-keep is 1, not 0: deleting the just-replaced digest
-      # immediately breaks anything that pulled "unstable" and cached that
-      # digest (Portainer/compose digest-pinning does this) moments before
-      # this run. Keeping one generation of slack means the old digest still
-      # resolves for a bit; it is only removed once a second push replaces
-      # it in turn.
+      # min-versions-to-keep is 1, not 0: it costs one extra generation of
+      # storage but means a client that pulled "unstable" and cached that
+      # digest moments before this run (Portainer/compose digest-pinning
+      # does this) still finds it for one more cycle instead of an instant 404.
       #
       # Needs the ghcr.io/<repo>/lorentz package's "Manage Actions access"
       # (in its GitHub Packages settings) to list this repository with the
