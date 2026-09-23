@@ -53,6 +53,11 @@ RUN useradd --system --no-create-home --home-dir /home/lorentz --shell /usr/sbin
 # but an empty file at least reports empty fields instead of failing outright.
 RUN touch /etc/lorentz/versions
 
+# readPID() (src/procps.c) opens LORENTZ_PID_FILE to check for an already
+# running instance and warns if that fails for any reason, ENOENT (a fresh
+# container) included - pre-create it empty so a first start doesn't warn.
+RUN touch /run/lorentz.pid && chown lorentz:lorentz /run/lorentz.pid
+
 COPY --from=build /app/lorentz /usr/bin/lorentz
 
 # A default configuration, so a first start does not log a missing file.
