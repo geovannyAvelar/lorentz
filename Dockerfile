@@ -39,6 +39,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /etc/lorentz /var/log/lorentz /run/lorentz /etc/dnsmasq.d /var/www/html /home/lorentz
+
+# Lorentz still runs as root (needed to bind DNS port 53 and the raw sockets
+# dnsmasq uses), but chown_lorentz() (src/files.c) normalizes the ownership
+# of its config, logs and database to a "lorentz" account regardless -
+# without one, that lookup fails and every such chown warns instead. Matches
+# the account test/run.sh creates for the same reason.
+RUN useradd --system --no-create-home --home-dir /home/lorentz --shell /usr/sbin/nologin lorentz \
+    && chown -R lorentz:lorentz /etc/lorentz /var/log/lorentz /run/lorentz /var/www/html /home/lorentz
+
 # /api/info/version reads this for the update-check fields Pi-hole's own
 # installer normally maintains; nothing populates it in a plain container,
 # but an empty file at least reports empty fields instead of failing outright.
@@ -48,7 +57,7 @@ COPY --from=build /app/lorentz /usr/bin/lorentz
 
 # A default configuration, so a first start does not log a missing file.
 WORKDIR /etc/lorentz
-RUN lorentz create-default-config lorentz.toml
+RUN lorentz create-default-config lorentz.toml && chown lorentz:lorentz lorentz.toml
 
 # 53: DNS. 80/443: the API and the web UI, both served by Lorentz itself at
 # its default admin path (/admin/, see README.md, "Web UI"). Lorentz replaces
