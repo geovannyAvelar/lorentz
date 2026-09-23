@@ -143,14 +143,24 @@ Lorentz has no documentation of its own yet. The documentation of the upstream p
 
 ## Docker images
 
-`.github/workflows/docker.yml` builds and publishes `ghcr.io/geovannyavelar/lorentz` (root
-`Dockerfile`) to GitHub Packages on every push to `main` and on version tags: a from-source,
+Both publish `ghcr.io/geovannyavelar/lorentz` (root `Dockerfile`) to GitHub Packages: a from-source,
 statically linked build with the PostgreSQL driver enabled and the web UI embedded (see "Web UI"
 above) - everything in one binary, on one port, nothing else to run.
 
+- **`.github/workflows/docker-unstable.yml`** - every push to `main` rebuilds and republishes
+  `ghcr.io/geovannyavelar/lorentz:unstable`, replacing whatever the tag last pointed to (the image
+  it replaces is deleted from the registry right after).
+- **`.github/workflows/release.yml`** - pushing a version tag (`vX.Y.Z`) publishes
+  `ghcr.io/geovannyavelar/lorentz:X.Y.Z`, `:X.Y` and `:latest`, then creates the matching GitHub
+  Release with auto-generated notes.
+
 ```bash
-docker run --network host ghcr.io/geovannyavelar/lorentz
+docker run --network host ghcr.io/geovannyavelar/lorentz            # latest release
+docker run --network host ghcr.io/geovannyavelar/lorentz:unstable   # latest main
 # UI at http://<host>/admin/
+
+# Cut a release:
+git tag v1.0.0 && git push origin v1.0.0
 ```
 
 `web/Dockerfile` (the UI as its own standalone Next.js server, for a Lorentz with a non-default
