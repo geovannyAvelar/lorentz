@@ -41,13 +41,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # github.repository is "geovannyAvelar/lorentz" (mixed case); a raw
+      # image tag with it would fail (Docker requires a lowercase
+      # repository name) - metadata-action normalizes it for us.
+      - name: Derive image tag
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: type=raw,value=unstable
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ghcr.io/${{ github.repository }}:unstable
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=lorentz-unstable
           cache-to: type=gha,mode=max,scope=lorentz-unstable
 
