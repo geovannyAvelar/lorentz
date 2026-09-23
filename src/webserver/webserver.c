@@ -26,6 +26,8 @@
 #include "webserver/x509.h"
 // allocate_lua(), free_lua(), init_lua(), request_handler()
 #include "webserver/lua_web.h"
+// webui_handler()
+#include "api/webui/webui.h"
 // log_certificate_domain_mismatch()
 #include "database/message-table.h"
 // create_cli_password()
@@ -980,6 +982,16 @@ void http_init(void)
 		// prefix_webhome_matcher is internally duplicated during
 		// request configuration so it can be freed here
 		free(prefix_webhome_matcher);
+	}
+
+	// Register the embedded web UI (web/, see src/api/webui/) for
+	// [prefix]<webhome> and everything below it. More specific than the "**"
+	// catch-all below, so it is checked first regardless of registration order.
+	char *webui_matcher = NULL;
+	if(asprintf(&webui_matcher, "%s**", prefix_webhome) >= 0)
+	{
+		mg_set_request_handler(ctx, webui_matcher, webui_handler, NULL);
+		free(webui_matcher);
 	}
 
 	// Register **.lp -> ** redirect handler

@@ -112,9 +112,25 @@ two-factor authentication (`webserver.api.totp_secret`) applies to the configure
 ## Web UI
 
 `web/` has a Next.js admin console (dashboard, query log, domains, groups, lists, clients, network
-devices, user accounts) built on the REST API above. It talks to Lorentz server-side only - the
-browser never sees the Lorentz URL or the session id - so Lorentz needs no CORS configuration. See
-`web/README.md` for the architecture, environment variables and a Docker setup.
+devices, user accounts) built on the REST API above.
+
+A build with `-DEMBED_WEBUI=ON` (needs Node.js/npm - see `src/api/webui/CMakeLists.txt`) folds
+`web/`'s static export straight into the `lorentz` binary: Lorentz serves it itself, from memory,
+at its own admin path (`webserver.paths.webhome`, `/admin/` by default), and the browser talks to
+`/api/*` directly, same origin, no separate process and no CORS configuration. The embedded build
+assumes the default `/admin/` webhome (baked in as `web/next.config.ts`'s `basePath` at build
+time); a Lorentz configured with a different webhome needs the standalone deployment below instead.
+The published `lorentz` Docker image (see "Docker images") is always built this way.
+
+```bash
+# Build Lorentz with the UI embedded
+./build.sh "-DUSE_POSTGRESQL=ON -DEMBED_WEBUI=ON"
+```
+
+Without `EMBED_WEBUI`, or for local frontend development, run `web/` as its own Next.js server; it
+proxies `/api/*` to a real Lorentz instance (`LORENTZ_API_URL`) via `next.config.ts`'s `rewrites()`,
+so the browser still only ever talks to one origin. See `web/README.md` for the architecture,
+environment variables and a Docker setup.
 
 ```bash
 cd web && npm install
@@ -127,17 +143,18 @@ Lorentz has no documentation of its own yet. The documentation of the upstream p
 
 ## Docker images
 
-`.github/workflows/docker.yml` builds and publishes two images to GitHub Packages on every push to
-`main` and on version tags:
-
-- `ghcr.io/geovannyavelar/lorentz` - the daemon (root `Dockerfile`), a from-source, statically
-  linked build with the PostgreSQL driver enabled.
-- `ghcr.io/geovannyavelar/lorentz/web` - the web UI (`web/Dockerfile`).
+`.github/workflows/docker.yml` builds and publishes `ghcr.io/geovannyavelar/lorentz` (root
+`Dockerfile`) to GitHub Packages on every push to `main` and on version tags: a from-source,
+statically linked build with the PostgreSQL driver enabled and the web UI embedded (see "Web UI"
+above) - everything in one binary, on one port, nothing else to run.
 
 ```bash
 docker run --network host ghcr.io/geovannyavelar/lorentz
-docker run -p 3000:3000 -e LORENTZ_API_URL=http://127.0.0.1:80 ghcr.io/geovannyavelar/lorentz/web
+# UI at http://<host>/admin/
 ```
+
+`web/Dockerfile` (the UI as its own standalone Next.js server, for a Lorentz with a non-default
+`webserver.paths.webhome`) is not built by CI - build it manually if needed, see `web/README.md`.
 
 Both are also buildable locally with a plain `docker build`; see the `Dockerfile`s themselves and
 `web/README.md` for the details.

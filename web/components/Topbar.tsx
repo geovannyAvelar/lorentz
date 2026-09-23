@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Button, Badge, Group, UnstyledButton, Text } from "@mantine/core";
 import { IconLogout } from "@tabler/icons-react";
 import type { Session } from "@/lib/types";
+import { setCsrfToken } from "@/lib/client";
 
 export function Topbar({ session }: { session: Session | undefined }) {
   const router = useRouter();
@@ -13,7 +14,8 @@ export function Topbar({ session }: { session: Session | undefined }) {
 
   async function logout() {
     setLoggingOut(true);
-    await fetch("/api/session", { method: "DELETE" });
+    await fetch("/api/auth", { method: "DELETE" });
+    setCsrfToken(null);
     router.replace("/login");
     router.refresh();
   }

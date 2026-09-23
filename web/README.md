@@ -10,29 +10,30 @@ default radius) and no other styling layer alongside it.
 
 ## Architecture
 
-The browser never talks to Lorentz directly. Every page calls this app's own
-routes under `/api/lorentz/*`, `/api/session` and `/api/bootstrap`, which
-proxy to Lorentz server-side (see `lib/lorentz-server.ts`). That keeps the
-Lorentz API URL, and the session id it authenticates with, off the client:
+Every page calls Lorentz's own REST API directly at `/api/*` - there is no
+backend-for-frontend layer in this app. That works out to the same origin in
+every deployment mode:
 
-- **`LORENTZ_API_URL`** is a server-only environment variable. It is never
-  sent to the browser, so Lorentz needs no CORS configuration - the only
-  requests it ever sees are server-to-server, from this app.
-- **The session** is a Lorentz `sid`, kept in an `httpOnly` cookie set by
-  `app/api/session/route.ts`. Client-side JavaScript cannot read it. It is
-  sent to Lorentz as a plain `sid` header (Lorentz accepts that in addition to
-  a cookie, see `check_client_auth()` in `src/api/auth.c`), not as a `Cookie`
-  header - so the CSRF token Lorentz requires for cookie-based auth never
-  applies here.
-- **`proxy.ts`** (Next.js 16 renamed `middleware.ts`) redirects a
-  cookie-less visitor to `/login` before any protected page renders. That is
-  a convenience only; the real enforcement is Lorentz's own 401/403 on every
-  API call, which every page already reacts to (see `useSession()` and the
-  `isAdmin` checks sprinkled through `app/(dashboard)/*`).
-- **Roles** are not cached client-side beyond the current page load:
-  `useSession()` re-reads `/api/session` (which re-reads `/api/auth`) every
-  60 seconds and on window focus, so a role change or a disabled account is
-  picked up without a fresh login.
+- **Embedded** (`LORENTZ_EMBED=1 npm run build:embed`, or `-DEMBED_WEBUI=ON`
+  on the Lorentz build): a static export, folded straight into the `lorentz`
+  binary and served by Lorentz itself (`src/api/webui/`, in the main
+  repository). Browser and API are literally the same server; see the root
+  `README.md`, "Web UI".
+- **Dev (`npm run dev`) and standalone (`npm run build` / `npm start`)**:
+  an ordinary Next.js server. `next.config.ts`'s `rewrites()` proxies
+  `/api/*` to `LORENTZ_API_URL` (a real Lorentz instance) transparently,
+  including the `Set-Cookie` Lorentz sends back - so the browser still only
+  ever talks to this app's own origin, and Lorentz still needs no CORS
+  configuration.
+
+Authentication is Lorentz's own cookie-based session (`POST /api/auth`, see
+`src/api/auth.c`): an `httpOnly` `sid` cookie the browser sends automatically,
+plus a CSRF token this app keeps in memory (`lib/client.ts`'s
+`setCsrfToken()`, populated by `useSession()` from the session object) and
+echoes back as `X-CSRF-TOKEN` on every call except `/api/auth` itself.
+Roles are not cached beyond that: `useSession()` re-reads `/api/auth` every 60
+seconds and on window focus, so a role change or a disabled account is picked
+up without a fresh login.
 
 ## Development
 
@@ -58,6 +59,10 @@ There is nothing to configure client-side: the browser only ever sees this
 app's own origin.
 
 ## Docker
+
+This standalone image is for a Lorentz configured with a non-default
+`webserver.paths.webhome` (the embedded build always serves at `/admin/`,
+see the root `README.md`) or for running the UI as its own service:
 
 ```bash
 docker build -t lorentz-web web/
@@ -107,5 +112,12 @@ account self-service (password change, comment) - each checked against both
 an admin and a viewer account, including two 403s where the backend rejects
 what a viewer's UI does not offer as a button.
 
-`npm run build` and `npm run lint` are clean (Next.js 16, React 19, strict
-TypeScript).
+`npm run build`, `npm run build:embed` and `npm run lint` are clean (Next.js
+16, React 19, strict TypeScript). The embedded build was additionally
+exercised end to end via `docker build -f ../Dockerfile ..`
+(`-DEMBED_WEBUI=ON`) and a container run of the result: `/admin/` and its
+`_next/static` assets serve correctly, `/admin` and `/` redirect as expected,
+an unmatched path 404s, and the full native auth cycle
+(`POST /api/users` to bootstrap, `POST /api/auth` to log in, a
+CSRF-protected `GET /api/users`, `DELETE /api/auth` to log out) works exactly
+as `lib/client.ts` and `hooks/useSession.ts` assume.

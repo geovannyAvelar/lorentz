@@ -1,5 +1,17 @@
-// The client-side counterpart of lib/lorentz-server.ts: every component in
-// this app calls Lorentz through /api/lorentz/*, never directly.
+// Talks to Lorentz directly: the browser and Lorentz are the same origin
+// (this app is either Lorentz's own embedded web UI, or proxied to Lorentz
+// one-for-one by next.config.ts's rewrites() in dev/standalone mode), so no
+// BFF is needed. Authentication is Lorentz's own cookie: an httpOnly "sid"
+// cookie the browser sends automatically, plus a CSRF token that has to be
+// echoed back as X-CSRF-TOKEN on every /api/* call except /api/auth itself
+// (see check_client_auth() in src/api/auth.c). useSession() captures that
+// token from the session object and hands it to setCsrfToken() below.
+let csrfToken: string | null = null;
+
+export function setCsrfToken(token: string | null | undefined) {
+  csrfToken = token ?? null;
+}
+
 export class ApiError extends Error {
   status: number;
   key?: string;
@@ -19,9 +31,18 @@ interface ErrorBody {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/lorentz${path}`, {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  // /api/auth is exempt from the CSRF check (it's how a client without a
+  // token yet logs in or checks its status), everything else needs it once
+  // a session exists.
+  if (csrfToken && path !== "/auth") headers["X-CSRF-TOKEN"] = csrfToken;
+
+  const res = await fetch(`/api${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers,
     cache: "no-store",
   });
 
@@ -37,6 +58,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
+    if (res.status === 401) setCsrfToken(null);
     const err = (data as ErrorBody | null)?.error;
     throw new ApiError(
       res.status,

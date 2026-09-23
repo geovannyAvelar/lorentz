@@ -17,11 +17,16 @@ import {
   Stack,
 } from "@mantine/core";
 import { IconAlertCircle } from "@tabler/icons-react";
-import { ApiError } from "@/lib/client";
+import { ApiError, api, setCsrfToken } from "@/lib/client";
+import type { Session } from "@/lib/types";
 
+// Is the API still open, i.e. does no account and no configured password
+// exist yet? GET /api/users answers 200 without authentication exactly in
+// that state (see users_login_required() in database/user-table.c) and 401
+// otherwise, so that single unauthenticated call is enough to tell.
 async function fetchBootstrap(): Promise<{ open: boolean }> {
-  const res = await fetch("/api/bootstrap", { cache: "no-store" });
-  return res.json();
+  const res = await fetch("/api/users", { cache: "no-store" });
+  return { open: res.status === 200 };
 }
 
 function LoginPageInner() {
@@ -68,7 +73,7 @@ export default function LoginPage() {
 }
 
 async function login(username: string, password: string, totp?: number) {
-  const res = await fetch("/api/session", {
+  const res = await fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -77,10 +82,11 @@ async function login(username: string, password: string, totp?: number) {
       ...(totp !== undefined ? { totp } : {}),
     }),
   });
-  const body = await res.json();
+  const body: { session?: Session; error?: { message?: string; key?: string } } = await res.json();
   if (!res.ok || !body?.session?.valid) {
     throw new ApiError(res.status, body?.error?.message ?? "Login failed", body?.error?.key);
   }
+  setCsrfToken(body.session.csrf);
   return body.session;
 }
 
@@ -174,15 +180,8 @@ function BootstrapForm({ next }: { next: string }) {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/lorentz/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, role: "admin", enabled: true }),
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        throw new ApiError(res.status, body?.error?.message ?? "Could not create the account", body?.error?.key);
-      }
+      // Unauthenticated while the API is still open (see fetchBootstrap above).
+      await api.post("/users", { username, password, role: "admin", enabled: true });
       await login(username, password);
       router.replace(next);
       router.refresh();

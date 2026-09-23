@@ -20,8 +20,12 @@ COPY . .
 # support, entirely unrelated to the mbedTLS this project's webserver uses
 # (see the comments around USE_POSTGRESQL in src/CMakeLists.txt for the
 # exact libraries and why the ordinary, non-"_shlib" ones are not enough).
-RUN apk add --no-cache libpq-dev openssl-libs-static
-RUN rm -rf cmake && bash build.sh "-DUSE_POSTGRESQL=ON"
+#
+# EMBED_WEBUI (see src/api/webui/CMakeLists.txt) folds web/'s static export
+# into the binary, so it needs Node.js/npm here at build time only - nothing
+# of it remains in the runtime stage or the final binary's dependencies.
+RUN apk add --no-cache libpq-dev openssl-libs-static nodejs npm
+RUN rm -rf cmake && bash build.sh "-DUSE_POSTGRESQL=ON -DEMBED_WEBUI=ON"
 
 # Runtime stage. The binary above is fully static (musl, no dynamic
 # libraries at all - `file` on it says "static-pie linked"), so this stage
@@ -46,8 +50,8 @@ COPY --from=build /app/lorentz /usr/bin/lorentz
 WORKDIR /etc/lorentz
 RUN lorentz create-default-config lorentz.toml
 
-# 53: DNS. 80/443: the web API and, once configured, the web UI's own
-# reverse proxy in front of it (see web/README.md). Lorentz replaces
+# 53: DNS. 80/443: the API and the web UI, both served by Lorentz itself at
+# its default admin path (/admin/, see README.md, "Web UI"). Lorentz replaces
 # dnsmasq, so DNS needs the host's network (--network host), or the
 # container's own network namespace with these ports published.
 EXPOSE 53/udp 53/tcp 80 443

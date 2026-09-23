@@ -13,6 +13,11 @@ export interface SessionUser {
 export interface Session {
   valid: boolean;
   totp: boolean;
+  // sid is never used client-side (it lives in the httpOnly "sid" cookie
+  // Lorentz itself sets); csrf is read once at login/status time and kept in
+  // memory by lib/client.ts, then sent back as the X-CSRF-TOKEN header.
+  sid?: string | null;
+  csrf?: string | null;
   validity: number;
   message: string | null;
   user: SessionUser | null;

@@ -298,6 +298,7 @@ set(LORENTZ_OBJECT_FILES
         $<TARGET_OBJECTS:core>
         $<TARGET_OBJECTS:api>
         $<TARGET_OBJECTS:api_docs>
+        $<TARGET_OBJECTS:api_webui>
         $<TARGET_OBJECTS:webserver>
         $<TARGET_OBJECTS:civetweb>
         $<TARGET_OBJECTS:cJSON>

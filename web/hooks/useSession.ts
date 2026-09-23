@@ -2,10 +2,13 @@
 
 import useSWR from "swr";
 import type { Session } from "@/lib/types";
+import { setCsrfToken } from "@/lib/client";
 
 async function fetchSession(): Promise<{ session: Session }> {
-  const res = await fetch("/api/session", { cache: "no-store" });
-  return res.json();
+  const res = await fetch("/api/auth", { cache: "no-store" });
+  const body: { session: Session } = await res.json();
+  setCsrfToken(body.session?.csrf);
+  return body;
 }
 
 export function useSession() {
