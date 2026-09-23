@@ -75,13 +75,20 @@ jobs:
       # registry - version tags from release.yml are never untagged, so
       # this can only ever delete old unstable builds, never a release.
       #
+      # min-versions-to-keep is 1, not 0: deleting the just-replaced digest
+      # immediately breaks anything that pulled "unstable" and cached that
+      # digest (Portainer/compose digest-pinning does this) moments before
+      # this run. Keeping one generation of slack means the old digest still
+      # resolves for a bit; it is only removed once a second push replaces
+      # it in turn.
+      #
       # Needs the ghcr.io/<repo>/lorentz package's "Manage Actions access"
       # (in its GitHub Packages settings) to list this repository with the
       # Admin role - GITHUB_TOKEN cannot delete package versions otherwise.
-      - name: Delete the untagged version this replaced
+      - name: Delete old untagged unstable versions
         uses: actions/delete-package-versions@v5
         with:
           package-name: lorentz
           package-type: container
           delete-only-untagged-versions: true
-          min-versions-to-keep: 0
+          min-versions-to-keep: 1
