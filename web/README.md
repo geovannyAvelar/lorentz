@@ -35,6 +35,18 @@ Roles are not cached beyond that: `useSession()` re-reads `/api/auth` every 60
 seconds and on window focus, so a role change or a disabled account is picked
 up without a fresh login.
 
+Lorentz's default `Content-Security-Policy` forbids inline scripts
+(`script-src 'self'`), which Next's static export needs for its hydration
+bootstrap and Mantine's color-scheme initializer. Rather than relaxing that
+to `'unsafe-inline'`, `npm run build:embed` runs
+`scripts/compute-csp-hashes.mjs` right after `next build`, which hashes each
+page's inline `<script>` blocks; `src/api/webui/generate.sh` (in the main
+repository) embeds those hashes alongside each file, and `webui_handler()`
+(`src/api/webui/webui.c`) splices them into that page's own `script-src`
+instead of sending the configured header unchanged. Every build's hashes
+differ (the hydration payload does), so this is meaningless outside the
+embedded build - the standalone/dev server doesn't set this CSP at all.
+
 ## Development
 
 Requires Node.js 20 or newer.

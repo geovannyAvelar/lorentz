@@ -15,5 +15,5 @@
 
 #include "webui.h"
 
-const struct webui_file webui_files[1] = { { NULL, NULL, NULL, 0 } };
+const struct webui_file webui_files[1] = { { NULL, NULL, NULL, 0, NULL } };
 const size_t webui_files_count = 0;

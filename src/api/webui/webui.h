@@ -21,6 +21,13 @@ struct webui_file {
 	const char *mime_type;
 	const unsigned char *content;
 	size_t content_size;
+	// Space-separated 'sha256-...' CSP source expressions for this file's
+	// own inline <script> blocks (Next.js's hydration bootstrap), computed
+	// at build time by web/scripts/compute-csp-hashes.mjs from the exact
+	// bytes of each script - or "" for a file with none (anything but HTML).
+	// webui_handler() splices these into the configured script-src instead
+	// of relaxing it with 'unsafe-inline' (see docker-unstable.yml history).
+	const char *csp_script_hashes;
 };
 
 extern const struct webui_file webui_files[];
