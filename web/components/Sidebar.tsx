@@ -12,6 +12,7 @@ import {
   IconDevices,
   IconNetwork,
   IconUserCog,
+  IconSettings,
 } from "@tabler/icons-react";
 
 interface NavItem {
@@ -30,6 +31,7 @@ const NAV: NavItem[] = [
   { href: "/clients", label: "Clients", icon: IconDevices },
   { href: "/network", label: "Network", icon: IconNetwork },
   { href: "/users", label: "Users", icon: IconUserCog, adminOnly: true },
+  { href: "/settings", label: "Settings", icon: IconSettings, adminOnly: true },
 ];
 
 export function Sidebar({ isAdmin }: { isAdmin: boolean }) {

@@ -96,13 +96,23 @@ services:
     depends_on: [lorentz]
 ```
 
+## Settings
+
+`/settings` (admins only) edits every key of `/api/config` without knowing any
+of them: `GET /api/config?detailed=true` reports each key's type, allowed
+values, default and flags, and `components/ConfigField.tsx` picks the input
+from that (switch, number, select for enums, tags for arrays, password). Keys
+that cannot be set through the API (`/api/config/_properties`) or are forced
+by an environment variable show as locked. Only changed keys are sent, as one
+`PATCH /api/config`; the API's own validation message is shown when it refuses
+one. A password change resets the sessions, so you sign in again.
+
 ## What isn't here
 
 Scoped out of this first pass, all doable against the existing API without
 further backend changes:
 
-- Teleporter (export/import), DHCP leases, and the full settings editor
-  (`/api/config` has ~170 keys).
+- Teleporter (export/import) and DHCP leases.
 - Triggering a gravity update from the UI - `/api/action/gravity` streams
   plain-text output over one long chunked HTTP response and appends a
   trailing JSON status to the same body, which doesn't fit a JSON-based proxy

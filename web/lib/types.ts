@@ -186,3 +186,45 @@ export type ClientsResponse = { clients: Client[] };
 export type NetworkResponse = { devices: NetworkDevice[] };
 export type UsersResponse = { users: User[] };
 export type MessagesResponse = { messages: Message[] };
+
+// GET /api/config?detailed=true: the whole configuration as a tree, each leaf
+// carrying its own type, allowed values, default and flags, so the settings
+// page needs no per-key knowledge (see get_json_config() in src/api/config.c).
+export interface ConfigOption {
+  item: string | number;
+  description: string;
+}
+
+export interface ConfigItemMeta {
+  description: string;
+  // A sentence for free-form types, the list of choices for an enum, or null
+  allowed: string | ConfigOption[] | null;
+  type: string;
+  value: unknown;
+  default: unknown;
+  modified: boolean;
+  flags: {
+    restart_dnsmasq: boolean;
+    session_reset: boolean;
+    env_var: boolean;
+  };
+}
+
+export interface ConfigNode {
+  [key: string]: ConfigItemMeta | ConfigNode;
+}
+
+export interface ConfigTopic {
+  name: string;
+  title: string;
+  description: string;
+}
+
+export interface ConfigResponse {
+  topics: ConfigTopic[];
+  config: ConfigNode;
+}
+
+export interface ConfigPropertiesResponse {
+  config: { read_only: { key: string; reason: string; description: string }[] };
+}
