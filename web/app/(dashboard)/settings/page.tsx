@@ -226,6 +226,7 @@ export default function SettingsPage() {
                     value={entry.key in drafts ? drafts[entry.key] : originalValue(entry.meta)}
                     onChange={(v) => edit(entry, v)}
                     lockedReason={lockedReason(entry)}
+                    presets={data.dns_servers}
                   />
                 ))}
               </Stack>

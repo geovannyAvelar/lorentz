@@ -3,7 +3,9 @@
 import type { ReactNode } from "react";
 import {
   Badge,
+  Button,
   Group,
+  Menu,
   NumberInput,
   PasswordInput,
   Select,
@@ -13,9 +15,10 @@ import {
   TextInput,
   Tooltip,
 } from "@mantine/core";
-import { IconInfoCircle } from "@tabler/icons-react";
+import { IconChevronDown, IconInfoCircle } from "@tabler/icons-react";
 import { firstParagraph, isPassword, isSecretString, options } from "@/lib/config-schema";
 import type { ConfigEntry } from "@/lib/config-schema";
+import type { DnsServerPreset } from "@/lib/types";
 
 interface Props {
   entry: ConfigEntry;
@@ -23,6 +26,50 @@ interface Props {
   onChange: (value: unknown) => void;
   // Why this key cannot be edited here, if it cannot
   lockedReason?: string;
+  // Suggested resolvers, offered as a menu on dns.upstreams
+  presets?: DnsServerPreset[];
+}
+
+// Adds a provider's addresses to the ones already listed, skipping repeats
+function UpstreamPresets({
+  presets,
+  value,
+  onChange,
+  disabled,
+}: {
+  presets: DnsServerPreset[];
+  value: string[];
+  onChange: (value: string[]) => void;
+  disabled: boolean;
+}) {
+  const add = (addresses: string[]) =>
+    onChange([...value, ...addresses.filter((a) => !value.includes(a))]);
+  const withV6 = presets.filter((p) => p.v6.length > 0);
+
+  return (
+    <Menu shadow="md" width={280} position="bottom-start" disabled={disabled}>
+      <Menu.Target>
+        <Button size="xs" variant="default" rightSection={<IconChevronDown size={14} />} disabled={disabled}>
+          Add a provider
+        </Button>
+      </Menu.Target>
+      <Menu.Dropdown mah={320} style={{ overflowY: "auto" }}>
+        <Menu.Label>IPv4</Menu.Label>
+        {presets.map((p) => (
+          <Menu.Item key={`v4-${p.name}`} onClick={() => add(p.v4)}>
+            {p.name}
+          </Menu.Item>
+        ))}
+        <Menu.Divider />
+        <Menu.Label>IPv6</Menu.Label>
+        {withV6.map((p) => (
+          <Menu.Item key={`v6-${p.name}`} onClick={() => add(p.v6)}>
+            {p.name}
+          </Menu.Item>
+        ))}
+      </Menu.Dropdown>
+    </Menu>
+  );
 }
 
 function Label({ entry, lockedReason }: { entry: ConfigEntry; lockedReason?: string }) {
@@ -60,7 +107,7 @@ function Hint({ entry }: { entry: ConfigEntry }): ReactNode {
   return meta.modified ? `${text} (default: ${JSON.stringify(meta.default)})` : text;
 }
 
-export function ConfigField({ entry, value, onChange, lockedReason }: Props) {
+export function ConfigField({ entry, value, onChange, lockedReason, presets }: Props) {
   const { meta } = entry;
   const disabled = lockedReason !== undefined;
   const common = {
@@ -102,16 +149,24 @@ export function ConfigField({ entry, value, onChange, lockedReason }: Props) {
   }
 
   if (meta.type === "string array") {
+    const list = Array.isArray(value) ? (value as string[]) : [];
     return (
-      <TagsInput
-        {...common}
-        // The default also splits on ",", which some entries legitimately
-        // contain (dns.cnameRecords, dns.revServers)
-        splitChars={[]}
-        acceptValueOnBlur
-        value={Array.isArray(value) ? (value as string[]) : []}
-        onChange={onChange}
-      />
+      <>
+        <TagsInput
+          {...common}
+          // The default also splits on ",", which some entries legitimately
+          // contain (dns.cnameRecords, dns.revServers)
+          splitChars={[]}
+          acceptValueOnBlur
+          value={list}
+          onChange={onChange}
+        />
+        {entry.key === "dns.upstreams" && presets && presets.length > 0 && (
+          <Group mt={6}>
+            <UpstreamPresets presets={presets} value={list} onChange={onChange} disabled={disabled} />
+          </Group>
+        )}
+      </>
     );
   }
 

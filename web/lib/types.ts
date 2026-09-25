@@ -220,8 +220,16 @@ export interface ConfigTopic {
   description: string;
 }
 
+// A well-known resolver the API suggests for dns.upstreams
+export interface DnsServerPreset {
+  name: string;
+  v4: string[];
+  v6: string[];
+}
+
 export interface ConfigResponse {
   topics: ConfigTopic[];
+  dns_servers: DnsServerPreset[];
   config: ConfigNode;
 }
 
