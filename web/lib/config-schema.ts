@@ -56,6 +56,26 @@ export function isPassword(meta: ConfigItemMeta): boolean {
   return meta.type.startsWith("password");
 }
 
+// String keys that hold a secret. files.database is also caught by its
+// value below, since it is a plain path until pointed at PostgreSQL.
+const SECRET_KEYS = new Set([
+  "webserver.api.pwhash",
+  "webserver.api.app_pwhash",
+  "webserver.api.totp_secret",
+]);
+
+// scheme://user:password@host/... - postgresql://lorentz:secret@db/lorentz
+const URI_WITH_PASSWORD = /^[a-z][a-z0-9+.-]*:\/\/[^\s/@:]*:[^\s/@]+@/i;
+
+// Judged on the saved value, not the one being typed, so the input does not
+// change kind halfway through an edit.
+export function isSecretString(entry: ConfigEntry): boolean {
+  return (
+    SECRET_KEYS.has(entry.key) ||
+    (typeof entry.meta.value === "string" && URI_WITH_PASSWORD.test(entry.meta.value))
+  );
+}
+
 // The value shown while nothing was edited. A write-only password is never
 // sent back by the API (it reads "********"), so it starts empty.
 export function originalValue(meta: ConfigItemMeta): unknown {

@@ -14,7 +14,7 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
-import { firstParagraph, isPassword, options } from "@/lib/config-schema";
+import { firstParagraph, isPassword, isSecretString, options } from "@/lib/config-schema";
 import type { ConfigEntry } from "@/lib/config-schema";
 
 interface Props {
@@ -133,6 +133,19 @@ export function ConfigField({ entry, value, onChange, lockedReason }: Props) {
       <PasswordInput
         {...common}
         autoComplete="new-password"
+        value={typeof value === "string" ? value : ""}
+        onChange={(e) => onChange(e.currentTarget.value)}
+      />
+    );
+  }
+
+  // A secret that the API does send back (a hash, or a URI holding a
+  // password): masked, with the eye toggle to see or edit it
+  if (isSecretString(entry)) {
+    return (
+      <PasswordInput
+        {...common}
+        autoComplete="off"
         value={typeof value === "string" ? value : ""}
         onChange={(e) => onChange(e.currentTarget.value)}
       />
