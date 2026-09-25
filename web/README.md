@@ -57,9 +57,13 @@ LORENTZ_API_URL=http://127.0.0.1 npm run dev
 ```
 
 Open <http://localhost:3000>. On a Lorentz instance with no account and no
-`webserver.api.password` set, the login page offers to create the first
-(admin) account instead of a password field - the API is "open" until then
-(see `database/user-table.c`, `users_login_required()`).
+`webserver.api.password` set the API is "open" (see `database/user-table.c`,
+`users_login_required()`), and every page sends the visitor to a setup screen
+that asks for a single password: it creates the administrator account
+`admin`, signs in as it, and closes the API. From then on the login page asks
+for a username and that password. The web UI only signs in with accounts; the
+one password of `webserver.api.password` still works for API clients and the
+CLI, but not on the login page.
 
 ## Environment variables
 

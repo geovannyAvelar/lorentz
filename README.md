@@ -118,7 +118,8 @@ deletes or disables their own account.
 
 As soon as an enabled account exists, the API needs a login even when `webserver.api.password` is empty. While
 it is still open (no password, no account) the first account has to be an enabled admin, and creating it
-closes the API. Accounts are kept in the `users` table of the long-term database (SQLite or PostgreSQL) and
+closes the API. The web UI does this for you: on a fresh install it asks for one password and creates the
+administrator `admin` with it. Accounts are kept in the `users` table of the long-term database (SQLite or PostgreSQL) and
 are held in memory for the checks of each request, so Lorentz instances that share one PostgreSQL database
 notice a change of another only after a restart. They are not part of the Teleporter export, the
 two-factor authentication (`webserver.api.totp_secret`) applies to the configured password only.

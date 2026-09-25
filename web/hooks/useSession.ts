@@ -4,7 +4,9 @@ import useSWR from "swr";
 import type { Session } from "@/lib/types";
 import { setCsrfToken } from "@/lib/client";
 
-async function fetchSession(): Promise<{ session: Session }> {
+export const SESSION_KEY = "session";
+
+export async function fetchSession(): Promise<{ session: Session }> {
   const res = await fetch("/api/auth", { cache: "no-store" });
   const body: { session: Session } = await res.json();
   setCsrfToken(body.session?.csrf);
@@ -12,7 +14,7 @@ async function fetchSession(): Promise<{ session: Session }> {
 }
 
 export function useSession() {
-  const { data, error, isLoading, mutate } = useSWR("session", fetchSession, {
+  const { data, error, isLoading, mutate } = useSWR(SESSION_KEY, fetchSession, {
     refreshInterval: 60_000,
     revalidateOnFocus: true,
   });
@@ -25,5 +27,11 @@ export function useSession() {
   // session response that leaves "user" out entirely rather than nulling it.
   const isAdmin = Boolean(session?.valid) && (session?.user == null || session.user.role === "admin");
 
-  return { session, isAdmin, isLoading, error, mutate };
+  // While no account and no configured password exist, Lorentz answers "valid"
+  // to everybody, without a session id (see get_session_object() in
+  // src/api/auth.c). That is not a login, it is a fresh install still waiting
+  // for its first password.
+  const isOpen = Boolean(session?.valid) && session?.sid == null;
+
+  return { session, isAdmin, isOpen, isLoading, error, mutate };
 }

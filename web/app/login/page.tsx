@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import {
   Paper,
   Title,
@@ -18,6 +18,7 @@ import {
 } from "@mantine/core";
 import { IconAlertCircle } from "@tabler/icons-react";
 import { ApiError, api, setCsrfToken } from "@/lib/client";
+import { SESSION_KEY, fetchSession } from "@/hooks/useSession";
 import type { Session } from "@/lib/types";
 
 // Is the API still open, i.e. does no account and no configured password
@@ -27,6 +28,24 @@ import type { Session } from "@/lib/types";
 async function fetchBootstrap(): Promise<{ open: boolean }> {
   const res = await fetch("/api/users", { cache: "no-store" });
   return { open: res.status === 200 };
+}
+
+// What the pages cache about the session was read before this login; refresh
+// it before navigating, or the dashboard would still see a fresh install (a
+// session without an id) and send the visitor straight back here. The cached
+// "API is open" answer is settled after navigating instead: changing it while
+// this page is still up swaps the setup form for the sign-in one mid-login.
+function useAfterLogin(next: string) {
+  const router = useRouter();
+  const { mutate } = useSWRConfig();
+  return async () => {
+    // Written straight into the cache: nothing on this page is subscribed to
+    // it, so a plain revalidation would not fetch anything
+    await mutate(SESSION_KEY, await fetchSession(), { revalidate: false });
+    router.replace(next);
+    router.refresh();
+    await mutate("bootstrap", { open: false }, { revalidate: false });
+  };
 }
 
 function LoginPageInner() {
@@ -46,7 +65,7 @@ function LoginPageInner() {
           {checkingSetup
             ? "Checking the API…"
             : open
-              ? "No account exists yet. Create the first admin account."
+              ? "Welcome. Choose a password to get started."
               : "Sign in to continue."}
         </Text>
         {checkingSetup ? (
@@ -72,15 +91,11 @@ export default function LoginPage() {
   );
 }
 
-async function login(username: string, password: string, totp?: number) {
+async function login(username: string, password: string) {
   const res = await fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: username || undefined,
-      password,
-      ...(totp !== undefined ? { totp } : {}),
-    }),
+    body: JSON.stringify({ username, password }),
   });
   const body: { session?: Session; error?: { message?: string; key?: string } } = await res.json();
   if (!res.ok || !body?.session?.valid) {
@@ -91,11 +106,9 @@ async function login(username: string, password: string, totp?: number) {
 }
 
 function LoginForm({ next }: { next: string }) {
-  const router = useRouter();
+  const afterLogin = useAfterLogin(next);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [totp, setTotp] = useState("");
-  const [needsTotp, setNeedsTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -104,20 +117,10 @@ function LoginForm({ next }: { next: string }) {
     setError(null);
     setLoading(true);
     try {
-      await login(
-        username,
-        password,
-        needsTotp && totp ? Number(totp) : undefined,
-      );
-      router.replace(next);
-      router.refresh();
+      await login(username.trim(), password);
+      await afterLogin();
     } catch (err) {
-      if (err instanceof ApiError) {
-        if (/2FA|totp/i.test(err.message)) setNeedsTotp(true);
-        setError(err.message);
-      } else {
-        setError("Login failed");
-      }
+      setError(err instanceof ApiError ? err.message : "Login failed");
     } finally {
       setLoading(false);
     }
@@ -128,11 +131,10 @@ function LoginForm({ next }: { next: string }) {
       <Stack gap="sm">
         <TextInput
           label="Username"
-          description="Leave blank to use the configured API password"
           value={username}
           onChange={(e) => setUsername(e.currentTarget.value)}
           autoComplete="username"
-          placeholder="(configured password)"
+          required
         />
         <PasswordInput
           label="Password"
@@ -141,15 +143,6 @@ function LoginForm({ next }: { next: string }) {
           autoComplete="current-password"
           required
         />
-        {needsTotp && (
-          <TextInput
-            label="2FA code"
-            value={totp}
-            onChange={(e) => setTotp(e.currentTarget.value)}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-          />
-        )}
         {error && (
           <Alert color="red" icon={<IconAlertCircle size={16} />}>
             {error}
@@ -163,9 +156,12 @@ function LoginForm({ next }: { next: string }) {
   );
 }
 
+// A fresh install only asks for a password: the account it belongs to is
+// this one, so there is no username to think of. It signs in with it later.
+const FIRST_ADMIN = "admin";
+
 function BootstrapForm({ next }: { next: string }) {
-  const router = useRouter();
-  const [username, setUsername] = useState("");
+  const afterLogin = useAfterLogin(next);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -181,12 +177,11 @@ function BootstrapForm({ next }: { next: string }) {
     setLoading(true);
     try {
       // Unauthenticated while the API is still open (see fetchBootstrap above).
-      await api.post("/users", { username, password, role: "admin", enabled: true });
-      await login(username, password);
-      router.replace(next);
-      router.refresh();
+      await api.post("/users", { username: FIRST_ADMIN, password, role: "admin", enabled: true });
+      await login(FIRST_ADMIN, password);
+      await afterLogin();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not create the account");
+      setError(err instanceof ApiError ? err.message : "Could not set the password");
     } finally {
       setLoading(false);
     }
@@ -195,16 +190,11 @@ function BootstrapForm({ next }: { next: string }) {
   return (
     <form onSubmit={onSubmit}>
       <Stack gap="sm">
-        <TextInput
-          label="Username"
-          value={username}
-          onChange={(e) => setUsername(e.currentTarget.value)}
-          autoComplete="username"
-          required
-        />
+        {/* For the browser's password manager, which saves it against a name */}
+        <input type="hidden" name="username" value={FIRST_ADMIN} autoComplete="username" readOnly />
         <PasswordInput
           label="Password"
-          description="8 to 256 characters"
+          description={`8 to 256 characters. You sign in as "${FIRST_ADMIN}" with it.`}
           value={password}
           onChange={(e) => setPassword(e.currentTarget.value)}
           autoComplete="new-password"
@@ -224,7 +214,7 @@ function BootstrapForm({ next }: { next: string }) {
           </Alert>
         )}
         <Button type="submit" loading={loading} mt={4}>
-          Create admin account
+          Set password and continue
         </Button>
       </Stack>
     </form>

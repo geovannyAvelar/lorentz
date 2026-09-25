@@ -9,17 +9,18 @@ import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { session, isAdmin, isLoading } = useSession();
+  const { session, isAdmin, isOpen, isLoading } = useSession();
   const router = useRouter();
 
   useEffect(() => {
-    // proxy.ts already keeps a signed-out visitor off these pages by cookie
-    // presence; this catches the cookie going stale after the fact (the
-    // session expired, or the account was disabled or deleted).
-    if (!isLoading && session && !session.valid) {
+    // A signed-out visitor (the session expired, or the account was disabled
+    // or deleted) goes to the login page, and so does anybody on a fresh
+    // install: an open API lets everyone in, so the first thing to do there
+    // is to set the password, on the same page.
+    if (!isLoading && session && (!session.valid || isOpen)) {
       router.replace("/login");
     }
-  }, [isLoading, session, router]);
+  }, [isLoading, session, isOpen, router]);
 
   if (isLoading || !session) {
     return (
@@ -29,7 +30,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!session.valid) return null;
+  if (!session.valid || isOpen) return null;
 
   return (
     <AppShell header={{ height: 60 }} navbar={{ width: 224, breakpoint: "sm" }} padding="lg">
