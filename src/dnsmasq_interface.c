@@ -745,7 +745,7 @@ static bool is_lorentz_domain(const char *domain)
 	// domain suffix is configured
 	if(!lorentz_suffix && daemon->domain_suffix)
 	{
-		lorentz_suffix = calloc(strlen(daemon->domain_suffix) + 9, sizeof(char));
+		lorentz_suffix = calloc(strlen(daemon->domain_suffix) + sizeof("lorentz.lan."), sizeof(char));
 		strcpy(lorentz_suffix, "lorentz.lan.");
 		strcat(lorentz_suffix, daemon->domain_suffix);
 		lorentz_suffix_len = strlen(lorentz_suffix);
@@ -766,7 +766,7 @@ static bool is_lorentz_domain(const char *domain)
 	// in the common case (domain is not lorentz.lan/hostname), all four checks
 	// short-circuit after a single strlen + four integer comparisons.
 	const size_t dlen = strlen(domain);
-	return (dlen == 7u           && strcasecmp(domain, "lorentz.lan") == 0) ||
+	return (dlen == sizeof("lorentz.lan") - 1u && strcasecmp(domain, "lorentz.lan") == 0) ||
 	       (dlen == hostname_len && strcasecmp(domain, hostname()) == 0) ||
 	       (lorentz_suffix   && dlen == lorentz_suffix_len   && strcasecmp(domain, lorentz_suffix) == 0) ||
 	       (hostname_suffix && dlen == hostname_suffix_len && strcasecmp(domain, hostname_suffix) == 0);
