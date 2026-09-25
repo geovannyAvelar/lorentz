@@ -27,6 +27,12 @@ import { useSession } from "@/hooks/useSession";
 import { GroupPicker } from "@/components/GroupPicker";
 import type { AdList, ListsResponse } from "@/lib/types";
 
+// Every write to /api/lists needs the list's type as a *query* parameter, not
+// just in the body: (address, type) is what identifies a list, and without it
+// the API answers 400 "Specify type parameter" (see api_list() in src/api/list.c).
+const listPath = (list: Pick<AdList, "address" | "type">) =>
+  `/lists/${encodeURIComponent(list.address)}?type=${list.type}`;
+
 export default function ListsPage() {
   const { isAdmin } = useSession();
   const { data, isLoading, mutate } = useSWR<ListsResponse>("/lists", fetcher);
@@ -34,8 +40,7 @@ export default function ListsPage() {
   const [editing, setEditing] = useState<AdList | null>(null);
 
   async function toggle(list: AdList) {
-    await api.put(`/lists/${encodeURIComponent(list.address)}`, {
-      type: list.type,
+    await api.put(listPath(list), {
       comment: list.comment,
       groups: list.groups,
       enabled: !list.enabled,
@@ -45,7 +50,7 @@ export default function ListsPage() {
 
   async function remove(list: AdList) {
     if (!confirm(`Remove list ${list.address}?`)) return;
-    await api.del(`/lists/${encodeURIComponent(list.address)}`);
+    await api.del(listPath(list));
     mutate();
   }
 
@@ -168,9 +173,8 @@ function AddListModal({
     setError(null);
     setSaving(true);
     try {
-      await api.post("/lists", {
+      await api.post(`/lists?type=${type}`, {
         address: addresses.length === 1 ? addresses[0] : addresses,
-        type,
         comment: comment || null,
         groups,
         enabled: true,
@@ -236,7 +240,6 @@ function EditListModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [type, setType] = useState(list.type);
   const [comment, setComment] = useState(list.comment ?? "");
   const [groups, setGroups] = useState<number[]>(list.groups);
   const [enabled, setEnabled] = useState(list.enabled);
@@ -247,8 +250,7 @@ function EditListModal({
     setError(null);
     setSaving(true);
     try {
-      await api.put(`/lists/${encodeURIComponent(list.address)}`, {
-        type,
+      await api.put(listPath(list), {
         comment: comment || null,
         groups,
         enabled,
@@ -264,14 +266,11 @@ function EditListModal({
   return (
     <Modal opened onClose={onClose} title={list.address}>
       <Stack>
-        <NativeSelect
+        <TextInput
           label="Type"
-          data={[
-            { value: "block", label: "Block" },
-            { value: "allow", label: "Allow" },
-          ]}
-          value={type}
-          onChange={(e) => setType(e.currentTarget.value as "block" | "allow")}
+          description="Part of what identifies a list; to change it, remove the list and add it again"
+          value={list.type === "block" ? "Block" : "Allow"}
+          disabled
         />
         <TextInput label="Comment" value={comment} onChange={(e) => setComment(e.currentTarget.value)} />
         <GroupPicker value={groups} onChange={setGroups} />
