@@ -150,6 +150,7 @@
 // How often should we delete old queries from the database? [seconds]
 // Default: 86400 (once per day)
 #define DATABASE_DELETE_OLD_QUERIES_INTERVAL 86400
+#define DATABASE_DELETE_OLD_QUERIES_INTERVAL_SERVER 3600
 
 // Over how many seconds should the query-per-second (QPS) value be averaged?
 // Default: 30 (seconds)

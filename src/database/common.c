@@ -415,7 +415,7 @@ static void db_init_finish(db_conn *db)
 
 	// Log if users asked us to not use the long-term database for queries
 	// We will still use it to store warnings (Lorentz diagnosis system)
-	if(config.database.maxDBdays.v.ui == 0)
+	if(!config.database.storeQueries.v.b)
 		log_info("Not using the database for storing queries");
 
 	log_info("Database successfully initialized");

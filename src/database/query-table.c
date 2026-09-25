@@ -747,8 +747,8 @@ static bool export_queries_to_remote(const bool final)
 		return false;
 	}
 
-	// Only store queries if database.maxDBdays > 0
-	if(config.database.maxDBdays.v.ui > 0)
+	// Only store queries if database.storeQueries is set
+	if(config.database.storeQueries.v.b)
 	{
 		log_debug(DEBUG_DATABASE, "Storing queries on the server WHERE timestamp < %f (memdb_queries_maxid = %"PRId64")",
 		          time, memdb_queries_maxid);
@@ -1128,8 +1128,8 @@ bool export_queries_to_disk(const bool final)
 	db_conn *memdb = get_memdb();
 	SQL_bool(memdb, "BEGIN");
 
-	// Only store queries if database.maxDBdays > 0
-	if(config.database.maxDBdays.v.ui > 0)
+	// Only store queries if database.storeQueries is set
+	if(config.database.storeQueries.v.b)
 	{
 		log_debug(DEBUG_DATABASE, "Storing queries on disk WHERE timestamp < %f (memdb_queries_maxid = %"PRId64")",
 		          time, memdb_queries_maxid);

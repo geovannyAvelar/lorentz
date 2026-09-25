@@ -1006,9 +1006,15 @@ void initConfig(struct config *conf)
 	conf->database.DBimport.d.b = true;
 	conf->database.DBimport.c = validate_stub; // Only type-based checking
 
+	conf->database.storeQueries.k = "database.storeQueries";
+	conf->database.storeQueries.h = "Should queries be stored in the long-term database?\n\n When disabled, queries only live in memory (for webserver.api.maxHistory seconds) and are lost on restart. database.maxDBdays sets how long stored queries are kept.";
+	conf->database.storeQueries.t = CONF_BOOL;
+	conf->database.storeQueries.d.b = true;
+	conf->database.storeQueries.c = validate_stub; // Only type-based checking
+
 	conf->database.maxDBdays.k = "database.maxDBdays";
-	conf->database.maxDBdays.h = "How long should queries be stored in the database [days]?";
-	conf->database.maxDBdays.a = cJSON_CreateStringReference("A positive integer value in days, or 0 to disable the database");
+	conf->database.maxDBdays.h = "How long should queries be kept in the long-term database [days]?\n\n Older queries are deleted automatically: once a day between 3 and 4 am for an SQLite file, every hour for a PostgreSQL server. 0 keeps them forever. Whether queries are stored at all is decided by database.storeQueries.";
+	conf->database.maxDBdays.a = cJSON_CreateStringReference("A positive integer value in days, or 0 to never delete queries");
 	// Unsigned: every reader takes .v.ui - database-thread.c, query-table.c
 	// and common.c - and the help text above promises a positive value. As
 	// CONF_INT the two disagreed, and a -1 stored through .v.i came back out

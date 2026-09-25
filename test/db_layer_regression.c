@@ -59,6 +59,7 @@ const char *db_test_path(const char *name)
 // Configuration the modules read. Everything else stays zero-initialized
 static void configure(void)
 {
+	config.database.storeQueries.v.b = true;
 	config.database.maxDBdays.v.ui = 365;
 	config.database.DBimport.v.b = false; // importing needs the shared memory
 	config.database.useWAL.v.b = true;
@@ -875,6 +876,7 @@ void test_postgres_database(void)
 	check_users();
 
 	// The in-memory database (always SQLite) exports to the server ...
+	config.database.storeQueries.v.b = true;
 	config.database.maxDBdays.v.ui = 365;
 	CHECK(init_memory_database());
 	db_conn *m = get_memdb();

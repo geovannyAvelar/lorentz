@@ -177,7 +177,9 @@ void *DB_thread(void *val)
 	// to the database
 	time_t before = time(NULL);
 	time_t lastDBsave = before - before%config.database.DBinterval.v.ui;
-	time_t lastDBdelete = before;
+	// A server database is purged right away, so a database.maxDBdays that
+	// was changed while Lorentz was down applies on the next start
+	time_t lastDBdelete = db_uri_is_remote(config.files.database.v.s) ? 0 : before;
 
 	// Add some randomness (between one and two hours) to these timestamps
 	// to avoid them running at the same time and immediately after Lorentz was
@@ -256,12 +258,19 @@ void *DB_thread(void *val)
 		if(killed)
 			break;
 
-		// Delete old queries from the database once per day between 3am
-		// and 4am
+		// Delete old queries from the database. An SQLite file once per
+		// day between 3am and 4am, a big delete being what it is for a
+		// single-writer file; on a server the same statement is cheap,
+		// and running it every hour means a changed database.maxDBdays
+		// takes effect within the hour. database.maxDBdays = 0 keeps the
+		// queries forever
 		struct tm tm_now = { 0 };
 		localtime_r(&now, &tm_now);
-		if(tm_now.tm_hour == 3 && tm_now.tm_min > cleaning_minute &&
-		   now - lastDBdelete >= DATABASE_DELETE_OLD_QUERIES_INTERVAL)
+		const bool purge_due = db_uri_is_remote(config.files.database.v.s)
+			? now - lastDBdelete >= DATABASE_DELETE_OLD_QUERIES_INTERVAL_SERVER
+			: tm_now.tm_hour == 3 && tm_now.tm_min > cleaning_minute &&
+			  now - lastDBdelete >= DATABASE_DELETE_OLD_QUERIES_INTERVAL;
+		if(purge_due && config.database.maxDBdays.v.ui > 0)
 		{
 			// Update lastDBdelete timer to avoid multiple deletions
 			lastDBdelete = now;

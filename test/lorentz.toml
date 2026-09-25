@@ -814,10 +814,23 @@
   #     true or false
   DBimport = true
 
-  # How long should queries be stored in the database [days]?
+  # Should queries be stored in the long-term database?
+  #
+  # When disabled, queries only live in memory (for webserver.api.maxHistory seconds)
+  # and are lost on restart. database.maxDBdays sets how long stored queries are kept.
   #
   # Allowed values are:
-  #     A positive integer value in days, or 0 to disable the database
+  #     true or false
+  storeQueries = true
+
+  # How long should queries be kept in the long-term database [days]?
+  #
+  # Older queries are deleted automatically: once a day between 3 and 4 am for an
+  # SQLite file, every hour for a PostgreSQL server. 0 keeps them forever. Whether
+  # queries are stored at all is decided by database.storeQueries.
+  #
+  # Allowed values are:
+  #     A positive integer value in days, or 0 to never delete queries
   maxDBdays = 91
 
   # How often do we store queries in Lorentz's database [seconds]?

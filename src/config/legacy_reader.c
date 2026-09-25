@@ -144,9 +144,13 @@ const char *readLorentzlegacy(struct config *conf)
 		if(value > maxdbdays_max)
 			value = maxdbdays_max;
 
-		// Import value if it is >= than 0, convert negative values
-		// to 0 to disable the database
-		conf->database.maxDBdays.v.ui = value >= 0 ? value : 0;
+		// A legacy MAXDBDAYS of 0 or below disabled the database; that
+		// is database.storeQueries now, and database.maxDBdays = 0
+		// would mean to keep the queries forever
+		if(value > 0)
+			conf->database.maxDBdays.v.ui = value;
+		else
+			conf->database.storeQueries.v.b = false;
 	}
 
 	// RESOLVE_IPV6
@@ -186,10 +190,10 @@ const char *readLorentzlegacy(struct config *conf)
 
 	if(conf->files.database.v.s == NULL || strlen(conf->files.database.v.s) == 0)
 	{
-		// Use standard path if path was set to zero but override
-		// MAXDBDAYS=0 to ensure no queries are stored in the database
+		// Use standard path if path was set to zero but ensure no
+		// queries are stored in the database
 		conf->files.database.v.s = conf->files.database.d.s;
-		conf->database.maxDBdays.v.ui = 0;
+		conf->database.storeQueries.v.b = false;
 	}
 
 	// MAXLOGAGE

@@ -76,6 +76,18 @@ in one step, and a database of an older version is refused), `LIKE` ignores the 
 SQLite, and a change of the schema after version 23 has to be written for both databases. Lorentz opens a
 connection for each request, and keeps up to `database.pool.size` (8) of the closed ones open for the next request, for at most `database.pool.idleTimeout` (300) seconds. Each connection is reset (`DISCARD ALL`) before it is used again, and one the server has closed is replaced. Set the size to 0 to turn the pool off. The pool caps the idle connections and not the busy ones, so an external pooler such as PgBouncer still helps when many API clients are expected; use session pooling mode, and set the timeout below the one of the pooler.
 
+### Query history
+
+The DNS queries are kept in memory for `webserver.api.maxHistory` seconds and written to the long-term
+database (`query_storage`, on SQLite or PostgreSQL) every `database.DBinterval` seconds and on shutdown.
+Two settings, both on the "Database" tab of the web UI's settings page, control what happens to them:
+
+- `database.storeQueries` (default `true`): set it to `false` to keep no history at all; queries then only
+  live in memory and are lost on restart.
+- `database.maxDBdays` (default `91`): how many days of queries to keep. Older ones are deleted
+  automatically - every hour on a PostgreSQL server (and once at start), once a day between 3 and 4 am for an
+  SQLite file - so a changed value takes effect within the hour. **`0` keeps the queries forever.**
+
 The driver is described at the top of `src/database/db-postgres.c`, the tests in `test/integration/README.md`.
 
 ## User accounts

@@ -439,8 +439,11 @@ components:
               properties:
                 DBimport:
                   type: boolean
+                storeQueries:
+                  type: boolean
                 maxDBdays:
                   type: integer
+                  description: Days to keep stored queries, 0 keeps them forever
                 DBinterval:
                   type: integer
                 useWAL:
@@ -839,6 +842,7 @@ components:
             refreshNames: IPV4_ONLY
           database:
             DBimport: true
+            storeQueries: true
             maxDBdays: 365
             DBinterval: 60
             useWAL: true
