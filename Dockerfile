@@ -64,6 +64,16 @@ COPY --from=build /app/lorentz /usr/bin/lorentz
 WORKDIR /etc/lorentz
 RUN lorentz create-default-config lorentz.toml && chown lorentz:lorentz lorentz.toml
 
+# gravity.db (domain lists, groups, clients, adlists) is always a local SQLite
+# file, even with files.database on PostgreSQL (see README.md, "Database
+# drivers"), and nothing but `pihole -g` creates it - without one, /api/domains,
+# /api/groups, /api/lists and /api/clients all fail with "Database not
+# available". Start from an empty one (the schema of test/gravity.db.sql).
+COPY docker/gravity.db.sql /tmp/gravity.db.sql
+RUN lorentz sqlite3 /etc/lorentz/gravity.db < /tmp/gravity.db.sql \
+    && chown lorentz:lorentz /etc/lorentz/gravity.db \
+    && rm /tmp/gravity.db.sql
+
 # 53: DNS. 80/443: the API and the web UI, both served by Lorentz itself at
 # its default admin path (/admin/, see README.md, "Web UI"). Lorentz replaces
 # dnsmasq, so DNS needs the host's network (--network host), or the

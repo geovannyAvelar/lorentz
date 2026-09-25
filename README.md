@@ -66,7 +66,9 @@ is, because they are private to one host or are produced by tools that write SQL
 
 - the in-memory query database (a cache of the last `webserver.api.maxHistory` seconds, filled from the
   server on start and written back every `database.DBinterval` seconds and on shutdown),
-- `gravity.db` (written by `pihole -g` and the gravity tools),
+- `gravity.db` (written by `pihole -g` and the gravity tools; it holds the domain lists, groups, lists and
+  clients, so the API endpoints for those fail with "Database not available" without one - the Docker image
+  ships an empty one),
 - the MAC vendor database.
 
 Differences to be aware of: SQLite migrations are not replayed (the schema of the current version is created
@@ -158,6 +160,7 @@ above) - everything in one binary, on one port, nothing else to run.
 docker run --network host ghcr.io/geovannyavelar/lorentz            # latest release
 docker run --network host ghcr.io/geovannyavelar/lorentz:unstable   # latest main
 # UI at http://<host>/admin/
+# Only the first lines of the log reach `docker logs`; the rest is in /var/log/lorentz/lorentz.log
 
 # Cut a release:
 git tag v1.0.0 && git push origin v1.0.0
