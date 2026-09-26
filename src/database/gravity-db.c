@@ -12,6 +12,8 @@
 #include "gravity-db.h"
 // Database driver layer
 #include "db-driver.h"
+// db_schema_gravity_baseline()
+#include "db-schema.h"
 // struct config
 #include "config/config.h"
 // logging routines
@@ -27,6 +29,8 @@
 #include "datastructure.h"
 // reset_aliasclient()
 #include "aliasclients.h"
+// subnet_match_bits()
+#include "sqlite3-ext.h"
 // Definition of struct regexData
 #include "regex_r.h"
 // file_readable()
@@ -280,6 +284,49 @@ void gravityDB_forked(void)
 	gravityDB_open();
 }
 
+// files.gravity is either the path of a SQLite file or a connection URI of a
+// server (postgresql://...), where the lists, groups, clients and domains are
+// kept together with the domains of the lists. Everything below that differs
+// between the two goes through these two helpers or the driver's dialect
+static bool gravity_is_remote(void)
+{
+	return db_uri_is_remote(config.files.gravity.v.s);
+}
+
+static db_conn *gravity_open_conn(const unsigned int flags, db_rc *rc, const char **msg)
+{
+	return db_open_uri_ex(config.files.gravity.v.s, flags, rc, msg);
+}
+
+// Create the gravity schema in an empty server database. Two instances may
+// start against the same empty database: the one that loses the race finds the
+// tables there, which is as good
+static bool gravity_ensure_schema(db_conn *db)
+{
+	// Once seen there, always there: the tables are not dropped at runtime, so
+	// the requests that open a connection of their own need not ask again
+	static _Atomic bool ready = false;
+	if(ready)
+		return true;
+
+	if(db_table_exists(db, "info"))
+	{
+		ready = true;
+		return true;
+	}
+
+	log_info("Creating the gravity database (version %d)", GRAVITY_SCHEMA_VERSION);
+	const char *error = NULL;
+	if(db_schema_gravity_baseline(db, &error) || db_table_exists(db, "info"))
+	{
+		ready = true;
+		return true;
+	}
+
+	log_err("Creating the gravity database failed, lists are not available: %s", error);
+	return false;
+}
+
 static void gravity_check_ABP_format(void)
 {
 	// Check if we have a valid ABP format
@@ -317,13 +364,13 @@ static void gravity_check_ABP_format(void)
 static bool gravity_table_has_entries(const char *table)
 {
 	char query[128];
-	snprintf(query, sizeof(query), "SELECT EXISTS(SELECT 1 FROM %s LIMIT 1);", table);
+	snprintf(query, sizeof(query), "SELECT 1 FROM %s LIMIT 1;", table);
 	db_stmt *stmt = NULL;
 	db_rc rc = (stmt = db_prepare(gravity_db, query, false)) != NULL ? DB_OK : DB_ERROR;
 	if(rc != DB_OK)
 		return false;
 	rc = db_step(stmt);
-	const bool has = (rc == DB_ROW) && db_column_int(stmt, 0) != 0;
+	const bool has = (rc == DB_ROW);
 	db_finalize(stmt);
 	return has;
 }
@@ -386,8 +433,9 @@ static bool gravity_apply_pragmas(db_conn *db, const char *func)
 // Open gravity database (read-write mode)
 static bool gravityDB_open(void)
 {
+	const bool remote = gravity_is_remote();
 	struct stat st;
-	if(stat(config.files.gravity.v.s, &st) != 0)
+	if(!remote && stat(config.files.gravity.v.s, &st) != 0)
 	{
 		// File does not exist
 		log_warn("gravityDB_open(): %s does not exist", config.files.gravity.v.s);
@@ -400,10 +448,10 @@ static bool gravityDB_open(void)
 		return true;
 	}
 
-	log_debug(DEBUG_DATABASE, "gravityDB_open(): Trying to open %s in read-write mode", config.files.gravity.v.s);
+	log_debug(DEBUG_DATABASE, "gravityDB_open(): Trying to open %s in read-write mode", db_uri_display(config.files.gravity.v.s));
 	db_rc rc;
 	const char *open_error = NULL;
-	gravity_db = db_open_sqlite_ex(config.files.gravity.v.s, DB_OPEN_READWRITE, &rc, &open_error);
+	gravity_db = gravity_open_conn(DB_OPEN_READWRITE, &rc, &open_error);
 	if(gravity_db == NULL)
 	{
 		log_err("gravityDB_open() - SQL error: %s", open_error);
@@ -413,11 +461,22 @@ static bool gravityDB_open(void)
 	// Database connection is now open
 	gravityDB_opened = true;
 
-	log_debug(DEBUG_DATABASE, "gravityDB_open(): Applying connection pragmas");
-	if(!gravity_apply_pragmas(gravity_db, "gravityDB_open"))
+	// An empty server database gets the gravity schema on first use
+	if(remote && !gravity_ensure_schema(gravity_db))
 	{
 		gravityDB_close();
 		return false;
+	}
+
+	// The pragmas tune a file
+	if(!remote)
+	{
+		log_debug(DEBUG_DATABASE, "gravityDB_open(): Applying connection pragmas");
+		if(!gravity_apply_pragmas(gravity_db, "gravityDB_open"))
+		{
+			gravityDB_close();
+			return false;
+		}
 	}
 
 	// Pre-warm: advise kernel to read gravity.db into page cache
@@ -433,6 +492,7 @@ static bool gravityDB_open(void)
 	// into the page cache. The amount of data read may be decreased by the
 	// kernel depending on virtual memory load. (A few megabytes will
 	// usually be fully satisfied, and more is rarely useful.)
+	if(!remote)
 	{
 		int warmup_fd = open(config.files.gravity.v.s, O_RDONLY);
 		if(warmup_fd >= 0)
@@ -462,27 +522,34 @@ static bool gravityDB_open(void)
 	// toggle an adlist, or change group assignments without triggering
 	// RELOAD_GRAVITY — the info.updated timestamp only changes on
 	// "lorentz -g", not on individual table modifications.
+	//
+	// The array of group ids is a carray() in SQLite and "= ANY(array)" on a
+	// server; the dialect writes the condition
+	char group_in[64];
+	if(gravity_db->drv->dialect->in_list(group_in, sizeof(group_in), "group_id", "?") < 0)
+	{
+		log_err("gravityDB_open(): Cannot build the group condition");
+		gravityDB_close();
+		return false;
+	}
+	char sql_gravity[192], sql_antigravity[192], sql_allowlist[192], sql_denylist[192];
+	char sql_regex_deny[192], sql_regex_allow[192];
+	snprintf(sql_gravity, sizeof(sql_gravity), "SELECT adlist_id FROM vw_gravity WHERE domain = ? AND %s;", group_in);
+	snprintf(sql_antigravity, sizeof(sql_antigravity), "SELECT adlist_id FROM vw_antigravity WHERE domain = ? AND %s;", group_in);
+	snprintf(sql_allowlist, sizeof(sql_allowlist), "SELECT id FROM vw_allowlist WHERE domain = ? AND %s;", group_in);
+	snprintf(sql_denylist, sizeof(sql_denylist), "SELECT id FROM vw_denylist WHERE domain = ? AND %s;", group_in);
+	snprintf(sql_regex_deny, sizeof(sql_regex_deny), "SELECT DISTINCT id FROM vw_regex_denylist WHERE %s;", group_in);
+	snprintf(sql_regex_allow, sizeof(sql_regex_allow), "SELECT DISTINCT id FROM vw_regex_allowlist WHERE %s;", group_in);
+
 	struct { db_stmt **stmt; const char *sql; const char *name; } shared_stmts[] = {
-		{ &gravity_shared_stmt,
-		  "SELECT adlist_id FROM vw_gravity WHERE domain = ?1 AND group_id IN carray(?2);",
-		  "gravity" },
-		{ &antigravity_shared_stmt,
-		  "SELECT adlist_id FROM vw_antigravity WHERE domain = ?1 AND group_id IN carray(?2);",
-		  "antigravity" },
-		{ &allowlist_shared_stmt,
-		  "SELECT id FROM vw_allowlist WHERE domain = ?1 AND group_id IN carray(?2);",
-		  "allowlist" },
-		{ &denylist_shared_stmt,
-		  "SELECT id FROM vw_denylist WHERE domain = ?1 AND group_id IN carray(?2);",
-		  "denylist" },
+		{ &gravity_shared_stmt, sql_gravity, "gravity" },
+		{ &antigravity_shared_stmt, sql_antigravity, "antigravity" },
+		{ &allowlist_shared_stmt, sql_allowlist, "allowlist" },
+		{ &denylist_shared_stmt, sql_denylist, "denylist" },
 		// DISTINCT eliminates duplicate IDs when a regex domain appears in multiple
-		// groups that are all present in the client's carray.
-		{ &regex_deny_groups_stmt,
-		  "SELECT DISTINCT id FROM vw_regex_denylist WHERE group_id IN carray(?1);",
-		  "regex_deny_groups" },
-		{ &regex_allow_groups_stmt,
-		  "SELECT DISTINCT id FROM vw_regex_allowlist WHERE group_id IN carray(?1);",
-		  "regex_allow_groups" },
+		// groups that are all present in the client's array.
+		{ &regex_deny_groups_stmt, sql_regex_deny, "regex_deny_groups" },
+		{ &regex_allow_groups_stmt, sql_regex_allow, "regex_allow_groups" },
 	};
 	for(unsigned int i = 0; i < sizeof(shared_stmts)/sizeof(shared_stmts[0]); i++)
 	{
@@ -548,6 +615,72 @@ static const char *show_client_string(const char *hwaddr, const char *hostname,
 }
 
 // Get associated groups for this client (if defined)
+// What the query with subnet_match() does for a SQLite gravity.db, for a server
+// that has no such function: the client table is small, so read it and match
+// the address in C. Of the entries that contain the address the ones with the
+// most specific network (most bits) count: their number, the highest id and its
+// address, and all ids as a comma separated list (allocated, freed by the caller)
+static bool client_subnet_lookup(const char *ip, int *count, int *chosen_id, char *chosen_text,
+                                 const size_t chosen_text_size, char **ids, int *bits)
+{
+	db_stmt *stmt = db_prepare(gravity_db, "SELECT id, ip FROM client;", false);
+	if(stmt == NULL)
+	{
+		log_err("get_client_groupids(\"%s\") - SQL error prepare: %s", ip, DB_LAST_ERR(gravity_db));
+		return false;
+	}
+
+	*count = 0;
+	*chosen_id = -1;
+	*bits = 0;
+	*ids = NULL;
+	size_t ids_len = 0;
+	db_rc rc;
+	while((rc = db_step(stmt)) == DB_ROW)
+	{
+		const int id = db_column_int(stmt, 0);
+		const char *entry = (const char*)db_column_text(stmt, 1);
+		const int match = entry != NULL ? subnet_match_bits(entry, ip) : 0;
+		if(match <= 0 || match < *bits)
+			continue;
+
+		if(match > *bits)
+		{
+			// A more specific network: forget the ones so far
+			*bits = match;
+			*count = 0;
+			*chosen_id = -1;
+			free(*ids);
+			*ids = NULL;
+			ids_len = 0;
+		}
+
+		(*count)++;
+		if(id > *chosen_id)
+		{
+			*chosen_id = id;
+			snprintf(chosen_text, chosen_text_size, "%s", entry);
+		}
+
+		char *grown = realloc(*ids, ids_len + 12 + 2);
+		if(grown == NULL)
+			continue;
+		*ids = grown;
+		ids_len += (size_t)sprintf(*ids + ids_len, ids_len > 0 ? ",%d" : "%d", id);
+	}
+	db_finalize(stmt);
+
+	if(rc != DB_DONE)
+	{
+		log_err("get_client_groupids(\"%s\") - SQL error step: %s", ip, DB_LAST_ERR(gravity_db));
+		free(*ids);
+		*ids = NULL;
+		return false;
+	}
+
+	return true;
+}
+
 static bool get_client_groupids(clientsData *client)
 {
 	const char *ip = getstr(client->ippos);
@@ -565,62 +698,88 @@ static bool get_client_groupids(clientsData *client)
 
 	// Check if client is configured through the client table
 	// This will return nothing if the client is unknown/unconfigured
-	const char *querystr = "SELECT count(id) matching_count, "
-	                       "max(id) chosen_match_id, "
-	                       "ip chosen_match_text, "
-	                       "group_concat(id) matching_ids, "
-	                       "subnet_match(ip,?) matching_bits FROM client "
-	                       "WHERE matching_bits > 0 "
-	                       "GROUP BY matching_bits "
-	                       "ORDER BY matching_bits DESC LIMIT 1;";
-
-	// Prepare query
-	db_rc rc = (table_stmt = db_prepare(gravity_db, querystr, false)) != NULL ? DB_OK : DB_ERROR;
-	if(rc != DB_OK)
-	{
-		log_err("get_client_groupids(\"%s\") - SQL error prepare: %s",
-		        ip, DB_LAST_ERR(gravity_db));
-		return false;
-	}
-
-	// Bind ipaddr to prepared statement
-	if((rc = db_bind_text_ref(table_stmt, 1, ip)) != DB_OK)
-	{
-		log_err("get_client_groupids(\"%s\"): Failed to bind ip: %s",
-		        ip, DB_LAST_ERR(gravity_db));
-		gravityDB_finalizeTable();
-		return false;
-	}
-
-	// Perform query
-	rc = db_step(table_stmt);
 	int matching_count = 0, chosen_match_id = -1, matching_bits = 0;
 	const char *matching_ids = NULL, *chosen_match_text = NULL;
-	if(rc == DB_ROW)
-	{
-		// There is a record for this client in the database,
-		// extract the result (there can be at most one line)
-		matching_count = db_column_int(table_stmt, 0);
-		chosen_match_id = db_column_int(table_stmt, 1);
-		chosen_match_text = (const char*)db_column_text(table_stmt, 2);
-		matching_ids = (const char*)db_column_text(table_stmt, 3);
-		matching_bits = db_column_int(table_stmt, 4);
+	char *remote_ids = NULL;
+	char remote_text[MAXDOMAINLEN] = { 0 };
+	const char *querystr = NULL;
+	db_rc rc = DB_DONE;
 
-		if(matching_count == 1)
-			// Case matching_count > 1 handled below using logg_subnet_warning()
-			log_debug(DEBUG_CLIENTS, "--> Found record for %s in the client table (group ID %d)", ip, chosen_match_id);
-	}
-	else if(rc == DB_DONE)
+	if(gravity_is_remote())
 	{
-		log_debug(DEBUG_CLIENTS, "--> No record for %s in the client table", ip);
+		// A server has no subnet_match() to run in the query
+		if(!client_subnet_lookup(ip, &matching_count, &chosen_match_id, remote_text,
+		                         sizeof(remote_text), &remote_ids, &matching_bits))
+			return false;
+		matching_ids = remote_ids;
+		chosen_match_text = remote_text;
+		if(matching_count == 1)
+		{
+			log_debug(DEBUG_CLIENTS, "--> Found record for %s in the client table (group ID %d)", ip, chosen_match_id);
+		}
+		else if(matching_count == 0)
+		{
+			log_debug(DEBUG_CLIENTS, "--> No record for %s in the client table", ip);
+		}
 	}
 	else
 	{
-		// Error
-		log_err("get_client_groupids(\"%s\") - SQL error step: %s",
-		        ip, DB_LAST_ERR(gravity_db));
-		gravityDB_finalizeTable();
-		return false;
+		querystr = "SELECT count(id) matching_count, "
+		                       "max(id) chosen_match_id, "
+		                       "ip chosen_match_text, "
+		                       "group_concat(id) matching_ids, "
+		                       "subnet_match(ip,?) matching_bits FROM client "
+		                       "WHERE matching_bits > 0 "
+		                       "GROUP BY matching_bits "
+		                       "ORDER BY matching_bits DESC LIMIT 1;";
+
+		// Prepare query
+		rc = (table_stmt = db_prepare(gravity_db, querystr, false)) != NULL ? DB_OK : DB_ERROR;
+		if(rc != DB_OK)
+		{
+			log_err("get_client_groupids(\"%s\") - SQL error prepare: %s",
+			        ip, DB_LAST_ERR(gravity_db));
+			return false;
+		}
+
+		// Bind ipaddr to prepared statement
+		if((rc = db_bind_text_ref(table_stmt, 1, ip)) != DB_OK)
+		{
+			log_err("get_client_groupids(\"%s\"): Failed to bind ip: %s",
+			        ip, DB_LAST_ERR(gravity_db));
+			gravityDB_finalizeTable();
+			return false;
+		}
+
+		// Perform query
+		rc = db_step(table_stmt);
+		if(rc == DB_ROW)
+		{
+			// There is a record for this client in the database,
+			// extract the result (there can be at most one line)
+			matching_count = db_column_int(table_stmt, 0);
+			chosen_match_id = db_column_int(table_stmt, 1);
+			chosen_match_text = (const char*)db_column_text(table_stmt, 2);
+			matching_ids = (const char*)db_column_text(table_stmt, 3);
+			matching_bits = db_column_int(table_stmt, 4);
+
+			if(matching_count == 1)
+				// Case matching_count > 1 handled below using logg_subnet_warning()
+				log_debug(DEBUG_CLIENTS, "--> Found record for %s in the client table (group ID %d)", ip, chosen_match_id);
+		}
+		else if(rc == DB_DONE)
+		{
+			log_debug(DEBUG_CLIENTS, "--> No record for %s in the client table", ip);
+		}
+		else
+		{
+			// Error
+			log_err("get_client_groupids(\"%s\") - SQL error step: %s",
+			        ip, DB_LAST_ERR(gravity_db));
+			gravityDB_finalizeTable();
+			return false;
+		}
+
 	}
 
 	if(matching_count > 1)
@@ -634,6 +793,8 @@ static bool get_client_groupids(clientsData *client)
 		//   Client 2: 10.8.1.0/24
 		logg_subnet_warning(ip, matching_count, matching_ids, matching_bits, chosen_match_text, chosen_match_id);
 	}
+	free(remote_ids);
+	remote_ids = NULL;
 
 	// Finalize statement
 	gravityDB_finalizeTable();
@@ -708,7 +869,7 @@ static bool get_client_groupids(clientsData *client)
 		// Check if client is configured through the client table
 		// This will return nothing if the client is unknown/unconfigured
 		// We use COLLATE NOCASE to ensure the comparison is done case-insensitive
-		querystr = "SELECT id FROM client WHERE ip = ? COLLATE NOCASE";
+		querystr = "SELECT id FROM client WHERE lower(ip) = lower(?)";
 
 		// Prepare query
 		rc = (table_stmt = db_prepare(gravity_db, querystr, false)) != NULL ? DB_OK : DB_ERROR;
@@ -802,7 +963,7 @@ static bool get_client_groupids(clientsData *client)
 		// Check if client is configured through the client table
 		// This will return nothing if the client is unknown/unconfigured
 		// We use COLLATE NOCASE to ensure the comparison is done case-insensitive
-		querystr = "SELECT id FROM client WHERE ip = ? COLLATE NOCASE;";
+		querystr = "SELECT id FROM client WHERE lower(ip) = lower(?);";
 
 		// Prepare query
 		rc = (table_stmt = db_prepare(gravity_db, querystr, false)) != NULL ? DB_OK : DB_ERROR;
@@ -896,7 +1057,7 @@ static bool get_client_groupids(clientsData *client)
 		// This will return nothing if the client is unknown/unconfigured
 		// We use the SQLite concatenate operator || to prepace the queried interface by ":"
 		// We use COLLATE NOCASE to ensure the comparison is done case-insensitive
-		querystr = "SELECT id FROM client WHERE ip = '"INTERFACE_SEP"' || ? COLLATE NOCASE;";
+		querystr = "SELECT id FROM client WHERE lower(ip) = lower('"INTERFACE_SEP"' || ?);";
 
 		// Prepare query
 		rc = (table_stmt = db_prepare(gravity_db, querystr, false)) != NULL ? DB_OK : DB_ERROR;
@@ -1059,8 +1220,10 @@ char *__attribute__ ((malloc)) get_client_names_from_ids(const char *group_ids)
 {
 	// Build query string to get concatenated groups
 	char *querystr = NULL;
-	if(asprintf(&querystr, "SELECT GROUP_CONCAT(ip) FROM client "
-	                       "WHERE id IN (%s);", group_ids) < 1)
+	char names_agg[64];
+	if(gravity_db->drv->dialect->group_concat(names_agg, sizeof(names_agg), "ip", false) < 0 ||
+	   asprintf(&querystr, "SELECT %s FROM client "
+	                       "WHERE id IN (%s);", names_agg, group_ids) < 1)
 	{
 		log_err("group_names(%s) - asprintf() error", group_ids);
 		return NULL;
@@ -1233,13 +1396,13 @@ bool gravityDB_getTable(const unsigned char list)
 	else if(list == ANTIGRAVITY_TABLE)
 		querystr = "SELECT DISTINCT domain FROM vw_antigravity";
 	else if(list == EXACT_DENY_TABLE)
-		querystr = "SELECT domain, id FROM vw_denylist GROUP BY id";
+		querystr = "SELECT domain, id FROM vw_denylist GROUP BY id, domain";
 	else if(list == EXACT_ALLOW_TABLE)
-		querystr = "SELECT domain, id FROM vw_allowlist GROUP BY id";
+		querystr = "SELECT domain, id FROM vw_allowlist GROUP BY id, domain";
 	else if(list == REGEX_DENY_TABLE)
-		querystr = "SELECT domain, id FROM vw_regex_denylist GROUP BY id";
+		querystr = "SELECT domain, id FROM vw_regex_denylist GROUP BY id, domain";
 	else if(list == REGEX_ALLOW_TABLE)
-		querystr = "SELECT domain, id FROM vw_regex_allowlist GROUP BY id";
+		querystr = "SELECT domain, id FROM vw_regex_allowlist GROUP BY id, domain";
 
 	// Prepare SQLite3 statement
 	db_rc rc = (table_stmt = db_prepare(gravity_db, querystr, false)) != NULL ? DB_OK : DB_ERROR;
@@ -1878,7 +2041,7 @@ bool gravityDB_get_regex_client_groups(clientsData *client, const unsigned int n
 static db_conn *gravity_write_open(const char **message)
 {
 	const char *open_error = NULL;
-	db_conn *db = db_open_sqlite_ex(config.files.gravity.v.s, DB_OPEN_READWRITE, NULL, &open_error);
+	db_conn *db = gravity_open_conn(DB_OPEN_READWRITE, NULL, &open_error);
 	if(db == NULL)
 	{
 		log_err("gravity_write_open() - SQL error open: %s", open_error);
@@ -1889,6 +2052,16 @@ static db_conn *gravity_write_open(const char **message)
 
 	if(db_set_busy_handler(db, sqliteBusyCallback, NULL) != DB_OK)
 		log_err("gravity_write_open() - Cannot set busy handler: %s", db_errmsg(db));
+
+	// The first write to an empty server database comes before the first
+	// lookup, when nothing has created the tables yet
+	if(gravity_is_remote() && !gravity_ensure_schema(db))
+	{
+		if(message != NULL)
+			*message = "Cannot create the gravity database";
+		db_close(db);
+		return NULL;
+	}
 
 	return db;
 }
@@ -2467,6 +2640,58 @@ bool gravityDB_delFromTable(const enum gravity_list_type listtype, const cJSON* 
 	return ret;
 }
 
+char **gravityDB_client_addresses(size_t *count)
+{
+	*count = 0;
+	const char *open_error = NULL;
+	db_conn *db = gravity_open_conn(DB_OPEN_READONLY | DB_OPEN_NOMUTEX, NULL, &open_error);
+	if(db == NULL)
+	{
+		log_err("gravityDB_client_addresses() - SQL error open: %s", open_error);
+		return NULL;
+	}
+
+	db_stmt *stmt = db_prepare(db, "SELECT lower(ip) FROM client;", false);
+	if(stmt == NULL)
+	{
+		log_err("gravityDB_client_addresses() - SQL error prepare: %s", db_errmsg(db));
+		db_close(db);
+		return NULL;
+	}
+
+	size_t cap = 16, n = 0;
+	char **addresses = calloc(cap, sizeof(char*));
+	db_rc rc;
+	while(addresses != NULL && (rc = db_step(stmt)) == DB_ROW)
+	{
+		const char *ip = (const char*)db_column_text(stmt, 0);
+		if(ip == NULL)
+			continue;
+		if(n == cap)
+		{
+			char **grown = realloc(addresses, 2 * cap * sizeof(char*));
+			if(grown == NULL)
+				break;
+			addresses = grown;
+			cap *= 2;
+		}
+		if((addresses[n] = strdup(ip)) != NULL)
+			n++;
+	}
+	db_finalize(stmt);
+	db_close(db);
+
+	*count = n;
+	return addresses;
+}
+
+void gravityDB_free_client_addresses(char **addresses, size_t count)
+{
+	for(size_t i = 0; i < count; i++)
+		free(addresses[i]);
+	free(addresses);
+}
+
 // A read-only connection of its own, for reads too long to run on the shared
 // one. Holding the SHM lock across such a read would stall DNS for its whole
 // duration, and without the lock a reload could close the shared connection
@@ -2474,7 +2699,7 @@ bool gravityDB_delFromTable(const enum gravity_list_type listtype, const cJSON* 
 db_conn *gravityDB_open_RO(void)
 {
 	const char *open_error = NULL;
-	db_conn *db = db_open_sqlite_ex(config.files.gravity.v.s, DB_OPEN_READONLY | DB_OPEN_NOMUTEX, NULL, &open_error);
+	db_conn *db = gravity_open_conn(DB_OPEN_READONLY | DB_OPEN_NOMUTEX, NULL, &open_error);
 	if(db == NULL)
 	{
 		log_err("gravityDB_open_RO() - SQL error open: %s", open_error);
@@ -2484,7 +2709,7 @@ db_conn *gravityDB_open_RO(void)
 	if(db_set_busy_handler(db, sqliteBusyCallback, NULL) != DB_OK)
 		log_err("gravityDB_open_RO() - Cannot set busy handler: %s", db_errmsg(db));
 
-	if(!gravity_apply_pragmas(db, "gravityDB_open_RO"))
+	if(!gravity_is_remote() && !gravity_apply_pragmas(db, "gravityDB_open_RO"))
 	{
 		db_close_deferred(db);
 		return NULL;
@@ -2564,6 +2789,14 @@ bool gravityDB_readTable(db_conn *db, const enum gravity_list_type listtype,
 			break;
 	}
 
+	// The aggregate joining the group ids of an entry
+	char group_agg[64];
+	if(db->drv->dialect->group_concat(group_agg, sizeof(group_agg), "group_id", false) < 0)
+	{
+		*message = "Failed to build the group aggregate";
+		return false;
+	}
+
 	// Build query statement
 	const size_t buflen = 512u + (ids != NULL ? strlen(ids) : 0u);
 	char *querystr = calloc(buflen, sizeof(char));
@@ -2605,7 +2838,7 @@ bool gravityDB_readTable(db_conn *db, const enum gravity_list_type listtype,
 			else
 				filter = " WHERE name LIKE :item ESCAPE '\\'";
 		}
-		snprintf(querystr, buflen, "SELECT id,name,enabled,date_added,date_modified,description AS comment FROM \"group\"%s;", filter);
+		snprintf(querystr, buflen, "SELECT id,name,enabled,date_added,date_modified,description AS comment FROM \"group\"%s ORDER BY id;", filter);
 	}
 	else if(listtype == GRAVITY_ADLISTS ||
 	        listtype == GRAVITY_ADLISTS_BLOCK ||
@@ -2627,9 +2860,9 @@ bool gravityDB_readTable(db_conn *db, const enum gravity_list_type listtype,
 				filter2 = " AND address LIKE :item ESCAPE '\\'";
 		}
 		snprintf(querystr, buflen, "SELECT id,type,address,enabled,date_added,date_modified,comment,"
-		                                     "(SELECT GROUP_CONCAT(group_id) FROM adlist_by_group g WHERE g.adlist_id = a.id) AS group_ids,"
+		                                     "(SELECT %s FROM adlist_by_group g WHERE g.adlist_id = a.id) AS group_ids,"
 		                                     "date_updated,number,invalid_domains,status,abp_entries "
-		                                     "FROM adlist a WHERE %s%s;", filter, filter2);
+		                                     "FROM adlist a WHERE %s%s ORDER BY id;", group_agg, filter, filter2);
 	}
 	else if(listtype == GRAVITY_CLIENTS)
 	{
@@ -2641,8 +2874,8 @@ bool gravityDB_readTable(db_conn *db, const enum gravity_list_type listtype,
 				filter = " WHERE ip LIKE :item ESCAPE '\\'";
 		}
 		snprintf(querystr, buflen, "SELECT id,ip AS client,date_added,date_modified,comment,"
-		                                     "(SELECT GROUP_CONCAT(group_id) FROM client_by_group g WHERE g.client_id = c.id) AS group_ids "
-		                                     "FROM client c%s;", filter);
+		                                     "(SELECT %s FROM client_by_group g WHERE g.client_id = c.id) AS group_ids "
+		                                     "FROM client c%s ORDER BY id;", group_agg, filter);
 	}
 	else if(listtype == GRAVITY_GRAVITY || listtype == GRAVITY_ANTIGRAVITY)
 	{
@@ -2655,8 +2888,8 @@ bool gravityDB_readTable(db_conn *db, const enum gravity_list_type listtype,
 		}
 		const char *table = listtype == GRAVITY_GRAVITY ? "gravity" : "antigravity";
 		snprintf(querystr, buflen, "SELECT domain,a.id,a.address,a.enabled,a.date_added,a.date_modified,a.comment,a.date_updated,a.number,a.invalid_domains,a.status,a.abp_entries,a.type,"
-		                                     "(SELECT GROUP_CONCAT(group_id) FROM adlist_by_group ag WHERE ag.adlist_id = g.adlist_id) AS group_ids "
-		                                     "FROM %s g JOIN adlist a ON a.id = g.adlist_id %s;", table, filter);
+		                                     "(SELECT %s FROM adlist_by_group ag WHERE ag.adlist_id = g.adlist_id) AS group_ids "
+		                                     "FROM %s g JOIN adlist a ON a.id = g.adlist_id %s;", group_agg, table, filter);
 	}
 	else // domainlist
 	{
@@ -2669,14 +2902,15 @@ bool gravityDB_readTable(db_conn *db, const enum gravity_list_type listtype,
 		}
 
 		snprintf(querystr, buflen, "SELECT id,domain,type,enabled,date_added,date_modified,comment,"
-		                                     "(SELECT GROUP_CONCAT(group_id) FROM domainlist_by_group g WHERE g.domainlist_id = d.id) AS group_ids "
-		                                     "FROM domainlist d WHERE d.type IN (%s)%s", type, filter);
+		                                     "(SELECT %s FROM domainlist_by_group g WHERE g.domainlist_id = d.id) AS group_ids "
+		                                     "FROM domainlist d WHERE d.type IN (%s)%s", group_agg, type, filter);
 
 		// Append id array filter to query string
 		// We have to do it this way as binding a sequence of int via a prepared
 		// statement isn't possible in SQLite3
 		if(ids != NULL)
 			snprintf(querystr+strlen(querystr), buflen-strlen(querystr), " AND id IN (%s)", ids);
+		snprintf(querystr+strlen(querystr), buflen-strlen(querystr), " ORDER BY id");
 	}
 
 	// Prepare SQLite statement
@@ -3214,8 +3448,8 @@ bool gravity_updated(void)
 	bool changed = false;
 	db_stmt *query_stmt = NULL;
 
-	// Check if database is a readable file
-	if(file_readable(config.files.gravity.v.s) == false)
+	// Check if database is a readable file (a server is not)
+	if(!gravity_is_remote() && file_readable(config.files.gravity.v.s) == false)
 	{
 		log_err("Cannot read gravity database at %s - file does not exist or is not readable",
 		        config.files.gravity.v.s);
@@ -3224,10 +3458,10 @@ bool gravity_updated(void)
 
 	// Open database
 	const char *open_error = NULL;
-	db_conn *db = db_open_sqlite_ex(config.files.gravity.v.s, DB_OPEN_READONLY | DB_OPEN_NOMUTEX, NULL, &open_error);
+	db_conn *db = gravity_open_conn(DB_OPEN_READONLY | DB_OPEN_NOMUTEX, NULL, &open_error);
 	if(db == NULL)
 	{
-		log_err("gravity_updated(): %s - SQL error open: %s", config.files.gravity.v.s, open_error);
+		log_err("gravity_updated(): %s - SQL error open: %s", db_uri_display(config.files.gravity.v.s), open_error);
 		return false;
 	}
 
@@ -3237,7 +3471,7 @@ bool gravity_updated(void)
 	db_rc rc = db_set_busy_handler(db, sqliteBusyCallback, NULL);
 	if(rc != DB_OK)
 	{
-		log_err("gravity_updated(): %s - Cannot set busy handler: %s", config.files.gravity.v.s, DB_LAST_ERR(db));
+		log_err("gravity_updated(): %s - Cannot set busy handler: %s", db_uri_display(config.files.gravity.v.s), DB_LAST_ERR(db));
 		db_close(db);
 		return false;
 	}

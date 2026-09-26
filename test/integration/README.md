@@ -76,10 +76,14 @@ any throw-away database with `POSTGRES_URL=postgresql://... ./db_postgres_regres
 
 ### Lorentz on PostgreSQL
 
-`lorentz.integration.test.mjs` runs its scenarios twice, once with the long-term database in a SQLite file
-and once on PostgreSQL (`LORENTZ_BACKENDS=sqlite,postgres`, the default; `postgres` or `sqlite` alone
-selects one; `PG_IMAGE` picks the server, `postgres:16-alpine` by default). The PostgreSQL run needs a Lorentz
-built with `-DUSE_POSTGRESQL=ON`. It starts a server and the Lorentz containers on one Docker network, gives
+`lorentz.integration.test.mjs` runs its scenarios three times: with everything in SQLite files (`sqlite`),
+with the long-term database on PostgreSQL and the gravity database still a file (`postgres`), and with the
+gravity database on PostgreSQL too (`postgres+gravity`: the lists, groups, clients and domains, seeded from
+the same sample data as the file, `test/gravity.db.sql`). `LORENTZ_BACKENDS=sqlite,postgres,postgres+gravity`
+is the default; a subset selects those; `PG_IMAGE` picks the server, `postgres:16-alpine` by default. The
+PostgreSQL runs need a Lorentz built with `-DUSE_POSTGRESQL=ON`. Two scenarios differ for `postgres+gravity`:
+the rebuilt gravity database is written to the server, and a Teleporter import leaves the gravity database
+alone. It starts a server and the Lorentz containers on one Docker network, gives
 each Lorentz a schema of its own, and covers startup, DNS, the query log, the statistics of the long-term
 database, the network table, messages, Teleporter, sessions and a restart that has to keep the history. The
 scenario that upgrades an old SQLite database only exists for SQLite. One scenario checks that the connection pool works: 40 API requests may open only a few sessions on the server.

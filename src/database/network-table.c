@@ -1745,17 +1745,17 @@ bool unify_hwaddr(db_conn *db)
 
 		// Update firstSeen with lowest value across all rows with the same hwaddr
 		dbquery(db, "UPDATE network "\
-		            "SET firstSeen = (SELECT MIN(firstSeen) FROM network WHERE hwaddr = \'%s\' COLLATE NOCASE) "\
+		            "SET firstSeen = (SELECT MIN(firstSeen) FROM network WHERE lower(hwaddr) = lower(\'%s\')) "\
 		            "WHERE id = %i;", hwaddr, id);
 
 		// Update numQueries with sum of all rows with the same hwaddr
 		dbquery(db, "UPDATE network "\
-		            "SET numQueries = (SELECT SUM(numQueries) FROM network WHERE hwaddr = \'%s\' COLLATE NOCASE) "\
+		            "SET numQueries = (SELECT SUM(numQueries) FROM network WHERE lower(hwaddr) = lower(\'%s\')) "\
 		            "WHERE id = %i;", hwaddr, id);
 
 		// Remove all other lines with the same hwaddr but a different id
 		dbquery(db, "DELETE FROM network "\
-		            "WHERE hwaddr = \'%s\' COLLATE NOCASE "\
+		            "WHERE lower(hwaddr) = lower(\'%s\') "\
 		            "AND id != %i;", hwaddr, id);
 
 		// Reset statement only after all queries using hwaddr have
@@ -2353,7 +2353,7 @@ bool getNameFromMAC(const char *client, char hostn[MAXDOMAINLEN])
 	// COLLATE NOCASE: Case-insensitive comparison
 	const char *querystr = "SELECT name FROM network_addresses "
 	                               "WHERE name IS NOT NULL AND "
-	                                     "network_id = (SELECT id FROM network WHERE hwaddr = ? COLLATE NOCASE) "
+	                                     "network_id = (SELECT id FROM network WHERE lower(hwaddr) = lower(?)) "
 	                               "ORDER BY lastSeen DESC LIMIT 1";
 	db_stmt *stmt = NULL;
 	db_rc rc = (stmt = db_prepare(db, querystr, false)) != NULL ? DB_OK : db_last_rc(db);

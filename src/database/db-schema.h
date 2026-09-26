@@ -30,6 +30,19 @@
 // given. The database must not contain the tables yet.
 bool db_schema_baseline(db_conn *db, const char **error);
 
+// Version of the gravity database schema (the "version" property of its info
+// table), the one of the gravity.db a SQLite setup has
+#define GRAVITY_SCHEMA_VERSION 20
+#define GRAVITY_SCHEMA_VERSION_STR "20"
+
+// Create the gravity database - lists, groups, clients, allow and deny domains
+// and the domains of the lists - in an empty server database, in one
+// transaction. Only for drivers that run on a server: its triggers are
+// PL/pgSQL, a SQLite gravity.db comes from a schema of its own. Returns
+// false on failure, with a description in *error (valid until the next call
+// on this thread) when it is given.
+bool db_schema_gravity_baseline(db_conn *db, const char **error);
+
 // Bring a database of an older version up to DB_SCHEMA_VERSION with the
 // migrations written for drivers that start from the baseline. There are none
 // yet, this returns true only when the database is current. Future migrations

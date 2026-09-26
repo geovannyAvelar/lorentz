@@ -795,6 +795,103 @@ void test_schema_baseline(void)
 }
 
 
+/* ---- gravity database on PostgreSQL (same requirements) ---- */
+
+void test_gravity_postgres(void)
+{
+	const char *url = getenv("POSTGRES_URL");
+	if(url == NULL || *url == '\0' || db_driver_get("postgres") == NULL)
+		return;
+
+	CHECK(db_driver_select("postgres"));
+	db_conn *setup = db_open(url, DB_OPEN_READWRITE);
+	CHECK(setup != NULL);
+	if(setup == NULL)
+	{
+		db_driver_select("sqlite");
+		return;
+	}
+	CHECK(db_exec(setup, "DROP SCHEMA IF EXISTS lz_gravity CASCADE; CREATE SCHEMA lz_gravity") == DB_OK);
+	db_close(setup);
+
+	static char uri[1024];
+	snprintf(uri, sizeof(uri), "%s%coptions=-c%%20search_path%%3Dlz_gravity", url, strchr(url, '?') != NULL ? '&' : '?');
+	db_conn *db = db_open(uri, DB_OPEN_READWRITE);
+	CHECK(db != NULL);
+	if(db == NULL)
+	{
+		db_driver_select("sqlite");
+		return;
+	}
+
+	const char *error = NULL;
+	CHECK(db_schema_gravity_baseline(db, &error));
+	CHECK(db_table_exists(db, "info") && db_table_exists(db, "adlist") && db_table_exists(db, "gravity"));
+	CHECK(db_query_int(db, "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'lz_gravity' AND table_type = 'BASE TABLE'") == 10);
+	CHECK(db_query_int(db, "SELECT count(*) FROM information_schema.views WHERE table_schema = 'lz_gravity'") == 7);
+	CHECK(db_query_int(db, "SELECT value FROM info WHERE property = 'version'") == GRAVITY_SCHEMA_VERSION);
+	CHECK(db_query_int(db, "SELECT count(*) FROM \"group\" WHERE id = 0 AND name = 'Default' AND enabled = 1") == 1);
+
+	// A new entry belongs to the default group
+	CHECK(db_exec(db, "INSERT INTO adlist (address, type) VALUES ('https://a.example/l.txt', 0)") == DB_OK);
+	CHECK(db_exec(db, "INSERT INTO domainlist (domain, type) VALUES ('allowed.example', 0)") == DB_OK);
+	CHECK(db_exec(db, "INSERT INTO client (ip) VALUES ('10.0.0.0/8')") == DB_OK);
+	CHECK(db_query_int(db, "SELECT count(*) FROM adlist_by_group WHERE group_id = 0") == 1);
+	CHECK(db_query_int(db, "SELECT count(*) FROM domainlist_by_group WHERE group_id = 0") == 1);
+	CHECK(db_query_int(db, "SELECT count(*) FROM client_by_group WHERE group_id = 0") == 1);
+
+	// (address, type) and (domain, type) are unique
+	CHECK(db_exec(db, "INSERT INTO adlist (address, type) VALUES ('https://a.example/l.txt', 0)") == DB_CONSTRAINT);
+	CHECK(db_exec(db, "INSERT INTO adlist (address, type) VALUES ('https://a.example/l.txt', 1)") == DB_OK);
+
+	// date_modified follows an edit, but not what a gravity run updates
+	CHECK(db_exec(db, "UPDATE client SET date_modified = 1") == DB_OK);
+	CHECK(db_exec(db, "UPDATE client SET comment = 'edited'") == DB_OK);
+	CHECK(db_query_int(db, "SELECT count(*) FROM client WHERE date_modified > 1") == 1);
+	CHECK(db_exec(db, "UPDATE adlist SET date_modified = 1") == DB_OK);
+	CHECK(db_exec(db, "UPDATE adlist SET number = 5, status = 2") == DB_OK);
+	CHECK(db_query_int(db, "SELECT count(*) FROM adlist WHERE date_modified = 1") == 2);
+	CHECK(db_exec(db, "UPDATE adlist SET enabled = 0 WHERE type = 1") == DB_OK);
+	CHECK(db_query_int(db, "SELECT count(*) FROM adlist WHERE date_modified > 1") == 1);
+
+	// The views see enabled entries in enabled groups, and entries that lost
+	// their group as well (LEFT JOIN)
+	CHECK(db_query_int(db, "SELECT count(*) FROM vw_allowlist WHERE domain = 'allowed.example' AND group_id = 0") == 1);
+	CHECK(db_exec(db, "UPDATE \"group\" SET enabled = 0 WHERE id = 0") == DB_OK);
+	CHECK(db_query_int(db, "SELECT count(*) FROM vw_allowlist WHERE domain = 'allowed.example'") == 0);
+	CHECK(db_exec(db, "DELETE FROM domainlist_by_group") == DB_OK);
+	CHECK(db_query_int(db, "SELECT count(*) FROM vw_allowlist WHERE domain = 'allowed.example' AND group_id IS NULL") == 1);
+	CHECK(db_exec(db, "UPDATE \"group\" SET enabled = 1 WHERE id = 0") == DB_OK);
+
+	// gravity: the lists that contain a domain, per group
+	CHECK(db_exec(db, "INSERT INTO gravity VALUES ('ads.example', 1)") == DB_OK);
+	CHECK(db_query_int(db, "SELECT count(*) FROM vw_gravity WHERE domain = 'ads.example' AND group_id = ANY('{0,3}'::int[])") == 1);
+	CHECK(db_exec(db, "UPDATE adlist SET enabled = 0 WHERE id = 1") == DB_OK);
+	CHECK(db_query_int(db, "SELECT count(*) FROM vw_gravity WHERE domain = 'ads.example'") == 0);
+
+	// Deleting a group takes its links along, and group 0 comes back
+	CHECK(db_exec(db, "INSERT INTO \"group\" (name) VALUES ('kids')") == DB_OK);
+	CHECK(db_exec(db, "INSERT INTO client_by_group SELECT 1, id FROM \"group\" WHERE name = 'kids'") == DB_OK);
+	CHECK(db_exec(db, "DELETE FROM \"group\" WHERE name = 'kids'") == DB_OK);
+	CHECK(db_query_int(db, "SELECT count(*) FROM client_by_group") == 1);
+	CHECK(db_exec(db, "DELETE FROM \"group\" WHERE id = 0") == DB_OK);
+	CHECK(db_query_int(db, "SELECT count(*) FROM \"group\" WHERE id = 0 AND name = 'Default'") == 1);
+
+	// Deleting an entry takes its links along
+	CHECK(db_exec(db, "DELETE FROM gravity") == DB_OK);
+	CHECK(db_exec(db, "DELETE FROM adlist") == DB_OK);
+	CHECK(db_query_int(db, "SELECT count(*) FROM adlist_by_group") == 0);
+
+	db_close(db);
+	setup = db_open(url, DB_OPEN_READWRITE);
+	if(setup != NULL)
+	{
+		db_exec(setup, "DROP SCHEMA IF EXISTS lz_gravity CASCADE");
+		db_close(setup);
+	}
+	db_driver_select("sqlite");
+}
+
 /* ---- long-term database on PostgreSQL (needs POSTGRES_URL and a build with USE_POSTGRESQL) ---- */
 
 void test_postgres_database(void)
@@ -954,6 +1051,7 @@ int main(void)
 	test_teleporter();
 	test_api_handlers();
 	test_postgres_database();
+	test_gravity_postgres();
 
 	char cmd[300];
 	snprintf(cmd, sizeof(cmd), "rm -rf '%s'", tmpdir);

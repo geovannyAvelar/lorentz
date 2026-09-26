@@ -22,6 +22,8 @@
 #include "database/common.h"
 // attach_database()
 #include "database/query-table.h"
+// gravityDB_client_addresses()
+#include "database/gravity-db.h"
 // config struct
 #include "config/config.h"
 // PRIx64
@@ -376,35 +378,67 @@ int api_client_suggestions(struct lorentz_conn *api)
 		                       NULL);
 	}
 
-	// Attach gravity database
+	// The clients that are already configured are those in the client table of
+	// the gravity database. When both databases are SQLite files, attach it and
+	// exclude them in the query. Otherwise (a server has no ATTACH, and its
+	// tables sit in another database than the file's) read the addresses and
+	// leave the configured ones out of the rows in C
+	const db_dialect *dialect = db->drv->dialect;
+	const bool attach = !db_uri_is_remote(config.files.gravity.v.s) && db->drv->attach != NULL;
 	const char *message = "";
-	if(!attach_database(db, &message, config.files.gravity.v.s, "g"))
+	char **configured = NULL;
+	size_t configured_count = 0;
+	if(attach)
 	{
-		log_err("Failed to attach gravity database: %s", message);
-		dbclose(&db);
-		return send_json_error(api, 500,
-		                       "database_error",
-		                       "Could not attach gravity database",
-		                       message);
+		if(!attach_database(db, &message, config.files.gravity.v.s, "g"))
+		{
+			log_err("Failed to attach gravity database: %s", message);
+			dbclose(&db);
+			return send_json_error(api, 500,
+			                       "database_error",
+			                       "Could not attach gravity database",
+			                       message);
+		}
+	}
+	else
+	{
+		configured = gravityDB_client_addresses(&configured_count);
+		if(configured == NULL && configured_count == 0)
+		{
+			// Nothing came back: an error, or no client at all. The two
+			// are told apart by the gravity database being reachable
+			// (the reader logged the reason)
+			log_debug(DEBUG_API, "api_client_suggestions(): no configured clients read");
+		}
 	}
 
 	// Prepare SQL statement
-	db_stmt *stmt = NULL;
-	const char *sql = "SELECT n.hwaddr,n.macVendor,n.lastQuery,"
-	                  "(SELECT GROUP_CONCAT(DISTINCT na.ip) "
-	                    "FROM network_addresses na "
-	                      "WHERE na.network_id = n.id),"
-	                  "(SELECT GROUP_CONCAT(DISTINCT na.name) "
-	                    "FROM network_addresses na "
-	                      "WHERE na.network_id = n.id) "
-	                  "FROM network n "
-	                  "WHERE n.hwaddr NOT IN (SELECT lower(ip) FROM g.client)" // real hardware addresses
-	                    "AND n.hwaddr NOT IN (SELECT CONCAT('ip-',lower(ip)) FROM g.client)" // mock hardware addresses built from IP addresses
-	                  "ORDER BY lastQuery DESC LIMIT ?";
+	char ips_agg[80], names_agg[80];
+	if(dialect->group_concat(ips_agg, sizeof(ips_agg), "na.ip", true) < 0 ||
+	   dialect->group_concat(names_agg, sizeof(names_agg), "na.name", true) < 0)
+	{
+		gravityDB_free_client_addresses(configured, configured_count);
+		dbclose(&db);
+		return send_json_error(api, 500, "database_error", "Could not build the SQL statement", NULL);
+	}
+	char sql[1024];
+	snprintf(sql, sizeof(sql),
+	         "SELECT n.hwaddr,n.macVendor,n.lastQuery,"
+	         "(SELECT %s FROM network_addresses na WHERE na.network_id = n.id),"
+	         "(SELECT %s FROM network_addresses na WHERE na.network_id = n.id) "
+	         "FROM network n%s"
+	         "ORDER BY lastQuery DESC%s",
+	         ips_agg, names_agg,
+	         attach ? " WHERE n.hwaddr NOT IN (SELECT lower(ip) FROM g.client)" // real hardware addresses
+	                  " AND n.hwaddr NOT IN (SELECT CONCAT('ip-',lower(ip)) FROM g.client) " // mock hardware addresses built from IP addresses
+	                : " ",
+	         attach ? " LIMIT ?" : "");
 
+	db_stmt *stmt = NULL;
 	if((stmt = db_prepare(db, sql, false)) == NULL)
 	{
 		log_err("Failed to prepare SQL statement: %s", db_errmsg(db));
+		gravityDB_free_client_addresses(configured, configured_count);
 		dbclose(&db);
 		return send_json_error(api, 500,
 		                       "database_error",
@@ -413,7 +447,7 @@ int api_client_suggestions(struct lorentz_conn *api)
 	}
 
 	// Bind parameters
-	if(db_bind_int(stmt, 1, count) != DB_OK)
+	if(attach && db_bind_int(stmt, 1, count) != DB_OK)
 	{
 		log_err("Failed to bind parameter: %s", db_errmsg(db));
 		db_finalize(stmt);
@@ -426,22 +460,38 @@ int api_client_suggestions(struct lorentz_conn *api)
 
 	// Execute SQL statement
 	cJSON *clients = JSON_NEW_ARRAY();
-	while(db_step(stmt) == DB_ROW)
+	unsigned int listed = 0;
+	while((attach || listed < count) && db_step(stmt) == DB_ROW)
 	{
+		const char *hwaddr = db_column_text(stmt, 0);
+		if(!attach && hwaddr != NULL)
+		{
+			// Skip the devices whose hardware address, or the mock one built
+			// from an IP address, is a configured client
+			bool skip = false;
+			for(size_t i = 0; i < configured_count && !skip; i++)
+				skip = strcasecmp(hwaddr, configured[i]) == 0 ||
+				       (strncasecmp(hwaddr, "ip-", 3) == 0 && strcasecmp(hwaddr + 3, configured[i]) == 0);
+			if(skip)
+				continue;
+		}
+
 		cJSON *client = JSON_NEW_OBJECT();
-		JSON_COPY_STR_TO_OBJECT(client, "hwaddr", db_column_text(stmt, 0));
+		JSON_COPY_STR_TO_OBJECT(client, "hwaddr", hwaddr);
 		JSON_COPY_STR_TO_OBJECT(client, "macVendor", db_column_text(stmt, 1));
 		JSON_ADD_NUMBER_TO_OBJECT(client, "lastQuery", db_column_int64(stmt, 2));
 		JSON_COPY_STR_TO_OBJECT(client, "addresses", db_column_text(stmt, 3));
 		JSON_COPY_STR_TO_OBJECT(client, "names", db_column_text(stmt, 4));
 		JSON_ADD_ITEM_TO_ARRAY(clients, client);
+		listed++;
 	}
 
 	// Finalize query
 	db_finalize(stmt);
+	gravityDB_free_client_addresses(configured, configured_count);
 
 	// Detach gravity database
-	if(!detach_database(db, &message, "g"))
+	if(attach && !detach_database(db, &message, "g"))
 	{
 		log_err("Failed to detach gravity database: %s", message);
 		dbclose(&db);

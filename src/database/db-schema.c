@@ -197,6 +197,189 @@ static bool insert_pair(db_conn *db, const char *sql, int64_t a, int64_t b, cons
 	return okay;
 }
 
+// The gravity database: what the API edits (lists, groups, clients, allow and
+// deny domains) and what a gravity run derives from the lists (the domains
+// they contain), the tables of the gravity.db file of a SQLite setup with the
+// same names and columns. Its triggers are written for a server (PL/pgSQL):
+// SQLite creates its file from a schema of its own.
+//   * flags are SMALLINT, compared with 0 and 1 as in SQLite,
+//   * the modification time is set by a BEFORE trigger, where SQLite updates the
+//     row afterwards - a server would run that trigger on its own update again,
+//   * the junction tables cascade on delete, which replaces SQLite's triggers
+//     for it.
+// The views are the ones of the SQLite file. They use LEFT JOINs deliberately:
+// groups can be removed from entries, leaving no row in a junction table, and
+// such an entry has to match every client rather than vanish.
+static const char *const gravity_statements[] = {
+	"CREATE TABLE \"group\" ("
+		"id @PK@, "
+		"enabled SMALLINT NOT NULL DEFAULT 1, "
+		"name TEXT UNIQUE NOT NULL, "
+		"date_added BIGINT NOT NULL DEFAULT (@NOW@), "
+		"date_modified BIGINT NOT NULL DEFAULT (@NOW@), "
+		"description TEXT)",
+	"CREATE TABLE domainlist ("
+		"id @PK@, "
+		"type INTEGER NOT NULL DEFAULT 0, "
+		"domain TEXT NOT NULL, "
+		"enabled SMALLINT NOT NULL DEFAULT 1, "
+		"date_added BIGINT NOT NULL DEFAULT (@NOW@), "
+		"date_modified BIGINT NOT NULL DEFAULT (@NOW@), "
+		"comment TEXT, "
+		"UNIQUE (domain, type))",
+	"CREATE TABLE adlist ("
+		"id @PK@, "
+		"address TEXT NOT NULL, "
+		"enabled SMALLINT NOT NULL DEFAULT 1, "
+		"date_added BIGINT NOT NULL DEFAULT (@NOW@), "
+		"date_modified BIGINT NOT NULL DEFAULT (@NOW@), "
+		"comment TEXT, "
+		"date_updated BIGINT, "
+		"number BIGINT NOT NULL DEFAULT 0, "
+		"invalid_domains BIGINT NOT NULL DEFAULT 0, "
+		"status INTEGER NOT NULL DEFAULT 0, "
+		"abp_entries BIGINT NOT NULL DEFAULT 0, "
+		"type INTEGER NOT NULL DEFAULT 0, "
+		"UNIQUE (address, type))",
+	"CREATE TABLE adlist_by_group ("
+		"adlist_id BIGINT NOT NULL REFERENCES adlist (id) ON DELETE CASCADE, "
+		"group_id BIGINT NOT NULL REFERENCES \"group\" (id) ON DELETE CASCADE, "
+		"PRIMARY KEY (adlist_id, group_id))",
+	"CREATE TABLE gravity ("
+		"domain TEXT NOT NULL, "
+		"adlist_id BIGINT NOT NULL REFERENCES adlist (id))",
+	"CREATE TABLE antigravity ("
+		"domain TEXT NOT NULL, "
+		"adlist_id BIGINT NOT NULL REFERENCES adlist (id))",
+	"CREATE TABLE info (property TEXT PRIMARY KEY, value TEXT NOT NULL)",
+	"CREATE TABLE domainlist_by_group ("
+		"domainlist_id BIGINT NOT NULL REFERENCES domainlist (id) ON DELETE CASCADE, "
+		"group_id BIGINT NOT NULL REFERENCES \"group\" (id) ON DELETE CASCADE, "
+		"PRIMARY KEY (domainlist_id, group_id))",
+	"CREATE TABLE client ("
+		"id @PK@, "
+		"ip TEXT NOT NULL UNIQUE, "
+		"date_added BIGINT NOT NULL DEFAULT (@NOW@), "
+		"date_modified BIGINT NOT NULL DEFAULT (@NOW@), "
+		"comment TEXT)",
+	"CREATE TABLE client_by_group ("
+		"client_id BIGINT NOT NULL REFERENCES client (id) ON DELETE CASCADE, "
+		"group_id BIGINT NOT NULL REFERENCES \"group\" (id) ON DELETE CASCADE, "
+		"PRIMARY KEY (client_id, group_id))",
+
+	"CREATE INDEX idx_adlist_by_group_gid ON adlist_by_group (group_id, adlist_id)",
+	"CREATE INDEX idx_domainlist_by_group_gid ON domainlist_by_group (group_id, domainlist_id)",
+	"CREATE INDEX idx_gravity ON gravity (domain, adlist_id)",
+	"CREATE INDEX idx_antigravity ON antigravity (domain, adlist_id)",
+	"CREATE INDEX idx_gravity_adlist ON gravity (adlist_id)",
+	"CREATE INDEX idx_antigravity_adlist ON antigravity (adlist_id)",
+
+	// date_modified follows a change of the entry (of an adlist, only of what
+	// the user edits: a gravity run updates number, status and the like)
+	"CREATE FUNCTION tr_touch_date_modified() RETURNS trigger AS $$ "
+		"BEGIN NEW.date_modified := @NOW@; RETURN NEW; END $$ LANGUAGE plpgsql",
+	"CREATE TRIGGER tr_adlist_update BEFORE UPDATE OF address, enabled, comment ON adlist "
+		"FOR EACH ROW EXECUTE FUNCTION tr_touch_date_modified()",
+	"CREATE TRIGGER tr_client_update BEFORE UPDATE ON client "
+		"FOR EACH ROW EXECUTE FUNCTION tr_touch_date_modified()",
+	"CREATE TRIGGER tr_domainlist_update BEFORE UPDATE ON domainlist "
+		"FOR EACH ROW EXECUTE FUNCTION tr_touch_date_modified()",
+	"CREATE TRIGGER tr_group_update BEFORE UPDATE ON \"group\" "
+		"FOR EACH ROW EXECUTE FUNCTION tr_touch_date_modified()",
+
+	// A new entry belongs to the default group, group 0
+	"CREATE FUNCTION tr_domainlist_to_default_group() RETURNS trigger AS $$ "
+		"BEGIN INSERT INTO domainlist_by_group (domainlist_id, group_id) VALUES (NEW.id, 0); "
+		"RETURN NULL; END $$ LANGUAGE plpgsql",
+	"CREATE TRIGGER tr_domainlist_add AFTER INSERT ON domainlist "
+		"FOR EACH ROW EXECUTE FUNCTION tr_domainlist_to_default_group()",
+	"CREATE FUNCTION tr_client_to_default_group() RETURNS trigger AS $$ "
+		"BEGIN INSERT INTO client_by_group (client_id, group_id) VALUES (NEW.id, 0); "
+		"RETURN NULL; END $$ LANGUAGE plpgsql",
+	"CREATE TRIGGER tr_client_add AFTER INSERT ON client "
+		"FOR EACH ROW EXECUTE FUNCTION tr_client_to_default_group()",
+	"CREATE FUNCTION tr_adlist_to_default_group() RETURNS trigger AS $$ "
+		"BEGIN INSERT INTO adlist_by_group (adlist_id, group_id) VALUES (NEW.id, 0); "
+		"RETURN NULL; END $$ LANGUAGE plpgsql",
+	"CREATE TRIGGER tr_adlist_add AFTER INSERT ON adlist "
+		"FOR EACH ROW EXECUTE FUNCTION tr_adlist_to_default_group()",
+
+	// Group 0 cannot be deleted for good
+	"CREATE FUNCTION tr_group_zero() RETURNS trigger AS $$ "
+		"BEGIN INSERT INTO \"group\" (id, enabled, name) VALUES (0, 1, 'Default') "
+		"ON CONFLICT DO NOTHING; RETURN NULL; END $$ LANGUAGE plpgsql",
+	"CREATE TRIGGER tr_group_zero AFTER DELETE ON \"group\" "
+		"FOR EACH ROW EXECUTE FUNCTION tr_group_zero()",
+
+#define GRAVITY_LIST_VIEW(name, type) \
+	"CREATE VIEW " name " AS SELECT domain, domainlist.id AS id, domainlist_by_group.group_id AS group_id " \
+		"FROM domainlist " \
+		"LEFT JOIN domainlist_by_group ON domainlist_by_group.domainlist_id = domainlist.id " \
+		"LEFT JOIN \"group\" ON \"group\".id = domainlist_by_group.group_id " \
+		"WHERE domainlist.enabled = 1 AND (domainlist_by_group.group_id IS NULL OR \"group\".enabled = 1) " \
+		"AND domainlist.type = " type
+	GRAVITY_LIST_VIEW("vw_allowlist", "0"),
+	GRAVITY_LIST_VIEW("vw_denylist", "1"),
+	GRAVITY_LIST_VIEW("vw_regex_allowlist", "2"),
+	GRAVITY_LIST_VIEW("vw_regex_denylist", "3"),
+#undef GRAVITY_LIST_VIEW
+
+	"CREATE VIEW vw_gravity AS SELECT domain, adlist.id AS adlist_id, adlist_by_group.group_id AS group_id "
+		"FROM gravity "
+		"LEFT JOIN adlist_by_group ON adlist_by_group.adlist_id = gravity.adlist_id "
+		"LEFT JOIN adlist ON adlist.id = gravity.adlist_id "
+		"LEFT JOIN \"group\" ON \"group\".id = adlist_by_group.group_id "
+		"WHERE adlist.enabled = 1 AND (adlist_by_group.group_id IS NULL OR \"group\".enabled = 1)",
+	"CREATE VIEW vw_antigravity AS SELECT domain, adlist.id AS adlist_id, adlist_by_group.group_id AS group_id "
+		"FROM antigravity "
+		"LEFT JOIN adlist_by_group ON adlist_by_group.adlist_id = antigravity.adlist_id "
+		"LEFT JOIN adlist ON adlist.id = antigravity.adlist_id "
+		"LEFT JOIN \"group\" ON \"group\".id = adlist_by_group.group_id "
+		"WHERE adlist.enabled = 1 AND (adlist_by_group.group_id IS NULL OR \"group\".enabled = 1) "
+		"AND adlist.type = 1",
+	"CREATE VIEW vw_adlist AS SELECT DISTINCT address, id, type FROM adlist WHERE enabled = 1 ORDER BY id",
+
+	// Rows the tables start with: the default group, and the properties a gravity
+	// run maintains
+	"INSERT INTO \"group\" (id, enabled, name, description) VALUES (0, 1, 'Default', 'The default group')",
+	"INSERT INTO info VALUES ('version', '" GRAVITY_SCHEMA_VERSION_STR "')",
+	"INSERT INTO info VALUES ('gravity_count', '0')",
+	"INSERT INTO info VALUES ('antigravity_count', '0')",
+	"INSERT INTO info VALUES ('abp_domains', '0')",
+	"INSERT INTO info VALUES ('updated', '0')",
+};
+
+bool db_schema_gravity_baseline(db_conn *db, const char **error)
+{
+	const db_dialect *dialect = db->drv->dialect;
+
+	if(db_begin(db, DB_TX_DEFERRED) != DB_OK)
+		return fail(db, "cannot start the transaction", error);
+
+	for(size_t i = 0; i < sizeof(gravity_statements) / sizeof(gravity_statements[0]); i++)
+	{
+		char *sql = expand(gravity_statements[i], dialect->autoincrement_pk(), dialect->now_expr());
+		const db_rc rc = sql != NULL ? db_exec(db, sql) : DB_ERROR;
+		if(rc != DB_OK)
+		{
+			const bool ok = fail(db, sql != NULL ? sql : "out of memory", error);
+			free(sql);
+			db_rollback(db);
+			return ok;
+		}
+		free(sql);
+	}
+
+	if(db_commit(db) != DB_OK)
+	{
+		const bool ok = fail(db, "cannot commit the gravity schema", error);
+		db_rollback(db);
+		return ok;
+	}
+
+	return true;
+}
+
 bool db_schema_baseline(db_conn *db, const char **error)
 {
 	const db_dialect *dialect = db->drv->dialect;

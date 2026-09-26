@@ -29,48 +29,26 @@
 // isMAC()
 #include "network-table.h"
 
-static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value **argv)
+// The number of bits of the network in a client table entry that the address
+// belongs to, 0 if it does not. The entry is a plain address or a CIDR range
+// ("10.8.1.0/24"); a MAC address, an interface name, a hostname or an entry of
+// the other IP family never matches. The most specific network wins, so the bits
+// let the caller prefer 10.8.1.0/24 over 10.0.0.0/8. Used by the SQLite function
+// below and, where the client table sits on a server without such functions, by
+// the code that reads the table
+int subnet_match_bits(const char *addrDBcidr, const char *addrLorentz)
 {
-	// Exactly two arguments should be submitted to this routine
-	if(argc != 2)
-	{
-		sqlite3_result_error(context, "Passed an invalid number of arguments", -1);
-		return;
-	}
-
-	// Return NO MATCH if invoked with non-TEXT arguments
-	if (sqlite3_value_type(argv[0]) != SQLITE_TEXT ||
-	    sqlite3_value_type(argv[1]) != SQLITE_TEXT)
-	{
-		log_err("SQL: Invoked subnet_match() with non-text arguments: %d, %d",
-		        sqlite3_value_type(argv[0]), sqlite3_value_type(argv[1]));
-		sqlite3_result_int(context, 0);
-		return;
-	}
-
-	// Analyze input supplied to our SQLite subroutine
-	// From the DB side (first argument) ...
-	const char *addrDBcidr = (const char*)sqlite3_value_text(argv[0]);
-	// ... and from Lorentz's side (second argument)
-	const char *addrLorentz = (const char*)sqlite3_value_text(argv[1]);
-
 	// Return early (no match) if database entry is a MAC address
 	// We can skip all computations in this case
 	if(isMAC(addrDBcidr))
-	{
-		sqlite3_result_int(context, 0);
-		return;
-	}
+		return 0;
 
 	// Return early (no match) if IP types are different
 	// We can skip all computations in this case
 	bool isIPv6_DB = strchr(addrDBcidr, ':') != NULL;
 	bool isIPv6_Lorentz = strchr(addrLorentz, ':') != NULL;
 	if(isIPv6_DB != isIPv6_Lorentz)
-	{
-		sqlite3_result_int(context, 0);
-		return;
-	}
+		return 0;
 
 	// Extract possible CIDR from database IP string
 	// sscanf() will not overwrite the pre-defined CIDR in cidr if
@@ -84,17 +62,13 @@ static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value 
 	{
 		log_err("SQL: Invalid CIDR value %d in database entry: %s", cidr, addrDBcidr);
 		free(addrDB);
-		sqlite3_result_int(context, 0);
-		return;
+		return 0;
 	}
 
 	// Skip if database row seems to be a CIDR but does not contain an address ('/32' is invalid)
 	// Passing an invalid IP address to inet_pton() causes a SEGFAULT
 	if(rt < 1 || addrDB == NULL)
-	{
-		sqlite3_result_int(context, 0);
-		return;
-	}
+		return 0;
 
 	// Convert the Internet host address into binary form in network byte order
 	// We use in6_addr as variable type here as it is guaranteed to be large enough
@@ -104,8 +78,7 @@ static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value 
 	{
 		// This may happen when trying to analyze a hostname, skip this entry and return NO MATCH (= 0)
 		free(addrDB);
-		sqlite3_result_int(context, 0);
-		return;
+		return 0;
 	}
 
 	// Free allocated memory
@@ -115,11 +88,9 @@ static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value 
 	// Check and convert client IP address as seen by Lorentz
 	if (inet_pton(isIPv6_Lorentz ? AF_INET6 : AF_INET, addrLorentz, &saddrLorentz) == 0)
 	{
-		//sqlite3_result_error(context, "Passed a malformed IP address (Lorentz)", -1);
 		// Return non-fatal "NO MATCH" if address is invalid
 		log_err("Malformed Lorentz IP address: %s", addrLorentz);
-		sqlite3_result_int(context, 0);
-		return;
+		return 0;
 	}
 
 	// Construct binary mask from CIDR field
@@ -155,12 +126,33 @@ static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value 
 		          match == 1 ? "!! MATCH !!" : "NO MATCH");
 	}
 
-	// Return if we found a match between the two addresses
-	// given a possibly specified mask. We return the number of
-	// matching bits (cannot be more than the CIDR field specified)
-	// so the algorithm can decide which subnet match is the most
-	// exact one and prefer it (e.g., 10.8.1.0/24 beats 10.0.0.0/8)
-	sqlite3_result_int(context, match ? cidr : 0);
+	// The number of matching bits (cannot be more than the CIDR field
+	// specified)
+	return match ? cidr : 0;
+}
+
+static void subnet_match_impl(sqlite3_context *context, int argc, sqlite3_value **argv)
+{
+	// Exactly two arguments should be submitted to this routine
+	if(argc != 2)
+	{
+		sqlite3_result_error(context, "Passed an invalid number of arguments", -1);
+		return;
+	}
+
+	// Return NO MATCH if invoked with non-TEXT arguments
+	if (sqlite3_value_type(argv[0]) != SQLITE_TEXT ||
+	    sqlite3_value_type(argv[1]) != SQLITE_TEXT)
+	{
+		log_err("SQL: Invoked subnet_match() with non-text arguments: %d, %d",
+		        sqlite3_value_type(argv[0]), sqlite3_value_type(argv[1]));
+		sqlite3_result_int(context, 0);
+		return;
+	}
+
+	// From the DB side (first argument) and from Lorentz's side (second argument)
+	sqlite3_result_int(context, subnet_match_bits((const char*)sqlite3_value_text(argv[0]),
+	                                              (const char*)sqlite3_value_text(argv[1])));
 }
 
 // Identify IPv6 addresses

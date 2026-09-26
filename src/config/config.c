@@ -1366,12 +1366,12 @@ void initConfig(struct config *conf)
 	conf->files.tmp_db.c = validate_filepath;
 
 	conf->files.gravity.k = "files.gravity";
-	conf->files.gravity.h = "The location of Lorentz's gravity database";
-	conf->files.gravity.a = cJSON_CreateStringReference("Any Lorentz gravity database");
+	conf->files.gravity.h = "The location of Lorentz's gravity database: the lists, groups, clients and allow/deny domains, and the domains of the lists. This is the path of a SQLite3 file or, when Lorentz is built with PostgreSQL support, a connection URI such as postgresql://user:password@host/database, which may be the one of files.database (the two do not share a table). The tables are created on the first start. Fields the URI leaves out come from the PG* environment variables, so postgresql:// alone works when they are set. Each DNS query that is not answered from the cache reads it, so keep a server close.";
+	conf->files.gravity.a = cJSON_CreateStringReference("Any Lorentz gravity database, or a PostgreSQL connection URI (postgresql://user:password@host/database)");
 	conf->files.gravity.t = CONF_STRING;
 	conf->files.gravity.f = FLAG_RESTART_LORENTZ;
 	conf->files.gravity.d.s = (char*)"/etc/lorentz/gravity.db";
-	conf->files.gravity.c = validate_filepath;
+	conf->files.gravity.c = validate_database_location;
 
 	conf->files.gravity_tmp.k = "files.gravity_tmp";
 	conf->files.gravity_tmp.h = "A temporary directory where Lorentz can store files during gravity updates. This directory must be writable by the user running gravity (typically lorentz).";

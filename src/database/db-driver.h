@@ -84,6 +84,10 @@ typedef struct db_dialect {
 	const char *(*regexp_op)(void);
 	// Write "<column> IN <array-parameter>" into buf, returns length or -1
 	int (*in_list)(char *buf, size_t size, const char *column, const char *bind_name);
+	// Write the aggregate joining the values of an expression, each once if
+	// distinct, into a comma separated text (GROUP_CONCAT, string_agg) into buf,
+	// returns length or -1
+	int (*group_concat)(char *buf, size_t size, const char *expr, bool distinct);
 } db_dialect;
 
 struct db_driver {

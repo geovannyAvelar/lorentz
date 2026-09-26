@@ -23,6 +23,10 @@ struct sqlite3_memory_usage {
         size_t current_allocations;
 };
 
+// Bits of the network of a client table entry that an address belongs to, 0 if
+// none (see the definition)
+int subnet_match_bits(const char *addrDBcidr, const char *addrLorentz);
+
 // Initialization point for SQLite3 extensions
 void lorentz_sqlite3_initalize(void);
 struct sqlite3_memory_usage *sqlite3_mem_used(void) __attribute__((const));

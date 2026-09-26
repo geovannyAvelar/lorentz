@@ -464,6 +464,14 @@ static struct teleporter_files {
 
 static bool import_json_table(cJSON *json, struct teleporter_files *file)
 {
+	// The tables are those of the gravity database, which is replaced as a
+	// file here
+	if(db_uri_is_remote(config.files.gravity.v.s))
+	{
+		log_err("import_json_table(%s): Not supported, the gravity database is on a server", file->filename);
+		return false;
+	}
+
 	// Check if the JSON object is an array
 	if(!cJSON_IsArray(json))
 	{

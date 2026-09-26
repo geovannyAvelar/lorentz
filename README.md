@@ -61,15 +61,41 @@ URI that contains the password is stored in `lorentz.toml`, where whoever can re
 logs mask it.
 
 What is on PostgreSQL is the **long-term database**: the query history, the counters, the network table,
-the messages, the sessions and the alias-clients. Three things stay in SQLite files whatever `files.database`
-is, because they are private to one host or are produced by tools that write SQLite:
+the messages, the sessions, the accounts and the alias-clients. Two things stay in SQLite files whatever
+`files.database` is, because they are private to one host:
 
 - the in-memory query database (a cache of the last `webserver.api.maxHistory` seconds, filled from the
   server on start and written back every `database.DBinterval` seconds and on shutdown),
-- `gravity.db` (written by `pihole -g` and the gravity tools; it holds the domain lists, groups, lists and
-  clients, so the API endpoints for those fail with "Database not available" without one - the Docker image
-  ships an empty one),
 - the MAC vendor database.
+
+The **gravity database** - the lists, groups, clients, allow and deny domains, and the domains the lists
+contain - is a third database, `files.gravity`, and a SQLite file (`gravity.db`) unless you say otherwise
+(see below). Without one the API endpoints for those fail with "Database not available"; the Docker image
+ships an empty file.
+
+### The lists on PostgreSQL
+
+`files.gravity` takes a connection URI as well, the same as `files.database` (it may be the very same one:
+the tables have different names):
+
+```bash
+LORENTZCONF_files_database=postgresql://
+LORENTZCONF_files_gravity=postgresql://
+PGHOST=db.example PGUSER=lorentz PGPASSWORD=secret PGDATABASE=lorentz
+```
+
+The tables, triggers and views are created on the first start (`db_schema_gravity_baseline()`). Lists, groups,
+clients and domains then survive the container being recreated and are shared by every Lorentz instance
+that points at the database, and the API, the web UI and the DNS decisions (groups, allowlist, denylist,
+regular expressions, the domains of the lists) all work from it. Things to know:
+
+- A DNS query that the cache cannot answer reads it, a few short statements each, so keep the server close.
+- Nothing in this repository downloads the lists yet, so `gravity` and `antigravity` are filled by whatever
+  builds them. Anything that writes to the file has to write to these tables instead; a change of
+  `info.updated` makes Lorentz reload.
+- Teleporter exports the gravity database, but an import does not replace it on a server: it is left out
+  with a warning.
+- Lorentz keeps working on the existing file if you do not set `files.gravity`; nothing is moved for you.
 
 Differences to be aware of: SQLite migrations are not replayed (the schema of the current version is created
 in one step, and a database of an older version is refused), `LIKE` ignores the case of letters as it does in

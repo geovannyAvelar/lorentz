@@ -291,7 +291,8 @@ const char *generate_teleporter_zip(mz_zip_archive *zip, char filename[128], voi
 	{
 		// Add gravity database to ZIP archive
 		file_comment = "Lorentz's gravity database";
-		file_path = config.files.gravity.v.s;
+		// A database on a server has no path to name the entry after
+		file_path = db_uri_is_remote(config.files.gravity.v.s) ? "etc/lorentz/gravity.db" : config.files.gravity.v.s;
 		if(file_path[0] == '/')
 			file_path++;
 		if(!mz_zip_writer_add_mem_ex(zip, file_path, dbbuf, dbsize, file_comment, (uint16_t)strlen(file_comment), MZ_BEST_COMPRESSION, 0, 0))
@@ -709,6 +710,7 @@ const char *read_teleporter_zip(uint8_t *buffer, const size_t buflen, char * con
 		const char *extract_files[] = {
 			"etc/lorentz/lorentz.toml",
 			"etc/lorentz/dhcp.leases",
+			db_uri_is_remote(config.files.gravity.v.s) ? "etc/lorentz/gravity.db" :
 			config.files.gravity.v.s[0] == '/' ? config.files.gravity.v.s + 1 : config.files.gravity.v.s
 		};
 
@@ -812,6 +814,15 @@ const char *read_teleporter_zip(uint8_t *buffer, const size_t buflen, char * con
 			if(import != NULL && !cJSON_HasObjectItem(import, "gravity"))
 			{
 				log_info("Ignoring file %s in Teleporter archive (not in import list)", file_stat.m_filename);
+				free(ptr);
+				continue;
+			}
+
+			// The import replaces tables of a database file; a gravity
+			// database on a server is not one
+			if(db_uri_is_remote(config.files.gravity.v.s))
+			{
+				log_warn("Not importing %s from the Teleporter archive: the gravity database is on a server", file_stat.m_filename);
 				free(ptr);
 				continue;
 			}

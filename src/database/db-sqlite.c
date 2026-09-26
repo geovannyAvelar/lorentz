@@ -735,6 +735,12 @@ static int sqlite_dialect_in_list(char *buf, size_t size, const char *column, co
 	return (len < 0 || (size_t)len >= size) ? -1 : len;
 }
 
+static int sqlite_dialect_group_concat(char *buf, size_t size, const char *expr, bool distinct)
+{
+	const int len = snprintf(buf, size, "GROUP_CONCAT(%s%s)", distinct ? "DISTINCT " : "", expr);
+	return (len < 0 || (size_t)len >= size) ? -1 : len;
+}
+
 static const db_dialect sqlite_dialect = {
 	.name = "sqlite",
 	.placeholder = sqlite_dialect_placeholder,
@@ -743,7 +749,8 @@ static const db_dialect sqlite_dialect = {
 	.upsert_suffix = sqlite_dialect_upsert_suffix,
 	.glob_op = sqlite_dialect_glob_op,
 	.regexp_op = sqlite_dialect_regexp_op,
-	.in_list = sqlite_dialect_in_list
+	.in_list = sqlite_dialect_in_list,
+	.group_concat = sqlite_dialect_group_concat
 };
 
 /* ---- driver instance ---- */

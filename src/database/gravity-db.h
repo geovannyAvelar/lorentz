@@ -76,6 +76,11 @@ enum db_result in_allowlist(const char *domain, DNSCacheData *dns_cache, clients
 bool gravityDB_get_regex_client_groups(clientsData *client, const unsigned int numregex, const regexData *regex,
                                        const unsigned char type, const char* table);
 
+// The addresses in the client table of the gravity database (IPs, ranges, MACs,
+// interfaces), lower case, as an array of allocated strings, *count long. NULL
+// on error. Free with gravityDB_free_client_addresses()
+char **gravityDB_client_addresses(size_t *count);
+void gravityDB_free_client_addresses(char **addresses, size_t count);
 db_conn *gravityDB_open_RO(void);
 void gravityDB_close_RO(db_conn *db);
 bool gravityDB_readTable(db_conn *db, const enum gravity_list_type listtype, const char *filter,

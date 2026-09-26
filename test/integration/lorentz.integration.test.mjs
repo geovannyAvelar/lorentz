@@ -13,6 +13,7 @@
 // (build Lorentz first, see LORENTZ_BINARY in lib.mjs). Needs a running Docker daemon.
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,15 +37,19 @@ const LOCAL_DOMAIN = "local.example.com"; // local record set through dns.hosts
 const isWalRecovery = (line) => /recovered \d+ frames from WAL file/.test(line);
 const errorLines = (log) => log.split("\n").filter((line) => /\bERROR\b/.test(line) && !isWalRecovery(line));
 
-// The long-term database Lorentz is run with. SQLite is the default, PostgreSQL
-// needs a Lorentz built with -DUSE_POSTGRESQL=ON. LORENTZ_BACKENDS=sqlite,postgres
-// selects (default: both)
-const wanted = (process.env.LORENTZ_BACKENDS ?? "sqlite,postgres").split(",");
+// The databases Lorentz is run with. SQLite is the default, PostgreSQL needs a
+// Lorentz built with -DUSE_POSTGRESQL=ON. "postgres" keeps the long-term database
+// on the server (the gravity database stays a file), "postgres+gravity" the
+// gravity database (lists, groups, clients, domains) as well.
+// LORENTZ_BACKENDS=sqlite,postgres,postgres+gravity selects (default: all)
+const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const wanted = (process.env.LORENTZ_BACKENDS ?? "sqlite,postgres,postgres+gravity").split(",");
+const needsPostgres = wanted.some((name) => name.startsWith("postgres"));
 let postgres;
 
 before(async () => {
   await buildImage();
-  if (wanted.includes("postgres")) postgres = await startPostgres();
+  if (needsPostgres) postgres = await startPostgres();
 });
 after(async () => {
   await postgres?.stop();
@@ -76,6 +81,59 @@ if (wanted.includes("postgres"))
     },
     healthy: async (lorentz) => assert.equal(await lorentz.longterm.query("SELECT 1"), "1"),
   });
+
+if (wanted.includes("postgres+gravity"))
+  backends.push({
+    name: "postgres+gravity",
+    gravityOnServer: true,
+    async start(environment = {}, options = {}) {
+      const schema = await postgres.schema();
+      const lorentz = await startLorentz(
+        { LORENTZCONF_files_database: schema.uri, LORENTZCONF_files_gravity: schema.uri, ...environment },
+        { ...options, network: postgres.network });
+      lorentz.longterm = { query: schema.sql, schema: schema.name };
+      lorentz.gravity = { query: schema.sql };
+      // Lorentz has created the tables; fill them with the sample data of the
+      // SQLite gravity.db and let it notice
+      await eventually("the gravity tables", async () => (await schema.sql("SELECT count(*) FROM info")) !== "");
+      const reloads = async () =>
+        ((await lorentzLog(lorentz)).match(/Gravity database has been updated, reloading now/g) ?? []).length;
+      const seen = await reloads();
+      await schema.sql(gravitySeed());
+      // Lorentz reads the counts and the lists it keeps in memory when it sees
+      // the new "updated" time, a moment later (this does not go through the API,
+      // which a test may have put behind a password)
+      // Lorentz's first look at "updated" only records it, so if that came after the
+      // seed there is nothing to notice: keep moving it on until a reload shows
+      await eventually("Lorentz to notice the sample gravity", async () => {
+        if ((await reloads()) > seen) return true;
+        await schema.sql("UPDATE info SET value = (CAST(value AS BIGINT) + 1)::text WHERE property = 'updated'");
+        return false;
+      }, { timeoutMs: 45_000, intervalMs: 1000 });
+      await settle(lorentz);
+      return lorentz;
+    },
+    healthy: async (lorentz) => assert.equal(await lorentz.longterm.query("SELECT 1"), "1"),
+  });
+
+// The rows of the sample gravity database (test/gravity.db.sql), as statements a
+// PostgreSQL gravity database takes: what follows the schema of that file, minus
+// the properties the tables start with, then the sequences moved past the ids
+// the rows brought along and a new "updated" time for Lorentz to notice
+function gravitySeed() {
+  const sql = readFileSync(join(repo, "test", "gravity.db.sql"), "utf8");
+  const marker = sql.indexOf("vvv Test content following vvv");
+  const rows = sql.slice(sql.indexOf("*/", marker) + 2)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^COMMIT;.*$/m, "");
+  const sequences = ['"group"', "domainlist", "adlist", "client"]
+    .map((table) => `SELECT setval(pg_get_serial_sequence('${table}', 'id'), (SELECT max(id) FROM ${table}));`)
+    .join("\n");
+  return `DELETE FROM info WHERE property IN ('gravity_count', 'antigravity_count', 'abp_domains', 'updated');
+${rows}
+${sequences}
+UPDATE info SET value = (CAST(extract(epoch from now()) AS BIGINT) + 5)::text WHERE property = 'updated';`;
+}
 
 for (const backend of backends) describe(`a fresh lorentz (${backend.name})`, () => {
   let lorentz;
@@ -272,9 +330,14 @@ for (const backend of backends) describe(`a fresh lorentz (${backend.name})`, ()
       const domain = "rebuilt.example";
       assert.notDeepEqual(await dig(lorentz, domain), BLOCKED);
       await settle(lorentz); // no reload may be running while gravity.db is written
-      await sqlite(lorentz, GRAVITY_DB,
-        `INSERT INTO gravity(domain, adlist_id) VALUES ('${domain}', 1);
-         UPDATE info SET value = CAST(strftime('%s','now') AS INTEGER) + 5 WHERE property = 'updated';`);
+      if (backend.gravityOnServer)
+        await lorentz.gravity.query(
+          `INSERT INTO gravity(domain, adlist_id) VALUES ('${domain}', 1);
+           UPDATE info SET value = (CAST(extract(epoch from now()) AS BIGINT) + 15)::text WHERE property = 'updated';`);
+      else
+        await sqlite(lorentz, GRAVITY_DB,
+          `INSERT INTO gravity(domain, adlist_id) VALUES ('${domain}', 1);
+           UPDATE info SET value = CAST(strftime('%s','now') AS INTEGER) + 5 WHERE property = 'updated';`);
       await eventually("Lorentz to notice the new gravity",
         async () => (await dig(lorentz, domain))[0] === "0.0.0.0", { timeoutMs: 30_000 });
       await eventually("the reload to be logged",
@@ -321,13 +384,19 @@ for (const backend of backends) describe(`a fresh lorentz (${backend.name})`, ()
       form.append("file", new Blob([archive.data]), "teleporter.zip");
       const imported = await api(lorentz, "/api/teleporter", { method: "POST", body: form });
       assert.equal(imported.status, 200);
-      assert.ok(imported.body.files.some((file) => file.startsWith("etc/lorentz/gravity.db->")));
+      // A gravity database on a server is exported, but an import replaces
+      // the tables of a file and skips it
+      if (!backend.gravityOnServer)
+        assert.ok(imported.body.files.some((file) => file.startsWith("etc/lorentz/gravity.db->")));
 
       // Lorentz restarts its DNS engine after an import
       await waitForApi(lorentz);
       await eventually("gravity to apply after the import",
         async () => (await dig(lorentz, GRAVITY_DOMAIN))[0] === "0.0.0.0", { timeoutMs: 45_000 });
-      assert.equal(await sqlite(lorentz, GRAVITY_DB, "PRAGMA integrity_check;"), "ok");
+      if (backend.gravityOnServer)
+        assert.ok(Number(await lorentz.gravity.query("SELECT count(*) FROM gravity")) >= 8);
+      else
+        assert.equal(await sqlite(lorentz, GRAVITY_DB, "PRAGMA integrity_check;"), "ok");
     });
   });
 

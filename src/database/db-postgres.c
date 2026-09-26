@@ -1892,6 +1892,12 @@ static int pg_dialect_in_list(char *buf, size_t size, const char *column, const 
 	return (len < 0 || (size_t)len >= size) ? -1 : len;
 }
 
+static int pg_dialect_group_concat(char *buf, size_t size, const char *expr, bool distinct)
+{
+	const int len = snprintf(buf, size, "string_agg(%sCAST(%s AS TEXT), ',')", distinct ? "DISTINCT " : "", expr);
+	return (len < 0 || (size_t)len >= size) ? -1 : len;
+}
+
 static const db_dialect pg_dialect = {
 	.name = "postgres",
 	.placeholder = pg_dialect_placeholder,
@@ -1900,7 +1906,8 @@ static const db_dialect pg_dialect = {
 	.upsert_suffix = pg_dialect_upsert_suffix,
 	.glob_op = pg_dialect_glob_op,
 	.regexp_op = pg_dialect_regexp_op,
-	.in_list = pg_dialect_in_list
+	.in_list = pg_dialect_in_list,
+	.group_concat = pg_dialect_group_concat
 };
 
 /* ---- driver instance ---- */
