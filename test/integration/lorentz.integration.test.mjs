@@ -75,7 +75,9 @@ if (wanted.includes("postgres"))
     async start(environment = {}, options = {}) {
       const schema = await postgres.schema();
       const lorentz = await startLorentz(
-        { LORENTZCONF_files_database: schema.uri, ...environment },
+        // The lists stay in the SQLite file: without a path of its own, files.gravity would
+        // follow files.database to the server
+        { LORENTZCONF_files_database: schema.uri, LORENTZCONF_files_gravity: "/etc/lorentz/gravity-file.db", ...environment },
         { ...options, network: postgres.network });
       lorentz.longterm = { query: schema.sql, schema: schema.name };
       return lorentz;
@@ -388,7 +390,7 @@ for (const backend of backends) describe(`a fresh lorentz (${backend.name})`, ()
       // A gravity database on a server is exported, but an import replaces
       // the tables of a file and skips it
       if (!backend.gravityOnServer)
-        assert.ok(imported.body.files.some((file) => file.startsWith("etc/lorentz/gravity.db->")));
+        assert.ok(imported.body.files.some((file) => /^etc\/lorentz\/gravity(-file)?\.db->/.test(file)));
 
       // Lorentz restarts its DNS engine after an import
       await waitForApi(lorentz);
@@ -468,6 +470,26 @@ for (const backend of backends) describe(`a fresh lorentz (${backend.name})`, ()
       assert.doesNotMatch(log, /is damaged/);
       assert.doesNotMatch(log, /is read-only/);
     });
+  });
+});
+
+// files.gravity is left alone: the lists go where files.database is
+describe("the gravity database follows a PostgreSQL long-term database", { skip: !wanted.includes("postgres+gravity") }, () => {
+  let lorentz, schema;
+  before(async () => {
+    schema = await postgres.schema();
+    lorentz = await startLorentz({ LORENTZCONF_files_database: schema.uri }, { network: postgres.network });
+  });
+  after(async () => {
+    await lorentz?.stop();
+  });
+
+  it("keeps the lists on the server", async () => {
+    const added = await api(lorentz, "/api/lists?type=block", {
+      method: "POST", json: { address: "https://lists.example/on-pg.txt", groups: [0], enabled: true } });
+    assert.equal(added.status, 201);
+    assert.equal(await schema.sql("SELECT count(*) FROM adlist WHERE address = 'https://lists.example/on-pg.txt'"), "1");
+    assert.match(await lorentzLog(lorentz), /Creating the gravity database/);
   });
 });
 

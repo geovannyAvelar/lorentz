@@ -19,6 +19,9 @@ COPY gravity.db.sql /tmp/gravity.db.sql
 # Gravity database from the same schema and sample data the bats suite uses,
 # created with the SQLite shell of the binary under test
 RUN lorentz sqlite3 /etc/lorentz/gravity.db < /tmp/gravity.db.sql
+# The same file under a name of its own: with a PostgreSQL long-term database, a
+# files.gravity that is not the default path keeps the gravity database in a file
+RUN ln -s gravity.db /etc/lorentz/gravity-file.db
 
 # Default configuration, so that a normal start does not log a missing file
 WORKDIR /etc/lorentz

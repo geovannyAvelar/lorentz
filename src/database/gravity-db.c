@@ -290,12 +290,12 @@ void gravityDB_forked(void)
 // between the two goes through these two helpers or the driver's dialect
 static bool gravity_is_remote(void)
 {
-	return db_uri_is_remote(config.files.gravity.v.s);
+	return db_uri_is_remote(gravity_location());
 }
 
 static db_conn *gravity_open_conn(const unsigned int flags, db_rc *rc, const char **msg)
 {
-	return db_open_uri_ex(config.files.gravity.v.s, flags, rc, msg);
+	return db_open_uri_ex(gravity_location(), flags, rc, msg);
 }
 
 // Create the gravity schema in an empty server database. Two instances may
@@ -435,10 +435,10 @@ static bool gravityDB_open(void)
 {
 	const bool remote = gravity_is_remote();
 	struct stat st;
-	if(!remote && stat(config.files.gravity.v.s, &st) != 0)
+	if(!remote && stat(gravity_location(), &st) != 0)
 	{
 		// File does not exist
-		log_warn("gravityDB_open(): %s does not exist", config.files.gravity.v.s);
+		log_warn("gravityDB_open(): %s does not exist", gravity_location());
 		return false;
 	}
 
@@ -448,7 +448,7 @@ static bool gravityDB_open(void)
 		return true;
 	}
 
-	log_debug(DEBUG_DATABASE, "gravityDB_open(): Trying to open %s in read-write mode", db_uri_display(config.files.gravity.v.s));
+	log_debug(DEBUG_DATABASE, "gravityDB_open(): Trying to open %s in read-write mode", db_uri_display(gravity_location()));
 	db_rc rc;
 	const char *open_error = NULL;
 	gravity_db = gravity_open_conn(DB_OPEN_READWRITE, &rc, &open_error);
@@ -494,7 +494,7 @@ static bool gravityDB_open(void)
 	// usually be fully satisfied, and more is rarely useful.)
 	if(!remote)
 	{
-		int warmup_fd = open(config.files.gravity.v.s, O_RDONLY);
+		int warmup_fd = open(gravity_location(), O_RDONLY);
 		if(warmup_fd >= 0)
 		{
 			struct stat warmup_st;
@@ -3454,10 +3454,10 @@ bool gravity_updated(void)
 	db_stmt *query_stmt = NULL;
 
 	// Check if database is a readable file (a server is not)
-	if(!gravity_is_remote() && file_readable(config.files.gravity.v.s) == false)
+	if(!gravity_is_remote() && file_readable(gravity_location()) == false)
 	{
 		log_err("Cannot read gravity database at %s - file does not exist or is not readable",
-		        config.files.gravity.v.s);
+		        gravity_location());
 		return false;
 	}
 
@@ -3466,7 +3466,7 @@ bool gravity_updated(void)
 	db_conn *db = gravity_open_conn(DB_OPEN_READONLY | DB_OPEN_NOMUTEX, NULL, &open_error);
 	if(db == NULL)
 	{
-		log_err("gravity_updated(): %s - SQL error open: %s", db_uri_display(config.files.gravity.v.s), open_error);
+		log_err("gravity_updated(): %s - SQL error open: %s", db_uri_display(gravity_location()), open_error);
 		return false;
 	}
 
@@ -3476,7 +3476,7 @@ bool gravity_updated(void)
 	db_rc rc = db_set_busy_handler(db, sqliteBusyCallback, NULL);
 	if(rc != DB_OK)
 	{
-		log_err("gravity_updated(): %s - Cannot set busy handler: %s", db_uri_display(config.files.gravity.v.s), DB_LAST_ERR(db));
+		log_err("gravity_updated(): %s - Cannot set busy handler: %s", db_uri_display(gravity_location()), DB_LAST_ERR(db));
 		db_close(db);
 		return false;
 	}

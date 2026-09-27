@@ -531,7 +531,7 @@ enum gravity_update_rc gravity_update_run(gravity_log_fn log, void *arg, struct 
 
 	// A file keeps its readers out of the way of the writer with a
 	// write-ahead log, and needs an index to find the rows of one list
-	if(!db_uri_is_remote(config.files.gravity.v.s))
+	if(!db_uri_is_remote(gravity_location()))
 	{
 		db_exec(db, "PRAGMA journal_mode = WAL");
 		db_exec(db, "CREATE INDEX IF NOT EXISTS idx_gravity_adlist ON gravity (adlist_id)");

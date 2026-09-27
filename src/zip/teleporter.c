@@ -287,12 +287,12 @@ const char *generate_teleporter_zip(mz_zip_archive *zip, char filename[128], voi
 	// Add (a reduced version of) the gravity database to the ZIP archive
 	void *dbbuf = NULL;
 	size_t dbsize = 0u;
-	if(create_teleporter_database(config.files.gravity.v.s, gravity_tables, ArraySize(gravity_tables), &dbbuf, &dbsize))
+	if(create_teleporter_database(gravity_location(), gravity_tables, ArraySize(gravity_tables), &dbbuf, &dbsize))
 	{
 		// Add gravity database to ZIP archive
 		file_comment = "Lorentz's gravity database";
 		// A database on a server has no path to name the entry after
-		file_path = db_uri_is_remote(config.files.gravity.v.s) ? "etc/lorentz/gravity.db" : config.files.gravity.v.s;
+		file_path = db_uri_is_remote(gravity_location()) ? "etc/lorentz/gravity.db" : gravity_location();
 		if(file_path[0] == '/')
 			file_path++;
 		if(!mz_zip_writer_add_mem_ex(zip, file_path, dbbuf, dbsize, file_comment, (uint16_t)strlen(file_comment), MZ_BEST_COMPRESSION, 0, 0))
@@ -710,8 +710,8 @@ const char *read_teleporter_zip(uint8_t *buffer, const size_t buflen, char * con
 		const char *extract_files[] = {
 			"etc/lorentz/lorentz.toml",
 			"etc/lorentz/dhcp.leases",
-			db_uri_is_remote(config.files.gravity.v.s) ? "etc/lorentz/gravity.db" :
-			config.files.gravity.v.s[0] == '/' ? config.files.gravity.v.s + 1 : config.files.gravity.v.s
+			db_uri_is_remote(gravity_location()) ? "etc/lorentz/gravity.db" :
+			gravity_location()[0] == '/' ? gravity_location() + 1 : gravity_location()
 		};
 
 		// Check if this file is one of the files we want to extract and process
@@ -820,7 +820,7 @@ const char *read_teleporter_zip(uint8_t *buffer, const size_t buflen, char * con
 
 			// The import replaces tables of a database file; a gravity
 			// database on a server is not one
-			if(db_uri_is_remote(config.files.gravity.v.s))
+			if(db_uri_is_remote(gravity_location()))
 			{
 				log_warn("Not importing %s from the Teleporter archive: the gravity database is on a server", file_stat.m_filename);
 				free(ptr);
@@ -858,7 +858,7 @@ const char *read_teleporter_zip(uint8_t *buffer, const size_t buflen, char * con
 
 			// Import gravity database
 			memset(hint, 0, ERRBUF_SIZE);
-			const char *err = test_and_import_database(ptr, file_stat.m_uncomp_size, config.files.gravity.v.s,
+			const char *err = test_and_import_database(ptr, file_stat.m_uncomp_size, gravity_location(),
 			                                           import_tables, num_tables, hint);
 			if(err != NULL)
 			{

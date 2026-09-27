@@ -422,6 +422,10 @@ bool create_default_config(const char *filename);
 
 // Defined in toml_reader.c
 bool readDebugSettings(void);
+// Where the gravity database is: files.gravity, except that a PostgreSQL files.database
+// takes it along when files.gravity was left at its default, so that the lists are
+// shared by every instance that uses the server
+const char *gravity_location(void);
 void init_config_mutex(void);
 enum blocking_status get_blockingstatus(void) __attribute__((pure));
 void set_blockingstatus(bool enabled);

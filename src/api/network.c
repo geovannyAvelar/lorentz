@@ -384,13 +384,13 @@ int api_client_suggestions(struct lorentz_conn *api)
 	// tables sit in another database than the file's) read the addresses and
 	// leave the configured ones out of the rows in C
 	const db_dialect *dialect = db->drv->dialect;
-	const bool attach = !db_uri_is_remote(config.files.gravity.v.s) && db->drv->attach != NULL;
+	const bool attach = !db_uri_is_remote(gravity_location()) && db->drv->attach != NULL;
 	const char *message = "";
 	char **configured = NULL;
 	size_t configured_count = 0;
 	if(attach)
 	{
-		if(!attach_database(db, &message, config.files.gravity.v.s, "g"))
+		if(!attach_database(db, &message, gravity_location(), "g"))
 		{
 			log_err("Failed to attach gravity database: %s", message);
 			dbclose(&db);

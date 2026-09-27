@@ -31,6 +31,7 @@
 #include "signals.h"
 // validation functions
 #include "config/validator.h"
+#include "database/db-driver.h"
 // getEnvVars()
 #include "config/env.h"
 // set_mbedtls_debug_threshold()
@@ -1374,7 +1375,7 @@ void initConfig(struct config *conf)
 	conf->files.tmp_db.c = validate_filepath;
 
 	conf->files.gravity.k = "files.gravity";
-	conf->files.gravity.h = "The location of Lorentz's gravity database: the lists, groups, clients and allow/deny domains, and the domains of the lists. This is the path of a SQLite3 file or, when Lorentz is built with PostgreSQL support, a connection URI such as postgresql://user:password@host/database, which may be the one of files.database (the two do not share a table). The tables are created on the first start. Fields the URI leaves out come from the PG* environment variables, so postgresql:// alone works when they are set. Each DNS query that is not answered from the cache reads it, so keep a server close.";
+	conf->files.gravity.h = "The location of Lorentz's gravity database: the lists, groups, clients and allow/deny domains, and the domains of the lists. This is the path of a SQLite3 file or, when Lorentz is built with PostgreSQL support, a connection URI such as postgresql://user:password@host/database, which may be the one of files.database (the two do not share a table). When files.database is a PostgreSQL URI and this is left at its default, the gravity database is on that server too, so that the lists are shared by every instance; give a path of your own to keep it in a file. The tables are created on the first start. Fields the URI leaves out come from the PG* environment variables, so postgresql:// alone works when they are set. Each DNS query that is not answered from the cache reads it, so keep a server close.";
 	conf->files.gravity.a = cJSON_CreateStringReference("Any Lorentz gravity database, or a PostgreSQL connection URI (postgresql://user:password@host/database)");
 	conf->files.gravity.t = CONF_STRING;
 	conf->files.gravity.f = FLAG_RESTART_LORENTZ;
@@ -2329,4 +2330,14 @@ bool create_default_config(const char *filename)
 	fclose(fp);
 	log_info("Default configuration written to %s", filename);
 	return true;
+}
+
+const char *gravity_location(void)
+{
+	const char *gravity = config.files.gravity.v.s;
+	const char *database = config.files.database.v.s;
+	if(db_uri_is_remote(database) && !db_uri_is_remote(gravity) &&
+	   strcmp(gravity, config.files.gravity.d.s) == 0)
+		return database;
+	return gravity;
 }

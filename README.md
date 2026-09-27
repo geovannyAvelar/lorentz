@@ -69,14 +69,17 @@ the messages, the sessions, the accounts and the alias-clients. Two things stay 
 - the MAC vendor database.
 
 The **gravity database** - the lists, groups, clients, allow and deny domains, and the domains the lists
-contain - is a third database, `files.gravity`, and a SQLite file (`gravity.db`) unless you say otherwise
-(see below). Without one the API endpoints for those fail with "Database not available"; the Docker image
+contain - is `files.gravity`. It follows `files.database` to the server, and is a SQLite file (`gravity.db`)
+only when `files.database` is a file or you give it a path of your own (see below). Without one the API endpoints for those fail with "Database not available"; the Docker image
 ships an empty file.
 
 ### The lists on PostgreSQL
 
+**When `files.database` is a PostgreSQL URI, the gravity database is on that server too**, unless you give
+`files.gravity` a value of your own (a file path keeps it in a file, on that instance only). The lists, groups,
+clients and domains are then shared by every instance that uses the server, with nothing more to set.
 `files.gravity` takes a connection URI as well, the same as `files.database` (it may be the very same one:
-the tables have different names):
+the tables have different names), for a gravity database on another server:
 
 ```bash
 LORENTZCONF_files_database=postgresql://
