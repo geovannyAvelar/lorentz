@@ -250,6 +250,10 @@ struct config {
 	} resolver;
 
 	struct {
+		struct conf_item updateInterval;
+	} gravity;
+
+	struct {
 		struct conf_item DBimport;
 		struct conf_item storeQueries;
 		struct conf_item maxDBdays;

@@ -611,6 +611,42 @@ else()
     target_compile_definitions(civetweb PRIVATE NO_SSL)
 endif()
 
+# The gravity updater (src/tools/gravity-update.c) downloads the adlists with
+# libcurl. Without it Lorentz builds and runs, and an update says it cannot
+# download. A static build links the static libcurl with everything it was
+# built against (pkg-config knows the list)
+option(USE_CURL "Build the adlist downloader, needs libcurl" ON)
+set(LIBCURL_USED FALSE)
+if(USE_CURL)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBCURL QUIET libcurl)
+    endif()
+    if(LIBCURL_FOUND)
+        set(LIBCURL_USED TRUE)
+        if(STATIC)
+            set(CURL_LINK_LIBRARIES ${LIBCURL_STATIC_LIBRARIES})
+            set(CURL_LINK_DIRECTORIES ${LIBCURL_STATIC_LIBRARY_DIRS})
+            set(CURL_INCLUDE ${LIBCURL_STATIC_INCLUDE_DIRS})
+            set(CURL_CFLAGS ${LIBCURL_STATIC_CFLAGS_OTHER})
+        else()
+            set(CURL_LINK_LIBRARIES ${LIBCURL_LIBRARIES})
+            set(CURL_LINK_DIRECTORIES ${LIBCURL_LIBRARY_DIRS})
+            set(CURL_INCLUDE ${LIBCURL_INCLUDE_DIRS})
+            set(CURL_CFLAGS ${LIBCURL_CFLAGS_OTHER})
+        endif()
+        message(STATUS "Building the adlist downloader (libcurl ${LIBCURL_VERSION}): YES")
+        target_compile_definitions(tools PRIVATE HAVE_LIBCURL)
+        target_include_directories(tools PRIVATE ${CURL_INCLUDE})
+        target_compile_options(tools PRIVATE ${CURL_CFLAGS})
+        target_link_directories(lorentz PRIVATE ${CURL_LINK_DIRECTORIES})
+        target_link_libraries(lorentz ${CURL_LINK_LIBRARIES})
+    endif()
+endif()
+if(NOT LIBCURL_USED)
+    message(STATUS "Building the adlist downloader: NO")
+endif()
+
 # After finishing building the Lorentz binary, we append the sha256sum of the binary
 # in raw form to itself and print the checksum to the console
 add_custom_command(TARGET lorentz POST_BUILD COMMENT "Appending sha256sum to lorentz"

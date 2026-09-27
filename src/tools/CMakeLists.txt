@@ -16,6 +16,8 @@ set(tools_sources
         dhcp-discover.h
         gravity-parseList.c
         gravity-parseList.h
+        gravity-update.c
+        gravity-update.h
         netlink_consts.h
         netlink.c
         netlink.h

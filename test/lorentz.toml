@@ -806,6 +806,16 @@
   #       host names.
   refreshNames = "NONE" ### CHANGED, default = "IPV4_ONLY"
 
+[gravity]
+  # How often should Lorentz download the adlists again and rebuild its list of blocked
+  # domains [hours]?
+  #
+  # The lists of these tests point nowhere, so nothing is downloaded on a schedule.
+  #
+  # Allowed values are:
+  #     A positive integer value in hours, or 0 to never update automatically
+  updateInterval = 0 ### CHANGED, default = 24
+
 [database]
   # Should Lorentz load information from the database on startup to be aware of the most
   # recent history?

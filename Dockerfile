@@ -24,7 +24,12 @@ COPY . .
 # EMBED_WEBUI (see src/api/webui/CMakeLists.txt) folds web/'s static export
 # into the binary, so it needs Node.js/npm here at build time only - nothing
 # of it remains in the runtime stage or the final binary's dependencies.
-RUN apk add --no-cache libpq-dev openssl-libs-static nodejs npm
+#
+# The adlist downloader (src/tools/gravity-update.c) links libcurl statically,
+# with the libraries this Alpine build of it depends on.
+RUN apk add --no-cache libpq-dev openssl-libs-static nodejs npm \
+    curl-dev curl-static nghttp2-static brotli-static zstd-static zlib-static \
+    libidn2-static libpsl-static libunistring-static
 RUN rm -rf cmake && bash build.sh "-DUSE_POSTGRESQL=ON -DEMBED_WEBUI=ON"
 
 # Runtime stage. The binary above is fully static (musl, no dynamic
@@ -64,11 +69,11 @@ COPY --from=build /app/lorentz /usr/bin/lorentz
 WORKDIR /etc/lorentz
 RUN lorentz create-default-config lorentz.toml && chown lorentz:lorentz lorentz.toml
 
-# gravity.db (domain lists, groups, clients, adlists) is always a local SQLite
-# file, even with files.database on PostgreSQL (see README.md, "Database
-# drivers"), and nothing but `pihole -g` creates it - without one, /api/domains,
-# /api/groups, /api/lists and /api/clients all fail with "Database not
-# available". Start from an empty one (the schema of test/gravity.db.sql).
+# gravity.db (domain lists, groups, clients, adlists) is a local SQLite file
+# unless files.gravity points at a PostgreSQL server (see README.md, "Database
+# drivers"), and nothing creates it - without one, /api/domains, /api/groups,
+# /api/lists and /api/clients all fail with "Database not available". Start
+# from an empty one (the schema of test/gravity.db.sql).
 COPY docker/gravity.db.sql /tmp/gravity.db.sql
 RUN lorentz sqlite3 /etc/lorentz/gravity.db < /tmp/gravity.db.sql \
     && chown lorentz:lorentz /etc/lorentz/gravity.db \

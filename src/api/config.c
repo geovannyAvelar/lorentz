@@ -41,6 +41,7 @@ static struct {
 	{ "dhcp", "DHCP", "DHCP server settings" },
 	{ "ntp", "NTP", "Network Time Sync settings" },
 	{ "resolver", "Resolver", "Resolver settings" },
+	{ "gravity", "Gravity", "Blocklist update settings" },
 	{ "database", "Database", "Database settings" },
 	{ "webserver", "HTTP/API", "Webserver and API settings" },
 	{ "files", "Files", "File locations" },

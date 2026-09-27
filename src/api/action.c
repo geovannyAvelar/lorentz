@@ -24,175 +24,55 @@
 #include "config/config.h"
 // gravity_running
 #include "daemon.h"
+// gravity_update_run()
+#include "tools/gravity-update.h"
 
-static int run_and_stream_command(struct lorentz_conn *api, const char *path, const char *const args[], const char *extra_env)
+// Sends what a gravity update reports as it goes, one chunk per line
+struct gravity_stream {
+	struct lorentz_conn *api;
+};
+
+static void stream_line(const char *line, void *arg)
 {
-	// Create a pipe for communication with our child
-	int pipefd[2];
-	if(pipe(pipefd) !=0)
-	{
-		// This function returns an HTTP status code, so a plain false
-		// would be a 0 the caller turns into a 404
-		log_err("Cannot create pipe while running gravity action: %s", strerror(errno));
-		return send_json_error(api, 500,
-		                       "server_error",
-		                       "Cannot create pipe",
-		                       strerror(errno));
-	}
-
-	// Fork!
-	pid_t cpid = fork();
-	int code = -1;
-	bool crashed = false;
-	if(cpid == -1)
-	{
-		// Neither branch below tests for this, and the parent one ends in
-		// waitpid(-1, ...): it would reap an unrelated child of ours - a
-		// dnsmasq TCP helper, say, whose tcp_pids slot then leaks - and
-		// report that child's exit status as the result of this command.
-		// test_dnsmasq_config() has the same fork and is fixed alongside
-		// the config write path
-		// Kept across the close() calls, which may clobber errno
-		const int err = errno;
-		log_err("Cannot fork to run command: %s", strerror(err));
-		close(pipefd[0]);
-		close(pipefd[1]);
-		return send_json_error(api, 500,
-		                       "server_error",
-		                       "Cannot fork to run command",
-		                       strerror(err));
-	}
-
-	if (cpid == 0)
-	{
-		/*** CHILD ***/
-		// Close the reading end of the pipe
-		close(pipefd[0]);
-
-		// Disable logging
-		log_ctrl(false, false);
-
-		// Flush STDERR
-		fflush(stderr);
-
-		// Redirect STDERR into our pipe
-		dup2(pipefd[1], STDERR_FILENO);
-		dup2(pipefd[1], STDOUT_FILENO);
-
-		// Set extra environment variable if requested
-		if(extra_env != NULL)
-			setenv(extra_env, "1", 1);
-
-		// Detach child into its own session/process group so signals
-		// sent to the parent's process group (like SIGTERM) do not
-		// propagate to this child.
-		(void)setsid();
-
-		// Ignore SIGTERM so systemd's cgroup-level kill (the
-		// default KillMode=control-group sends SIGTERM to ALL
-		// processes in the cgroup) doesn't terminate gravity
-		// mid-run. SIG_IGN is preserved across execv(), unlike
-		// custom handlers which are reset to SIG_DFL.
-		signal(SIGTERM, SIG_IGN);
-
-		// Run lorentz -g
-		execv(path, (char *const *)args);
-
-		// execv() only returns if it failed, so the command never ran.
-		// Exit non-zero so the parent reports the action as failed.
-		exit(EXIT_FAILURE);
-	}
-	else
-	{
-		/*** PARENT ***/
-		// Close the writing end of the pipe
-		close(pipefd[1]);
-
-		// Send 200 OK with chunked size (-1)
-		mg_send_http_ok(api->conn, "text/plain", -1);
-
-		// Read readirected STDOUT/STDERR until EOF
-		// We are only interested in the last pipe line
-		char errbuf[1024] = "";
-		ssize_t nread;
-		while((nread = read(pipefd[0], errbuf, sizeof(errbuf) - 1)) > 0)
-		{
-			// NUL-terminate what we just read so the string
-			// operations below cannot read past the buffer
-			errbuf[nread] = '\0';
-			// Send chunked data
-			// The chunked size is the length of the string in hex and has to be
-			// transferred in advance, followed by \r\n as line separator and
-			// followed by a chunk of data (the string itself) of the specified
-			// size
-			mg_printf(api->conn, "%zX\r\n%s\r\n", strlen(errbuf), errbuf);
-
-			// Reset buffer
-			memset(errbuf, 0, sizeof(errbuf));
-		}
-
-		// Wait until child has exited to get its return code
-		// dnsmasq reaps every child on SIGCHLD and may have been faster,
-		// the exit status is unknown then and the streamed output is all
-		// there is to judge the run by
-		int status = 0;
-		pid_t waited;
-		do
-			waited = waitpid(cpid, &status, 0);
-		while(waited == -1 && errno == EINTR);
-		if(waited == -1)
-		{
-			log_debug(DEBUG_API, "Cannot wait for child: %s", strerror(errno));
-			status = 0;
-		}
-		code = WEXITSTATUS(status);
-
-		if(WIFSIGNALED(status))
-		{
-			crashed = true;
-			log_err("gravity failed with signal %d %s",
-			        WTERMSIG(status),
-			        WCOREDUMP(status) ? "(core dumped)" : "");
-		}
-
-		log_debug(DEBUG_API, "Gravity return code: %d", code);
-
-		// Close the reading end of the pipe
-		close(pipefd[0]);
-	}
-
-	// Send final chunk of size 0 showing end of data
-	mg_printf(api->conn, "0\r\n\r\n");
-
-	if(code == EXIT_SUCCESS && !crashed)
-		return send_json_success(api);
-	else
-		return send_json_error(api, 500,
-		                       "server_error",
-		                       "Gravity failed",
-		                       NULL);
+	struct gravity_stream *stream = arg;
+	char chunk[1100];
+	const int len = snprintf(chunk, sizeof(chunk), "%s\n", line);
+	if(len > 0)
+		mg_printf(stream->api->conn, "%zX\r\n%s\r\n", (size_t)len, chunk);
 }
 
 int api_action_gravity(struct lorentz_conn *api)
 {
-	// Only set FORCE_COLOR if the client explicitly requests it via "color=true" query parameter
-	// This prevents ANSI escape codes from being included in the output for API consumers that don't need them
-	bool color = false;
-	const char *query = api->request != NULL ? api->request->query_string : "";
-	if(query != NULL)
-		get_bool_var(query, "color", &color);
+	if(!gravity_update_available())
+		return send_json_error(api, 501,
+		                       "not_implemented",
+		                       "This build of Lorentz cannot download lists",
+		                       "Lorentz was built without libcurl");
 
-	const char *extra_env = color ? "FORCE_COLOR" : NULL;
+	// Once the stream has started the status cannot change, so a run that is
+	// already going on is turned away first
+	if(gravity_update_running())
+		return send_json_error(api, 409,
+		                       "conflict",
+		                       "An update is already running",
+		                       NULL);
 
-	gravity_running = 1;
-	const int ret = run_and_stream_command(api, "/usr/local/bin/lorentz", (const char *const []){ "lorentz", "-g", NULL }, extra_env);
-	gravity_running = 0;
+	// Send 200 OK with chunked size (-1) and report as the run goes on
+	mg_send_http_ok(api->conn, "text/plain", -1);
+	struct gravity_stream stream = { .api = api };
+	gravity_update_run(stream_line, &stream, NULL);
+
+	// Send final chunk of size 0 showing end of data
+	mg_printf(api->conn, "0\r\n\r\n");
 
 	// If a termination/restart was requested while gravity was running,
 	// act on it now rather than waiting up to ~1s for the GC thread to pick it up
 	check_if_want_terminate();
 
-	return ret;
+	// The stream is the whole answer: how the run ended is its last line ("Done:
+	// N updated, M failed"), the status was sent with the first byte. Another
+	// response now would only be appended to it
+	return 1;
 }
 
 int api_action_restartDNS(struct lorentz_conn *api)

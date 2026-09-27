@@ -111,16 +111,16 @@ by an environment variable show as locked. Only changed keys are sent, as one
 `PATCH /api/config`; the API's own validation message is shown when it refuses
 one. A password change resets the sessions, so you sign in again.
 
+The lists page has an "Update now" button. It posts to `/api/action/gravity` through `apiStream()`
+(`lib/client.ts`), which shows the plain-text progress of the download as it arrives, and ends with the
+JSON status the endpoint appends to the same body.
+
 ## What isn't here
 
 Scoped out of this first pass, all doable against the existing API without
 further backend changes:
 
 - Teleporter (export/import) and DHCP leases.
-- Triggering a gravity update from the UI - `/api/action/gravity` streams
-  plain-text output over one long chunked HTTP response and appends a
-  trailing JSON status to the same body, which doesn't fit a JSON-based proxy
-  cleanly; run `pihole -g` (or the Lorentz equivalent) directly instead.
 - Two-factor authentication at login (`webserver.api.totp_secret` covers only
   the configured password, not accounts, so this matters less than it would
   otherwise).

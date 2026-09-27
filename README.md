@@ -90,9 +90,9 @@ that points at the database, and the API, the web UI and the DNS decisions (grou
 regular expressions, the domains of the lists) all work from it. Things to know:
 
 - A DNS query that the cache cannot answer reads it, a few short statements each, so keep the server close.
-- Nothing in this repository downloads the lists yet, so `gravity` and `antigravity` are filled by whatever
-  builds them. Anything that writes to the file has to write to these tables instead; a change of
-  `info.updated` makes Lorentz reload.
+- The blocklist updater (see "Blocklist updates") fills `gravity` and `antigravity` on the server. Anything
+  else that builds them has to write to these tables instead of the file; a change of `info.updated` makes
+  Lorentz reload.
 - Teleporter exports the gravity database, but an import does not replace it on a server: it is left out
   with a warning.
 - Lorentz keeps working on the existing file if you do not set `files.gravity`; nothing is moved for you.
@@ -115,6 +115,27 @@ Two settings, both on the "Database" tab of the web UI's settings page, control 
   SQLite file - so a changed value takes effect within the hour. **`0` keeps the queries forever.**
 
 The driver is described at the top of `src/database/db-postgres.c`, the tests in `test/integration/README.md`.
+
+## Blocklist updates
+
+Lorentz downloads the adlists itself (`src/tools/gravity-update.c`, on libcurl) and rebuilds the blocked
+domains in whichever gravity database it uses, SQLite file or PostgreSQL. It needs nothing else installed.
+
+- **Schedule**: `gravity.updateInterval` (`LORENTZCONF_gravity_updateInterval`, default `24` hours, `0` turns it
+  off). A minute after the start, and then every 30 seconds, Lorentz checks whether the lists are older than
+  the interval and updates them if so. A restart does not repeat an update that is still fresh. A run that
+  failed completely is tried again after an hour.
+- **On demand**: the "Update now" button on the lists page of the web UI, or `POST /api/action/gravity`, which
+  streams the progress and answers 409 while another run goes on.
+- **A list that fails keeps its domains.** Each list is replaced in a transaction of its own, only when the
+  download and the parse succeeded and found at least one domain. A failed list shows the status
+  "unavailable", or "old copy" when it still has the domains of an earlier update.
+- **Formats**: hosts files, plain domain lists and Adblock Plus style entries (`||example.com^`), from
+  `http://`, `https://` and `file://` addresses. Compressed downloads are not unpacked.
+- Certificates are verified. The Docker image links libcurl statically; the runtime stage has the CA bundle.
+
+Build with `-DUSE_CURL=OFF` (or without libcurl development files) to leave the downloader out: the schedule
+does nothing and the API answers 501. `lorentz gravity parseList` remains for building gravity by hand.
 
 ## User accounts
 

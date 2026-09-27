@@ -79,6 +79,13 @@ bool gravityDB_get_regex_client_groups(clientsData *client, const unsigned int n
 // The addresses in the client table of the gravity database (IPs, ranges, MACs,
 // interfaces), lower case, as an array of allocated strings, *count long. NULL
 // on error. Free with gravityDB_free_client_addresses()
+// A read-write connection of its own to the gravity database, for the updater
+// (a server database gets its tables here if it has none yet). NULL on error,
+// with a description in *message
+db_conn *gravityDB_open_write(const char **message);
+// The "updated" time of the gravity database as Lorentz last saw it, -1 before
+// its first look
+int64_t gravityDB_last_updated(void);
 char **gravityDB_client_addresses(size_t *count);
 void gravityDB_free_client_addresses(char **addresses, size_t count);
 db_conn *gravityDB_open_RO(void);

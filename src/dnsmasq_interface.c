@@ -12,6 +12,8 @@
 #include "dnsmasq/dnsmasq.h"
 #undef __USE_XOPEN
 #include "lorentz.h"
+// gravity_update_thread()
+#include "tools/gravity-update.h"
 #include "enums.h"
 #include "dnsmasq_interface.h"
 #include "shmem.h"
@@ -3636,6 +3638,14 @@ void Lorentz_fork_and_bind_sockets(struct passwd *ent_pw, bool dnsmasq_start)
 	if(pthread_create( &threads[DB], &attr, DB_thread, NULL ) != 0)
 	{
 		log_crit("Unable to create database thread. Exiting...");
+		exit(EXIT_FAILURE);
+	}
+
+	// Start the thread that updates the adlists on a schedule. It does
+	// nothing when gravity.updateInterval is 0
+	if(pthread_create( &threads[GRAVITY], &attr, gravity_update_thread, NULL ) != 0)
+	{
+		log_crit("Unable to create gravity thread. Exiting...");
 		exit(EXIT_FAILURE);
 	}
 

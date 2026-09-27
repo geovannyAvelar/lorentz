@@ -59,6 +59,8 @@ export async function startLorentz(environment = {}, { command, files = [], netw
       LORENTZCONF_dns_hosts: "1.2.3.4 local.example.com",
       // Store the network table and the long-term database quickly
       LORENTZCONF_database_DBinterval: "2",
+      // The sample lists point nowhere: never download them on a schedule
+      LORENTZCONF_gravity_updateInterval: "0",
       ...environment,
     })
     .withExposedPorts(80)

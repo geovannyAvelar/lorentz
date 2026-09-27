@@ -2640,6 +2640,11 @@ bool gravityDB_delFromTable(const enum gravity_list_type listtype, const cJSON* 
 	return ret;
 }
 
+db_conn *gravityDB_open_write(const char **message)
+{
+	return gravity_write_open(message);
+}
+
 char **gravityDB_client_addresses(size_t *count)
 {
 	*count = 0;
@@ -3525,6 +3530,14 @@ bool gravity_updated(void)
 	db_close(db);
 
 	return changed;
+}
+
+int64_t gravityDB_last_updated(void)
+{
+	pthread_mutex_lock(&last_updated_lock);
+	const int64_t updated = last_updated;
+	pthread_mutex_unlock(&last_updated_lock);
+	return updated;
 }
 
 // Thread-safe getter for the last updated timestamp of the gravity database

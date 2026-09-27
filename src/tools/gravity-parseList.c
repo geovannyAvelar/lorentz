@@ -56,9 +56,6 @@ static inline bool string_has_within(const char *s, const char character, const 
 // which would be printed too often as affect performance
 #define PRINT_PROGRESS_THRESHOLD 10*1000*1000
 
-// Number of invalid domains to print before skipping the rest
-#define MAX_INVALID_DOMAINS 5
-
 // Length of the UTF-8 sequence starting at *p, or 0 if it is not one
 //
 // An internationalized name reaches us as UTF-8 and dnsmasq, built with
@@ -250,111 +247,19 @@ static void print_escaped(const char *str, const ssize_t len)
 			printf("\\x%02x", (unsigned char)str[j]);
 }
 
-int gravity_parseList(const char *infile, const char *outfile, const char *adlistIDstr,
-                      const bool checkOnly, const bool antigravity)
+// The parsing of a list, shared by the command line tool below and by the
+// updater (gravity-update.c). Reads fpin line by line and hands every domain
+// or ABP-style pattern it finds to p->add() (NULL only counts), and counts what
+// it finds in st. Returns 0, or -1 if p->add() refused a domain or memory ran
+// out (st->oom is set then)
+int gravity_parse_stream(FILE *fpin, const size_t fsize, struct gravity_parser *p, struct gravity_parse_stats *st)
 {
 	const char *info = cli_info();
-	const char *tick = cli_tick();
 	const char *cross = cli_cross();
 	const char *over = cli_over();
+	const bool antigravity = p->antigravity;
 
-	// Open input file
-	FILE *fpin = fopen(infile, "r");
-	if(fpin == NULL)
-	{
-		printf("%s  %s Unable to open %s for reading\n", over, cross, infile);
-		return EXIT_FAILURE;
-	}
-
-	// Open output file (database)
-	db_conn *db = NULL;
-	db_stmt *stmt = NULL;
-	if(!checkOnly && (db = db_open(outfile, DB_OPEN_READWRITE | DB_OPEN_NOMUTEX)) == NULL)
-	{
-		printf("%s  %s Unable to open database file %s for writing\n", over, cross, outfile);
-		fclose(fpin);
-		return EXIT_FAILURE;
-	}
-
-	// Disable journaling
-	// Journaling is used to prevent database corruption in case of a power
-	// loss or operating system crash. However, this is not needed for the
-	// gravity database the database is created from scratch at every run
-	// of lorentz -g.
-	// The OFF journaling mode disables the rollback journal completely. No
-	// rollback journal is ever created and hence there is never a rollback
-	// journal to delete.
-	if(!checkOnly && db_exec(db, "PRAGMA journal_mode = OFF;") != DB_OK)
-	{
-		printf("%s  %s Unable to disable journaling in database file %s\n", over, cross, outfile);
-		fclose(fpin);
-		db_close(db);
-		return EXIT_FAILURE;
-	}
-
-	// Disable synchronous mode
-	// With synchronous OFF (0), SQLite continues without syncing as soon as
-	// it has handed data off to the operating system. If the application
-	// running SQLite crashes, the data will be safe, but the database might
-	// become corrupted if the operating system crashes or the computer
-	// loses power before that data has been written to the disk surface. On
-	// the other hand, commits can be orders of magnitude faster with
-	// synchronous OFF.
-	// See https://www.sqlite.org/pragma.html#pragma_synchronous
-	// If a power loss (or operating system crash) happens, the database
-	// created here will never be swapped into action and is discarded at
-	// the next run of lorentz -g.
-	if(!checkOnly && db_exec(db, "PRAGMA synchronous = OFF;") != DB_OK)
-	{
-		printf("%s  %s Unable to disable synchronous mode in database file %s\n", over, cross, outfile);
-		fclose(fpin);
-		db_close(db);
-		return EXIT_FAILURE;
-	}
-
-	// Get size of input file
-	fseek(fpin, 0L, SEEK_END);
-	const size_t fsize = ftell(fpin);
-	rewind(fpin);
-
-	// Begin transaction
-	if(!checkOnly && db_exec(db, "BEGIN TRANSACTION;") != DB_OK)
-	{
-		printf("%s  %s Unable to begin transaction to insert domains into database file %s\n",
-		       over, cross, outfile);
-		fclose(fpin);
-		db_close(db);
-		return EXIT_FAILURE;
-	}
-
-	// Prepare SQL statement
-	const char *sql = antigravity ?
-		"INSERT INTO antigravity (domain, adlist_id) VALUES (?, ?);" :
-		"INSERT INTO gravity (domain, adlist_id) VALUES (?, ?);";
-	if(!checkOnly && (stmt = db_prepare(db, sql, false)) == NULL)
-	{
-		printf("%s  %s Unable to prepare SQL statement to insert domains into database file %s\n",
-		       over, cross, outfile);
-		fclose(fpin);
-		db_exec(db, "ROLLBACK");
-		db_close(db);
-		return EXIT_FAILURE;
-	}
-
-	// Bind adlistID
-	const int adlistID = atoi(adlistIDstr);
-	if(!checkOnly && db_bind_int(stmt, 2, adlistID) != DB_OK)
-	{
-		printf("%s  %s Unable to bind adlistID to SQL statement to insert domains into database file %s\n",
-		       over, cross, outfile);
-		fclose(fpin);
-		db_finalize(stmt);
-		db_exec(db, "ROLLBACK");
-		db_close(db);
-		return EXIT_FAILURE;
-	}
-
-	// Parse list file line by line
+	memset(st, 0, sizeof(*st));
 	char *line = NULL;
 	size_t lineno = 0;
 	size_t len = 0;
@@ -362,11 +267,8 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 	size_t total_read = 0, last_print = 0;
 	const size_t print_step = fsize / 20; // Print progress every 100/20 = 5%
 	int last_progress = 0;
-	char *invalid_domains_list[MAX_INVALID_DOMAINS] = { NULL };
-	ssize_t invalid_domains_list_lengths[MAX_INVALID_DOMAINS] = { -1 };
-	unsigned int invalid_domains_list_len = 0;
-	unsigned int exact_domains = 0, abp_domains = 0, invalid_domains = 0;
 	bool first_line = true; // Flag to test UTF-8 Bom only on first line
+	int ret = 0;
 	while((read = getline(&line, &len, fpin)) != -1)
 	{
 		// Handle UTF-8 BOM (Byte Order Mark) if present at start of file
@@ -493,72 +395,24 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 			if(line[0] != (antigravity ? '@' : '|') &&  // <- Not an ABP-style match
 			   valid_domain(token, token_len, true, false))
 			{
-				// Exact match found
-				if(checkOnly)
+				// Exact match found: hand it over (unless we only count)
+				if(p->add != NULL && !p->add(token, p->arg))
 				{
-					// Increment counter
-					exact_domains++;
-					goto next_domain;
+					ret = -1;
+					goto done;
 				}
-
-				// else: Append domain to database using prepared statement
-				// Append domain to database using prepared statement
-				if(db_bind_text_ref(stmt, 1, token) != DB_OK)
-				{
-					printf("%s  %s Unable to bind domain to SQL statement to insert domains into database file %s\n",
-					over, cross, outfile);
-					fclose(fpin);
-					db_finalize(stmt);
-					db_exec(db, "ROLLBACK");
-					db_close(db);
-					return EXIT_FAILURE;
-				}
-				if(db_step(stmt) != DB_DONE)
-				{
-					printf("%s  %s Unable to insert domain into database file %s\n", over, cross, outfile);
-					fclose(fpin);
-					db_finalize(stmt);
-					db_exec(db, "ROLLBACK");
-					db_close(db);
-					return EXIT_FAILURE;
-				}
-				db_reset(stmt);
-				// Increment counter
-				exact_domains++;
+				st->exact++;
 			}
 			else if(token[0] == (antigravity ? '@' : '|') &&         // <- ABP-style match
 			        valid_abp_domain(token, token_len, antigravity)) // <- Valid ABP domain
 			{
 				// ABP-style match (see comments above)
-				if(checkOnly)
+				if(p->add != NULL && !p->add(token, p->arg))
 				{
-					// Increment counter
-					abp_domains++;
-					goto next_domain;
+					ret = -1;
+					goto done;
 				}
-
-				// else: Append pattern to database using prepared statement
-				if(db_bind_text_ref(stmt, 1, token) != DB_OK)
-				{
-					printf("%s  %s Unable to bind domain to SQL statement to insert domains into database file %s\n",
-					over, cross, outfile);
-					fclose(fpin);
-					db_finalize(stmt);
-					db_exec(db, "ROLLBACK");
-					db_close(db);
-					return EXIT_FAILURE;
-				}
-				if(db_step(stmt) != DB_DONE)
-				{
-					printf("%s  %s Unable to insert domain into database file %s\n", over, cross, outfile);
-					fclose(fpin);
-					db_finalize(stmt);
-					db_exec(db, "ROLLBACK");
-					db_close(db);
-					return EXIT_FAILURE;
-				}
-				db_reset(stmt);
-				abp_domains++;
+				st->abp++;
 			}
 			else
 			{
@@ -567,29 +421,29 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 				// Ignore false positives - they don't count as invalid domains
 				if(!is_false_positive(token))
 				{
-					if(checkOnly)
+					if(p->print_invalid)
 					{
 						// Increment counter
-						invalid_domains++;
+						st->invalid++;
 						printf("%s  %s Invalid domain on line %zu: ", over, cross, lineno);
 						print_escaped(token, token_len);
 						puts("");
 						goto next_domain;
 					}
-					// Add the domain to invalid_domains_list only
+					// Add the domain to the sample only
 					// if the list contains < MAX_INVALID_DOMAINS
-					if(invalid_domains_list_len < MAX_INVALID_DOMAINS)
+					if(st->samples < MAX_INVALID_DOMAINS)
 					{
 						// Check if we have this domain already
 						bool found = false;
-						for(unsigned int i = 0; i < invalid_domains_list_len; i++)
+						for(unsigned int i = 0; i < st->samples; i++)
 						{
 							// Do not compare against unset entries
-							if(invalid_domains_list[i] == NULL || invalid_domains_list_lengths[i] == -1)
+							if(st->sample[i] == NULL || st->sample_len[i] == -1)
 								break;
 
 							// Compare against the current domain
-							if(memcmp(invalid_domains_list[i], token, min((ssize_t)token_len, invalid_domains_list_lengths[i])) == 0)
+							if(memcmp(st->sample[i], token, min((ssize_t)token_len, st->sample_len[i])) == 0)
 							{
 								found = true;
 								break;
@@ -599,24 +453,21 @@ int gravity_parseList(const char *infile, const char *outfile, const char *adlis
 						// If not found, add it to the list
 						if(!found)
 						{
-							invalid_domains_list[invalid_domains_list_len] = calloc(token_len + 1, sizeof(char));
-							if(invalid_domains_list[invalid_domains_list_len] == NULL)
+							st->sample[st->samples] = calloc(token_len + 1, sizeof(char));
+							if(st->sample[st->samples] == NULL)
 							{
-								printf("%s  %s Unable to allocate memory for invalid domains list\n", over, cross);
-								fclose(fpin);
-								db_finalize(stmt);
-								db_exec(db, "ROLLBACK");
-								db_close(db);
-								return EXIT_FAILURE;
+								st->oom = true;
+								ret = -1;
+								goto done;
 							}
-							memcpy(invalid_domains_list[invalid_domains_list_len], token, token_len);
-							invalid_domains_list[invalid_domains_list_len][token_len] = '\0';
-							invalid_domains_list_lengths[invalid_domains_list_len] = token_len;
-							invalid_domains_list_len++;
+							memcpy(st->sample[st->samples], token, token_len);
+							st->sample[st->samples][token_len] = '\0';
+							st->sample_len[st->samples] = token_len;
+							st->samples++;
 						}
 
 					}
-					invalid_domains++;
+					st->invalid++;
 				}
 			}
 next_domain:
@@ -624,8 +475,7 @@ next_domain:
 		}
 
 		// Print progress if the file is large enough every 100 lines
-		// This code cannot be reached if checkOnly is true
-		if(fsize > PRINT_PROGRESS_THRESHOLD && total_read - last_print > print_step)
+		if(p->progress && fsize > PRINT_PROGRESS_THRESHOLD && total_read - last_print > print_step)
 		{
 			last_print = total_read;
 			// Calculate progress
@@ -640,8 +490,179 @@ next_domain:
 		}
 	}
 
+done:
+	free(line);
+	return ret;
+}
+
+void gravity_parse_stats_free(struct gravity_parse_stats *st)
+{
+	for(unsigned int i = 0; i < st->samples; i++)
+	{
+		free(st->sample[i]);
+		st->sample[i] = NULL;
+	}
+	st->samples = 0;
+}
+
+// What the command line tool does with a domain: append it to the database
+struct parse_db {
+	db_stmt *stmt;
+	const char *outfile;
+	const char *over, *cross;
+};
+
+static bool parse_db_add(const char *domain, void *arg)
+{
+	struct parse_db *pdb = arg;
+	if(db_bind_text_ref(pdb->stmt, 1, domain) != DB_OK)
+	{
+		printf("%s  %s Unable to bind domain to SQL statement to insert domains into database file %s\n",
+		       pdb->over, pdb->cross, pdb->outfile);
+		return false;
+	}
+	if(db_step(pdb->stmt) != DB_DONE)
+	{
+		printf("%s  %s Unable to insert domain into database file %s\n", pdb->over, pdb->cross, pdb->outfile);
+		return false;
+	}
+	db_reset(pdb->stmt);
+	return true;
+}
+
+int gravity_parseList(const char *infile, const char *outfile, const char *adlistIDstr,
+                      const bool checkOnly, const bool antigravity)
+{
+	const char *tick = cli_tick();
+	const char *cross = cli_cross();
+	const char *over = cli_over();
+
+	// Open input file
+	FILE *fpin = fopen(infile, "r");
+	if(fpin == NULL)
+	{
+		printf("%s  %s Unable to open %s for reading\n", over, cross, infile);
+		return EXIT_FAILURE;
+	}
+
+	// Open output file (database)
+	db_conn *db = NULL;
+	db_stmt *stmt = NULL;
+	if(!checkOnly && (db = db_open(outfile, DB_OPEN_READWRITE | DB_OPEN_NOMUTEX)) == NULL)
+	{
+		printf("%s  %s Unable to open database file %s for writing\n", over, cross, outfile);
+		fclose(fpin);
+		return EXIT_FAILURE;
+	}
+
+	// Disable journaling
+	// Journaling is used to prevent database corruption in case of a power
+	// loss or operating system crash. However, this is not needed for the
+	// gravity database the database is created from scratch at every run
+	// of lorentz -g.
+	// The OFF journaling mode disables the rollback journal completely. No
+	// rollback journal is ever created and hence there is never a rollback
+	// journal to delete.
+	if(!checkOnly && db_exec(db, "PRAGMA journal_mode = OFF;") != DB_OK)
+	{
+		printf("%s  %s Unable to disable journaling in database file %s\n", over, cross, outfile);
+		fclose(fpin);
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+	// Disable synchronous mode
+	// With synchronous OFF (0), SQLite continues without syncing as soon as
+	// it has handed data off to the operating system. If the application
+	// running SQLite crashes, the data will be safe, but the database might
+	// become corrupted if the operating system crashes or the computer
+	// loses power before that data has been written to the disk surface. On
+	// the other hand, commits can be orders of magnitude faster with
+	// synchronous OFF.
+	// See https://www.sqlite.org/pragma.html#pragma_synchronous
+	// If a power loss (or operating system crash) happens, the database
+	// created here will never be swapped into action and is discarded at
+	// the next run of lorentz -g.
+	if(!checkOnly && db_exec(db, "PRAGMA synchronous = OFF;") != DB_OK)
+	{
+		printf("%s  %s Unable to disable synchronous mode in database file %s\n", over, cross, outfile);
+		fclose(fpin);
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+	// Get size of input file
+	fseek(fpin, 0L, SEEK_END);
+	const size_t fsize = ftell(fpin);
+	rewind(fpin);
+
+	// Begin transaction
+	if(!checkOnly && db_exec(db, "BEGIN TRANSACTION;") != DB_OK)
+	{
+		printf("%s  %s Unable to begin transaction to insert domains into database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+	// Prepare SQL statement
+	const char *sql = antigravity ?
+		"INSERT INTO antigravity (domain, adlist_id) VALUES (?, ?);" :
+		"INSERT INTO gravity (domain, adlist_id) VALUES (?, ?);";
+	if(!checkOnly && (stmt = db_prepare(db, sql, false)) == NULL)
+	{
+		printf("%s  %s Unable to prepare SQL statement to insert domains into database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+	// Bind adlistID
+	const int adlistID = atoi(adlistIDstr);
+	if(!checkOnly && db_bind_int(stmt, 2, adlistID) != DB_OK)
+	{
+		printf("%s  %s Unable to bind adlistID to SQL statement to insert domains into database file %s\n",
+		       over, cross, outfile);
+		fclose(fpin);
+		db_finalize(stmt);
+		db_exec(db, "ROLLBACK");
+		db_close(db);
+		return EXIT_FAILURE;
+	}
+
+	// Parse list file line by line
+	struct parse_db pdb = { .stmt = stmt, .outfile = outfile, .over = over, .cross = cross };
+	struct gravity_parser parser = {
+		.antigravity = antigravity,
+		.add = checkOnly ? NULL : parse_db_add,
+		.arg = &pdb,
+		.print_invalid = checkOnly,
+		.progress = !checkOnly
+	};
+	struct gravity_parse_stats st;
+	if(gravity_parse_stream(fpin, fsize, &parser, &st) != 0)
+	{
+		if(st.oom)
+			printf("%s  %s Unable to allocate memory for invalid domains list\n", over, cross);
+		fclose(fpin);
+		gravity_parse_stats_free(&st);
+		if(stmt != NULL)
+			db_finalize(stmt);
+		if(db != NULL)
+		{
+			db_exec(db, "ROLLBACK");
+			db_close(db);
+		}
+		return EXIT_FAILURE;
+	}
+	const unsigned int exact_domains = st.exact, abp_domains = st.abp, invalid_domains = st.invalid;
+
 	// Finalize SQL statement
-	db_finalize(stmt);
+	if(stmt != NULL)
+		db_finalize(stmt);
 	stmt = NULL;
 
 	// Skip to end of parseList if we are only checking the list
@@ -658,6 +679,7 @@ next_domain:
 			printf("%s  %s Unable to update database properties in database file %s\n",
 			       over, cross, outfile);
 			fclose(fpin);
+			gravity_parse_stats_free(&st);
 			db_exec(db, "ROLLBACK");
 			db_close(db);
 			return EXIT_FAILURE;
@@ -679,6 +701,7 @@ next_domain:
 		printf("%s  %s Unable to prepare SQL statement to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
+		gravity_parse_stats_free(&st);
 		db_exec(db, "ROLLBACK");
 		db_close(db);
 		return EXIT_FAILURE;
@@ -689,6 +712,7 @@ next_domain:
 		printf("%s  %s Unable to bind number of entries to SQL statement to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
+		gravity_parse_stats_free(&st);
 		db_finalize(stmt);
 		db_exec(db, "ROLLBACK");
 		db_close(db);
@@ -699,6 +723,7 @@ next_domain:
 		printf("%s  %s Unable to bind number of invalid domains to SQL statement to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
+		gravity_parse_stats_free(&st);
 		db_finalize(stmt);
 		db_exec(db, "ROLLBACK");
 		db_close(db);
@@ -709,6 +734,7 @@ next_domain:
 		printf("%s  %s Unable to bind number of ABP entries to SQL statement to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
+		gravity_parse_stats_free(&st);
 		db_finalize(stmt);
 		db_exec(db, "ROLLBACK");
 		db_close(db);
@@ -719,6 +745,7 @@ next_domain:
 		printf("%s  %s Unable to bind adlist ID to SQL statement to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
+		gravity_parse_stats_free(&st);
 		db_finalize(stmt);
 		db_exec(db, "ROLLBACK");
 		db_close(db);
@@ -729,6 +756,7 @@ next_domain:
 		printf("%s  %s Unable to update adlist properties in database file %s\n",
 		       over, cross, outfile);
 		fclose(fpin);
+		gravity_parse_stats_free(&st);
 		db_finalize(stmt);
 		db_exec(db, "ROLLBACK");
 		db_close(db);
@@ -742,6 +770,7 @@ next_domain:
 		printf("%s  %s Unable to end transaction to insert domains into database file %s (database file may be corrupted)\n",
 		       over, cross, outfile);
 		fclose(fpin);
+		gravity_parse_stats_free(&st);
 		db_exec(db, "ROLLBACK");
 		db_close(db);
 		return EXIT_FAILURE;
@@ -751,24 +780,21 @@ end_of_parseList:
 	// Print summary
 	printf("%s  %s Parsed %u exact domains and %u ABP-style domains (%sing, ignored %u non-domain entries)\n",
 	       over, tick, exact_domains, abp_domains, antigravity ? "allow" : "block", invalid_domains);
-	if(invalid_domains_list_len > 0)
+	if(st.samples > 0)
 	{
 		puts("      Sample of non-domain entries:");
-		for(unsigned int i = 0; i < invalid_domains_list_len; i++)
+		for(unsigned int i = 0; i < st.samples; i++)
 		{
 			// Print indentation
 			printf("        - ");
-			print_escaped(invalid_domains_list[i], invalid_domains_list_lengths[i]);
+			print_escaped(st.sample[i], st.sample_len[i]);
 			// Print newline
 			puts("");
 		}
 	}
 
 	// Free memory
-	free(line);
-	for(unsigned int i = 0; i < invalid_domains_list_len; i++)
-		if(invalid_domains_list[i] != NULL)
-			free(invalid_domains_list[i]);
+	gravity_parse_stats_free(&st);
 
 	// Close files
 	fclose(fpin);

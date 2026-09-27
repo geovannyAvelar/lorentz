@@ -999,6 +999,14 @@ void initConfig(struct config *conf)
 	conf->resolver.refreshNames.c = validate_stub; // Only type-based checking
 
 
+	// struct gravity
+	conf->gravity.updateInterval.k = "gravity.updateInterval";
+	conf->gravity.updateInterval.h = "How often should Lorentz download the adlists again and rebuild its list of blocked domains [hours]?\n\n The lists are downloaded in the background, each one over HTTP(S) (or read from a file:// path) and replaced only when its download succeeded, so a list that is unreachable keeps the domains it had. A run also starts at launch when the last one is older than this. 0 turns the automatic update off; it can still be started from the web interface or with the gravity action of the API.";
+	conf->gravity.updateInterval.a = cJSON_CreateStringReference("A positive integer value in hours, or 0 to never update automatically");
+	conf->gravity.updateInterval.t = CONF_UINT;
+	conf->gravity.updateInterval.d.ui = 24;
+	conf->gravity.updateInterval.c = validate_stub; // Only type-based checking
+
 	// struct database
 	conf->database.DBimport.k = "database.DBimport";
 	conf->database.DBimport.h = "Should Lorentz load information from the database on startup to be aware of the most recent history?";

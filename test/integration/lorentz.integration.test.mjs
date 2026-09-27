@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { GenericContainer, Network, Wait } from "testcontainers";
 
 import {
   LORENTZ_DB, GRAVITY_DB, api, apiBinary, buildImage, dig, eventually, lorentzLog,
@@ -467,6 +468,208 @@ for (const backend of backends) describe(`a fresh lorentz (${backend.name})`, ()
       assert.doesNotMatch(log, /is damaged/);
       assert.doesNotMatch(log, /is read-only/);
     });
+  });
+});
+
+// A web server for the adlists, in a container next to Lorentz (a container cannot
+// reach the host on every machine). /slow.txt answers after four seconds. Lorentz
+// reaches it as http://lists
+const LIST_SERVER = `
+import http.server, os, time
+class H(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/slow.txt":
+            time.sleep(4)
+        if self.path == "/error":
+            self.send_error(503)
+            return
+        super().do_GET()
+os.chdir("/srv")
+http.server.ThreadingHTTPServer(("", 80), H).serve_forever()
+`;
+async function startListServer(network) {
+  const container = await new GenericContainer("python:3-alpine")
+    .withNetwork(network)
+    .withNetworkAliases("lists")
+    .withCopyContentToContainer([{ content: LIST_SERVER, target: "/server.py" }])
+    .withCommand(["python", "/server.py"])
+    .withExposedPorts(80)
+    .withWaitStrategy(Wait.forListeningPorts())
+    .start();
+  return {
+    url: (path) => `http://lists${path}`,
+    // Serve body at path
+    async set(path, body) {
+      const r = await container.exec(["sh", "-c", `printf '%s' "$1" > /srv${path}`, "sh", body]);
+      assert.equal(r.exitCode, 0, r.output);
+    },
+    stop: () => container.stop(),
+  };
+}
+
+const HOSTS_LIST = "# a list\n127.0.0.1 localhost\n0.0.0.0 tracker1.updater.example\n0.0.0.0 tracker2.updater.example\n0.0.0.0 shared.updater.example\n0.0.0.0 not_a_domain!!\n";
+const ABP_LIST = "[Adblock Plus 2.0]\n! Title: abp\n||ads.abp.updater.example^\n##.banner\nplain.abp.updater.example\n";
+const ALLOW_LIST = "shared.updater.example\n";
+
+// The sample lists of the gravity database point at real addresses; a test of the
+// updater has no business downloading them
+async function disableSampleLists(lorentz) {
+  const { body } = await api(lorentz, "/api/lists");
+  for (const list of body.lists) {
+    const path = `/api/lists/${encodeURIComponent(list.address)}?type=${list.type}`;
+    const off = await api(lorentz, path, { method: "PUT", json: { comment: list.comment, groups: list.groups, enabled: false } });
+    assert.equal(off.status, 200);
+  }
+}
+
+const addList = (lorentz, address, type = "block") =>
+  api(lorentz, `/api/lists?type=${type}`, { method: "POST", json: { address, groups: [0], enabled: true } });
+const updateLists = (lorentz) => api(lorentz, "/api/action/gravity", { method: "POST" });
+const listOf = async (lorentz, address) =>
+  (await api(lorentz, "/api/lists")).body.lists.find((list) => list.address === address);
+
+for (const backend of backends) describe(`adlist updater (${backend.name})`, () => {
+  let lorentz, server, network;
+
+  before(async () => {
+    network = backend.name === "sqlite" ? await new Network().start() : postgres.network;
+    server = await startListServer(network);
+    await server.set("/hosts.txt", HOSTS_LIST);
+    await server.set("/abp.txt", ABP_LIST);
+    await server.set("/allow.txt", ALLOW_LIST);
+    lorentz = await backend.start({}, { network });
+    await disableSampleLists(lorentz);
+  });
+  after(async () => {
+    await lorentz?.stop();
+    await server?.stop();
+    if (backend.name === "sqlite") await network?.stop();
+  });
+
+  it("downloads the lists and blocks the domains in them", async () => {
+    assert.equal((await addList(lorentz, server.url("/hosts.txt"))).status, 201);
+    assert.equal((await addList(lorentz, server.url("/abp.txt"))).status, 201);
+    assert.equal((await addList(lorentz, server.url("/allow.txt"), "allow")).status, 201);
+    assert.equal((await addList(lorentz, server.url("/missing.txt"))).status, 201);
+
+    const result = await updateLists(lorentz);
+    assert.equal(result.status, 200);
+    assert.match(result.body, /Downloading 4 lists/);
+    assert.match(result.body, /Done: 3 updated, 1 failed/);
+
+    const hosts = await listOf(lorentz, server.url("/hosts.txt"));
+    assert.equal(hosts.number, 3, "hosts, localhost being no domain to report");
+    assert.equal(hosts.invalid_domains, 1);
+    assert.equal(hosts.status, 1);
+    assert.ok(hosts.date_updated > 0);
+    const abp = await listOf(lorentz, server.url("/abp.txt"));
+    assert.equal(abp.number, 2);
+    assert.equal(abp.abp_entries, 1);
+    const missing = await listOf(lorentz, server.url("/missing.txt"));
+    assert.equal(missing.status, 3, "unavailable, and nothing to fall back on");
+
+    const blocked = (domain) => async () => (await dig(lorentz, domain))[0] === "0.0.0.0";
+    await eventually("the listed domain to be blocked", blocked("tracker1.updater.example"), { timeoutMs: 30_000 });
+    await eventually("a subdomain of an ABP-style entry to be blocked", blocked("deep.ads.abp.updater.example"));
+    await eventually("a plain domain of the ABP list to be blocked", blocked("plain.abp.updater.example"));
+    assert.notDeepEqual(await dig(lorentz, "shared.updater.example"), BLOCKED, "an allow list wins");
+    assert.notDeepEqual(await dig(lorentz, "unlisted.updater.example"), BLOCKED);
+  });
+
+  it("replaces the domains of a list that changed", async () => {
+    await server.set("/hosts.txt", "0.0.0.0 tracker1.updater.example\n0.0.0.0 tracker3.updater.example\n");
+    const result = await updateLists(lorentz);
+    assert.match(result.body, /Done: 3 updated, 1 failed/);
+    await eventually("the new domain to be blocked",
+      async () => (await dig(lorentz, "tracker3.updater.example"))[0] === "0.0.0.0", { timeoutMs: 30_000 });
+    await eventually("the removed domain to be let through",
+      async () => (await dig(lorentz, "tracker2.updater.example"))[0] !== "0.0.0.0", { timeoutMs: 30_000 });
+  });
+
+  it("keeps the domains of a list whose download is not a list", async () => {
+    await server.set("/hosts.txt", "<html><body>Service unavailable</body></html>");
+    const result = await updateLists(lorentz);
+    assert.match(result.body, /the download contains no domains \(keeping the domains it had\)/);
+    const hosts = await listOf(lorentz, server.url("/hosts.txt"));
+    assert.equal(hosts.status, 4, "unavailable, using what was downloaded before");
+    assert.equal(hosts.number, 2);
+    assert.equal((await dig(lorentz, "tracker3.updater.example"))[0], "0.0.0.0");
+
+    assert.equal((await addList(lorentz, server.url("/error"))).status, 201);
+    assert.match((await updateLists(lorentz)).body, /returned error: 503/);
+    assert.equal((await dig(lorentz, "tracker3.updater.example"))[0], "0.0.0.0");
+  });
+
+  it("reads a list from a file", async () => {
+    await run(lorentz, ["sh", "-c", "printf '0.0.0.0 fromfile.updater.example\\n' > /tmp/adlist.txt"]);
+    assert.equal((await addList(lorentz, "file:///tmp/adlist.txt")).status, 201);
+    assert.match((await updateLists(lorentz)).body, /file:\/\/\/tmp\/adlist.txt: 1 blocked domains/);
+    await eventually("the domain of the file to be blocked",
+      async () => (await dig(lorentz, "fromfile.updater.example"))[0] === "0.0.0.0", { timeoutMs: 30_000 });
+  });
+
+  it("turns a second update away while one is running", async () => {
+    await server.set("/slow.txt", "0.0.0.0 slow.updater.example\n");
+    assert.equal((await addList(lorentz, server.url("/slow.txt"))).status, 201);
+    const first = updateLists(lorentz);
+    await sleep(1500);
+    const second = await updateLists(lorentz);
+    assert.equal(second.status, 409);
+    assert.equal(second.body.error.key, "conflict");
+    assert.match((await first).body, /Done:/);
+  });
+
+  it("reports the databases it left behind", async () => {
+    const { body } = await api(lorentz, "/api/info/lorentz");
+    assert.ok(body.lorentz.database.gravity >= 4, `${body.lorentz.database.gravity} blocked domains`);
+    assert.equal(body.lorentz.database.antigravity, 1);
+  });
+});
+
+// The schedule needs a database that was never updated (the sample data are, at
+// "updated" = 0) and about a minute after the start, so it is only done twice
+for (const backend of backends.filter((b) => b.name !== "postgres")) describe(`scheduled adlist update (${backend.name})`, () => {
+  let lorentz, server, network;
+
+  before(async () => {
+    network = backend.name === "sqlite" ? await new Network().start() : postgres.network;
+    server = await startListServer(network);
+    await server.set("/hosts.txt", HOSTS_LIST);
+    lorentz = await backend.start({ LORENTZCONF_gravity_updateInterval: "1" }, { network });
+    await disableSampleLists(lorentz);
+    // Preparing the backend touched "updated"; the lists have to look old. Lorentz only
+    // notices a newer value while it runs, so it reads this one at a restart
+    const reset = "UPDATE info SET value = '0' WHERE property = 'updated'";
+    if (lorentz.gravity) await lorentz.gravity.query(reset);
+    else await sqlite(lorentz, GRAVITY_DB, `${reset};`);
+    await restartLorentz(lorentz);
+    assert.equal((await addList(lorentz, server.url("/hosts.txt"))).status, 201);
+  });
+  after(async () => {
+    await lorentz?.stop();
+    await server?.stop();
+    if (backend.name === "sqlite") await network?.stop();
+  });
+
+  it("updates the lists by itself when they are older than the interval", async () => {
+    await eventually("the scheduled update", async () =>
+      /gravity: Done: 1 updated, 0 failed/.test(await lorentzLog(lorentz)), { timeoutMs: 180_000, intervalMs: 5000 })
+      .catch(async (error) => {
+        error.message += `\n${(await lorentzLog(lorentz)).split("\n").slice(-25).join("\n")}`;
+        throw error;
+      });
+    const log = await lorentzLog(lorentz);
+    assert.match(log, /gravity: The lists were never updated, updating them/);
+    await eventually("the domain to be blocked",
+      async () => (await dig(lorentz, "tracker1.updater.example"))[0] === "0.0.0.0", { timeoutMs: 30_000 });
+  });
+
+  it("does not update again after a restart while they are fresh", async () => {
+    const count = async () => ((await lorentzLog(lorentz)).match(/gravity: Downloading/g) ?? []).length;
+    const before = await count();
+    await restartLorentz(lorentz);
+    await sleep(100_000);
+    assert.equal(await count(), before);
   });
 });
 

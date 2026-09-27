@@ -70,6 +70,31 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+// A call whose answer is text that arrives while the request runs (the gravity
+// update reports each list as it goes). onText gets the pieces as they come;
+// resolves with the status once the stream has ended
+export async function apiStream(
+  path: string,
+  onText: (text: string) => void,
+  init?: RequestInit,
+): Promise<{ status: number }> {
+  const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
+  if (csrfToken && path !== "/auth") headers["X-CSRF-TOKEN"] = csrfToken;
+  const res = await fetch(`/api${path}`, { ...init, headers, cache: "no-store" });
+  if (!res.body) {
+    onText(await res.text());
+    return { status: res.status };
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    onText(decoder.decode(value, { stream: true }));
+  }
+  return { status: res.status };
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>

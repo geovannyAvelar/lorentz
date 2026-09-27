@@ -21,10 +21,11 @@ import {
   EmptyState,
   ScrollArea,
 } from "@mantine/core";
-import { IconPlus, IconAlertCircle } from "@tabler/icons-react";
+import { IconPlus, IconAlertCircle, IconRefresh } from "@tabler/icons-react";
 import { api, ApiError, fetcher } from "@/lib/client";
 import { useSession } from "@/hooks/useSession";
 import { GroupPicker } from "@/components/GroupPicker";
+import { UpdateListsModal } from "@/components/UpdateListsModal";
 import type { AdList, ListsResponse } from "@/lib/types";
 
 // Every write to /api/lists needs the list's type as a *query* parameter, not
@@ -38,6 +39,7 @@ export default function ListsPage() {
   const { data, isLoading, mutate } = useSWR<ListsResponse>("/lists", fetcher);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<AdList | null>(null);
+  const [updating, setUpdating] = useState(false);
 
   async function toggle(list: AdList) {
     await api.put(listPath(list), {
@@ -61,13 +63,19 @@ export default function ListsPage() {
           <div>
             <Text fw={600}>Lists</Text>
             <Text size="xs" c="dimmed">
-              Adlists Lorentz downloads via gravity; run pihole -g (or the equivalent action) after changing these
+              Lorentz downloads the enabled lists on the schedule of gravity.updateInterval (see Settings), and
+              when you update them here
             </Text>
           </div>
           {isAdmin && (
-            <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => setAdding(true)}>
-              Add list
-            </Button>
+            <Group gap="xs">
+              <Button size="xs" variant="default" leftSection={<IconRefresh size={14} />} onClick={() => setUpdating(true)}>
+                Update now
+              </Button>
+              <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => setAdding(true)}>
+                Add list
+              </Button>
+            </Group>
           )}
         </Group>
         {isLoading || !data ? (
@@ -84,6 +92,7 @@ export default function ListsPage() {
                   <Table.Th>Address</Table.Th>
                   <Table.Th>Type</Table.Th>
                   <Table.Th>Domains</Table.Th>
+                  <Table.Th>Updated</Table.Th>
                   <Table.Th>Status</Table.Th>
                   {isAdmin && <Table.Th>Actions</Table.Th>}
                 </Table.Tr>
@@ -102,10 +111,26 @@ export default function ListsPage() {
                     <Table.Td c="dimmed">
                       {typeof list.number === "number" ? list.number.toLocaleString() : "—"}
                     </Table.Td>
+                    <Table.Td c="dimmed">
+                      {list.date_updated ? new Date(list.date_updated * 1000).toLocaleString() : "never"}
+                    </Table.Td>
                     <Table.Td>
-                      <Badge color={list.enabled ? "green" : "gray"}>
-                        {list.enabled ? "enabled" : "disabled"}
-                      </Badge>
+                      <Group gap={6}>
+                        <Badge color={list.enabled ? "green" : "gray"}>
+                          {list.enabled ? "enabled" : "disabled"}
+                        </Badge>
+                        {/* What the last download did (see adlist.status in gravity-update.c) */}
+                        {list.status === 3 && (
+                          <Badge color="red" variant="light" title="The last download failed and there are no domains yet">
+                            unavailable
+                          </Badge>
+                        )}
+                        {list.status === 4 && (
+                          <Badge color="yellow" variant="light" title="The last download failed, the domains of the one before are kept">
+                            old copy
+                          </Badge>
+                        )}
+                      </Group>
                     </Table.Td>
                     {isAdmin && (
                       <Table.Td>
@@ -131,6 +156,7 @@ export default function ListsPage() {
       </Card>
 
       <AddListModal opened={adding} onClose={() => setAdding(false)} onSaved={mutate} />
+      <UpdateListsModal opened={updating} onClose={() => setUpdating(false)} onDone={mutate} />
       {editing && (
         <EditListModal
           list={editing}
